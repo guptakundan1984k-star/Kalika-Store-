@@ -1,0 +1,149 @@
+{
+  "entities": {
+    "Review": {
+      "title": "Review",
+      "description": "Product reviews and ratings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["productId", "userId", "rating", "comment"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user information and roles",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique Firebase Auth ID" },
+        "name": { "type": "string", "description": "Full name" },
+        "email": { "type": "string", "format": "email", "description": "Email address" },
+        "phone": { "type": "string", "description": "Phone number" },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "User role" },
+        "address": { "type": "string", "description": "Default address" },
+        "addresses": { "type": "array", "items": { "type": "object" } },
+        "wishlist": { "type": "array", "items": { "type": "string" } },
+        "lastActiveAt": { "type": "number" },
+        "loyaltyPoints": { "type": "number", "description": "Kalika Coins earned by user" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Store items for sale",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "image": { "type": "string" },
+        "stock": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "weight": { "type": "string" }
+      },
+      "required": ["name", "price", "category", "stock"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer purchase records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "items": { "type": "array", "items": { "type": "object" } },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["Pending", "Packed", "Out for Delivery", "Delivered", "Cancelled"] },
+        "deliveryType": { "type": "string", "enum": ["Takeaway", "Delivery"] },
+        "address": { "type": "object" },
+        "pin": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "prescriptionImage": { "type": "string" },
+        "earnedPoints": { "type": "number" },
+        "redeemedPoints": { "type": "number" },
+        "tracking": { "type": "array", "items": { "type": "object" } }
+      },
+      "required": ["userId", "total", "status", "deliveryType", "pin"]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Discount codes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "discount": { "type": "number" },
+        "type": { "type": "string", "enum": ["percentage", "fixed"] },
+        "minOrder": { "type": "number" },
+        "expiryDate": { "type": "number" },
+        "usageLimitPerCustomer": { "type": "number" }
+      },
+      "required": ["code", "discount", "type"]
+    },
+    "Banner": {
+      "title": "Banner",
+      "description": "Home page promotional banners",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "image": { "type": "string" },
+        "title": { "type": "string" },
+        "link": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["image", "title", "active"]
+    },
+    "StoreSettings": {
+      "title": "Store Settings",
+      "description": "Global store configuration",
+      "type": "object",
+      "properties": {
+        "isOpen": { "type": "boolean" },
+        "openingTime": { "type": "string" },
+        "closingTime": { "type": "string" },
+        "message": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["isOpen", "openingTime", "closingTime"]
+    }
+  },
+  "firestore": {
+    "/settings/store": {
+      "schema": "StoreSettings",
+      "description": "Global store operating settings"
+    },
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User data collection"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Store inventory"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders"
+    },
+    "/coupons/{couponId}": {
+      "schema": "Coupon",
+      "description": "Promotional codes"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Product reviews"
+    },
+    "/banners/{bannerId}": {
+      "schema": "Banner",
+      "description": "Promotional banners"
+    }
+  }
+}
