@@ -46,13 +46,39 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </Link>
         
         {/* Badges */}
-        <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+        <div className="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
           <span className="px-2 py-0.5 bg-white/90 backdrop-blur-sm text-gray-900 text-[9px] font-black uppercase tracking-widest rounded-lg shadow-sm border border-gray-100">
             {product.category}
           </span>
-          {product.stock < 5 && product.stock > 0 && (
-            <span className="px-2 py-1 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-red-200 animate-pulse">
-              Low Stock: {product.stock} left
+          
+          {/* Imported Tag */}
+          {(product.name.toLowerCase().includes('redbull') || 
+            product.name.toLowerCase().includes('monster') || 
+            product.name.toLowerCase().includes('imported') ||
+            product.name.toLowerCase().includes('swiss')) && (
+            <span className="px-2 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-indigo-200">
+              Imported
+            </span>
+          )}
+
+          {/* Low Stock Tag */}
+          {product.stock <= 10 && product.stock > 0 && (
+            <span className="px-2 py-1 bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-orange-200 animate-pulse">
+              Only a few left!
+            </span>
+          )}
+
+          {/* Popular Tag */}
+          {(product.rating || 4.5) >= 4.8 && (
+            <span className="px-2 py-1 bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-amber-200">
+              Most Popular
+            </span>
+          )}
+
+          {/* Bestseller Tag */}
+          {((product.reviewCount || 0) >= 20 || product.price > 400) && (
+            <span className="px-2 py-1 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-blue-200">
+              Bestseller
             </span>
           )}
         </div>

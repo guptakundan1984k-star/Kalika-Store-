@@ -65,6 +65,7 @@ export interface Order {
     manual?: string;
     lat?: number;
     lng?: number;
+    liveLocationUrl?: string;
     verified?: boolean;
   };
   pin: string;
@@ -116,9 +117,13 @@ export interface Coupon {
 }
 
 export interface StoreSettings {
-  isOpen: boolean;
-  openingTime: string;
-  closingTime: string;
+  isOpen: boolean; // Manual override
+  autoSchedule: boolean; // Follow operating hours automatically
+  isFunctionallyOpen?: boolean; // Combined logic state
+  openingTime: string; // Mon-Sat
+  closingTime: string; // Mon-Sat
+  sundayOpeningTime: string;
+  sundayClosingTime: string;
   message?: string;
   updatedAt: number;
 }

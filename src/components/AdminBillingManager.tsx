@@ -286,7 +286,7 @@ export const AdminBillingManager: React.FC<AdminBillingManagerProps> = ({ orders
 
                   <div className="space-y-3">
                     {newBillItems.map((item, index) => (
-                      <div key={index} className="flex flex-col md:flex-row items-center gap-4 bg-gray-50 p-4 rounded-3xl border border-gray-100 group">
+                      <div key={`bill-item-${index}`} className="flex flex-col md:flex-row items-center gap-4 bg-gray-50 p-4 rounded-3xl border border-gray-100 group">
                         <div className="flex-1 w-full">
                           <input 
                             type="text" 
@@ -470,8 +470,8 @@ export const AdminBillingManager: React.FC<AdminBillingManagerProps> = ({ orders
                       <span>Qty</span>
                       <span>Price</span>
                     </div>
-                    {selectedOrder.items.map((item, i) => (
-                      <div key={i} className="flex justify-between">
+                    {selectedOrder.items.map((item, index) => (
+                      <div key={`order-item-preview-${selectedOrder.id}-${index}`} className="flex justify-between">
                         <span className="truncate max-w-[100px]">{item.name}</span>
                         <span>x{item.quantity}</span>
                         <span>₹{item.price * item.quantity}</span>

@@ -3,7 +3,7 @@ import {
   Search, Filter, Eye, CheckCircle, Truck, Package, Clock, 
   ShieldCheck, XCircle, MoreVertical, ArrowUpRight, ArrowDownRight, Calendar,
   Trash2, FileText, Download, CheckSquare, Square, Bluetooth, Printer, Sparkles,
-  MapPin, CheckCircle2, ShoppingBag
+  MapPin, CheckCircle2, ShoppingBag, Navigation
 } from 'lucide-react';
 import { Order } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -237,7 +237,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
           { label: 'Revenue', value: `₹${orders.reduce((sum, o) => sum + o.total, 0)}`, icon: ArrowUpRight, color: 'blue', filter: 'all' },
         ].map((stat, i) => (
           <button 
-            key={i} 
+            key={stat.label} 
             onClick={() => setStatusFilter(stat.filter)}
             className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm text-left hover:shadow-md transition-all active:scale-95"
           >
@@ -390,21 +390,42 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <div className="relative group/status">
-                        <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusColor(order.status)}`}>
-                          <StatusIcon className="w-3 h-3" />
-                          {order.status}
-                        </span>
-                        <div className="absolute left-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden hidden group-hover/status:block z-50">
-                          {['Pending', 'Proceeded', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'].map((s) => (
-                            <button
-                              key={s}
-                              onClick={() => onUpdateStatus(order.id, s as Order['status'])}
-                              className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all text-gray-400 hover:bg-primary/5 hover:text-primary"
+                      <div className="flex flex-col gap-2">
+                        <div className="relative group/status">
+                          <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusColor(order.status)}`}>
+                            <StatusIcon className="w-3 h-3" />
+                            {order.status}
+                          </span>
+                          <div className="absolute left-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden hidden group-hover/status:block z-50">
+                            {['Pending', 'Proceeded', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'].map((s) => (
+                              <button
+                                key={s}
+                                onClick={() => onUpdateStatus(order.id, s as Order['status'])}
+                                className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all text-gray-400 hover:bg-primary/5 hover:text-primary"
+                              >
+                                Mark as {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {/* Quick Actions for Proceed & Pack */}
+                        <div className="flex gap-1">
+                          {order.status === 'Pending' && (
+                            <button 
+                              onClick={() => onUpdateStatus(order.id, 'Proceeded')}
+                              className="px-2 py-1 bg-cyan-50 text-cyan-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-cyan-600 hover:text-white transition-all"
                             >
-                              Mark as {s}
+                              Proceed
                             </button>
-                          ))}
+                          )}
+                          {(order.status === 'Pending' || order.status === 'Proceeded') && (
+                            <button 
+                              onClick={() => onUpdateStatus(order.id, 'Packed')}
+                              className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all"
+                            >
+                              Pack
+                            </button>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -454,8 +475,8 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
             { title: 'Delivery Tracking', desc: 'Real-time map tracking for delivery partners.' },
             { title: 'Multi-Language', desc: 'Support for Hindi and other local languages.' },
             { title: 'Subscriptions', desc: 'Weekly/Monthly grocery subscriptions for essentials.' }
-          ].map((s, i) => (
-            <div key={i} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-1">
+          ].map((s) => (
+            <div key={s.title} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-1">
               <p className="text-sm font-black text-gray-900">{s.title}</p>
               <p className="text-[10px] text-gray-500 font-medium leading-relaxed">{s.desc}</p>
             </div>
@@ -518,30 +539,53 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
                         </p>
                       )}
                       {selectedOrder.address && (
-                        <div className="space-y-2">
-                          <a 
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedOrder.address.manual || '')}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block text-xs text-primary font-bold hover:underline"
-                          >
-                            Address: {selectedOrder.address.manual || 'No address provided'}
-                          </a>
-                          {!selectedOrder.address.verified && (
-                            <button 
-                              onClick={() => handleVerifyAddress(selectedOrder)}
-                              className="flex items-center gap-2 text-[10px] font-black text-primary uppercase tracking-widest hover:underline"
+                        <div className="space-y-3">
+                          <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Manual Address</p>
+                            <a 
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedOrder.address.manual || '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-gray-700 font-medium hover:text-primary transition-colors block leading-relaxed"
                             >
-                              <MapPin className="w-3 h-3" />
-                              Verify Address
-                            </button>
+                              {selectedOrder.address.manual || 'No address provided'}
+                            </a>
+                          </div>
+
+                          {selectedOrder.address.liveLocationUrl && (
+                            <a 
+                              href={selectedOrder.address.liveLocationUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-3 bg-primary/10 p-3 rounded-xl border border-primary/20 group/loc transition-all hover:bg-primary/20"
+                            >
+                              <div className="w-8 h-8 bg-primary text-white rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-primary/20 group-hover/loc:scale-110 transition-transform">
+                                <Navigation className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black text-primary uppercase tracking-widest">Live Location Detected</p>
+                                <p className="text-[9px] font-bold text-primary/60 uppercase tracking-tighter">Click for exact marker on map</p>
+                              </div>
+                              <ArrowUpRight className="w-4 h-4 text-primary ml-auto group-hover/loc:translate-x-1 group-hover/loc:-translate-y-1 transition-transform" />
+                            </a>
                           )}
-                          {selectedOrder.address.verified && (
-                            <div className="flex items-center gap-2 text-[10px] font-black text-green-500 uppercase tracking-widest">
-                              <CheckCircle2 className="w-3 h-3" />
-                              Address Verified
-                            </div>
-                          )}
+
+                          <div className="flex items-center justify-between pt-1">
+                            {!selectedOrder.address.verified ? (
+                              <button 
+                                onClick={() => handleVerifyAddress(selectedOrder)}
+                                className="flex items-center gap-2 text-[10px] font-black text-primary uppercase tracking-widest hover:underline"
+                              >
+                                <MapPin className="w-3 h-3" />
+                                Verify Address
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-2 text-[10px] font-black text-green-500 uppercase tracking-widest">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Address Verified
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -593,7 +637,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Order Items</h4>
                   <div className="space-y-3">
                     {selectedOrder.items.map((item, i) => (
-                      <div key={i} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-gray-100">
+                      <div key={`order-item-${selectedOrder.id}-${i}`} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-gray-100">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-gray-50 rounded-xl overflow-hidden">
                             {item.image && <img src={item.image} alt={item.name} className="w-full h-full object-cover" />}

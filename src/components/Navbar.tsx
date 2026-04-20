@@ -104,11 +104,6 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
             </div>
 
             <div className="flex items-center gap-4">
-              {isAdmin && (
-                <Link to="/admin" className="p-2 hover:bg-primary/10 rounded-full transition-all text-primary" title="Go to Admin Panel">
-                  <Shield className="w-6 h-6" />
-                </Link>
-              )}
               <Link to="/profile" className="p-2 hover:bg-gray-50 rounded-full transition-colors" aria-label="Profile">
                 <User className="w-6 h-6 text-gray-700" />
               </Link>

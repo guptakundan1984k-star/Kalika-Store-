@@ -7,7 +7,7 @@ export async function generateProductDescription(name: string, category: string)
     model: "gemini-3-flash-preview",
     contents: `Generate a high-quality, professional product description for a grocery item named "${name}" in the category "${category}". Include nutritional highlights and usage suggestions.`,
     config: {
-      tools: [{ googleSearchRetrieval: {} }]
+      tools: [{ googleSearch: {} }]
     }
   });
   return response.text;
@@ -31,7 +31,7 @@ export async function analyzeProductImage(base64Image: string) {
       ]
     },
     config: {
-      tools: [{ googleSearchRetrieval: {} }],
+      tools: [{ googleSearch: {} }],
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -120,7 +120,7 @@ export async function searchProductDetails(name: string) {
     model: "gemini-3-flash-preview",
     contents: `Search for detailed information about the grocery product "${name}". Find its professional description, typical price in India, and a high-quality public image URL if available. If you can't find a real image URL, suggest a descriptive keyword for a placeholder image.`,
     config: {
-      tools: [{ googleSearchRetrieval: {} }],
+      tools: [{ googleSearch: {} }],
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -161,7 +161,7 @@ export async function answerAdminQuery(query: string, data: any, base64Image?: s
     model: "gemini-3-flash-preview",
     contents: { parts },
     config: {
-      tools: [{ googleSearchRetrieval: {} }]
+      tools: [{ googleSearch: {} }]
     }
   });
   return response.text;

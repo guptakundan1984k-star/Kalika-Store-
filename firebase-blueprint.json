@@ -114,12 +114,27 @@
         "updatedAt": { "type": "number" }
       },
       "required": ["isOpen", "openingTime", "closingTime"]
+    },
+    "GoogleDriveSettings": {
+      "title": "Google Drive Settings",
+      "description": "Google Drive OAuth tokens and status",
+      "type": "object",
+      "properties": {
+        "tokens": { "type": "object" },
+        "email": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["tokens", "email"]
     }
   },
   "firestore": {
     "/settings/store": {
       "schema": "StoreSettings",
       "description": "Global store operating settings"
+    },
+    "/settings/google_drive": {
+      "schema": "GoogleDriveSettings",
+      "description": "Google Drive integration tokens"
     },
     "/users/{uid}": {
       "schema": "UserProfile",

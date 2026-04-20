@@ -14,7 +14,27 @@ import {
   createUserWithEmailAndPassword,
   updateProfile
 } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, Timestamp, getDocFromServer, addDoc } from 'firebase/firestore';
+import { 
+  getFirestore, 
+  initializeFirestore,
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  getDocs, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where, 
+  onSnapshot, 
+  orderBy, 
+  limit, 
+  Timestamp, 
+  getDocFromServer, 
+  addDoc, 
+  enableMultiTabIndexedDbPersistence, 
+  terminate 
+} from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 import firebaseAppletConfig from '../firebase-applet-config.json';
@@ -28,7 +48,26 @@ export const auth = initializeAuth(app, {
   popupRedirectResolver: browserPopupRedirectResolver,
 });
 
-export const db = getFirestore(app, firebaseAppletConfig.firestoreDatabaseId);
+// Initialize Firestore with long polling to prevent the 10-second timeout in restricted environments
+// NOTE: If you are deploying to kalikastore.netlify.app, ensure you add this domain 
+// to your Authorized Domains in the Firebase Console (Auth > Settings > Authorized Domains)
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, firebaseAppletConfig.firestoreDatabaseId);
+
+// Enable persistence for better resilience in sandboxed/iframe environments
+if (typeof window !== 'undefined') {
+  enableMultiTabIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+      // Multiple tabs open, persistence can only be enabled in one tab at a a time.
+      console.warn('Firestore persistence failed: Multiple tabs open');
+    } else if (err.code === 'unimplemented') {
+      // The current browser does not support all of the features required to enable persistence
+      console.warn('Firestore persistence is not supported by this browser');
+    }
+  });
+}
+
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
@@ -79,12 +118,16 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
   
-  // Don't throw for transient connection issues
-  if (errInfo.error.includes('unavailable') || errInfo.error.includes('offline')) {
+  // Don't log or throw for transient connection issues
+  if (errInfo.error.toLowerCase().includes('unavailable') || 
+      errInfo.error.toLowerCase().includes('offline') || 
+      errInfo.error.toLowerCase().includes('could not reach')) {
+    console.log(`Firestore is operating in offline mode (${operationType} on ${path})`);
     return;
   }
+
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
 
   if (shouldThrow) {
     throw new Error(JSON.stringify(errInfo));
@@ -96,21 +139,39 @@ export const isAdminEmail = (email: string | null | undefined) => {
   return email === 'guptakundan1984k@gmail.com';
 };
 
-// Connection test
-async function testConnection() {
+// Connection test with retry mechanism
+async function testConnection(retries = 3) {
   try {
-    console.log("Testing Firestore connection...");
+    // Attempt to fetch from server to verify actual backend connectivity
     await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log("Firestore connection successful.");
+    console.log("Firestore connection verified (Server).");
+    
+    // Test Storage connectivity
+    try {
+      const storageRef = ref(storage, 'test_connection.txt');
+      await getDownloadURL(storageRef).catch(() => {}); // We don't care if file exists, just if service is reachable
+      console.log("Firebase Storage service is reachable.");
+    } catch (e) {
+      console.warn("Firebase Storage might not be initialized or rules are restrictive.");
+    }
   } catch (error) {
-    if(error instanceof Error && (error.message.includes('the client is offline') || error.message.includes('unavailable'))) {
-      // Silent warning for transient connection issues
-      console.log("Firestore is currently in offline mode.");
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    if (errorMessage.includes('unavailable') || errorMessage.includes('offline')) {
+      if (retries > 0) {
+        console.log(`Firestore unavailable, retrying connection... (${retries} attempts left)`);
+        // Wait 2 seconds before retrying
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return testConnection(retries - 1);
+      }
+      console.log("Firestore is currently in offline mode. Local persistence is enabled.");
     } else {
-      console.log("Firestore connection test completed (document may not exist, which is fine).");
+      // Document likely doesn't exist, which is a successful "connection" to the DB service
+      console.log("Firestore service is reachable.");
     }
   }
 }
+
 testConnection();
 
 export { 

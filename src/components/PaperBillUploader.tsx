@@ -141,7 +141,7 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
 
               <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto">
                 {detectedItems.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                  <div key={`detected-${i}-${item.name}`} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
                     <div className="flex items-center gap-4">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.matchedProduct ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                         {item.matchedProduct ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}

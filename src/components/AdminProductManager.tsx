@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Plus, Search, Edit2, Trash2, Package, Filter, Download, 
   Upload, Image as ImageIcon, Sparkles, Loader2, AlertCircle, Save, X,
-  CheckSquare, Square
+  CheckSquare, Square, Cloud
 } from 'lucide-react';
 import { Product } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -39,13 +39,15 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     image: '',
     weight: ''
   });
+  const [bulkStockValue, setBulkStockValue] = useState<number>(0);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categories, setCategories] = useState(['Vegetables', 'Fruits', 'Dairy', 'Bakery', 'Meat', 'Snacks', 'Beverages', 'Staples', 'Oils', 'Household']);
 
   const handleBulkSync = async (type: 'images' | 'descriptions' | 'all') => {
     const productsToSync = products.filter(p => {
-      const needsImage = !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder');
+      const isPlaceholder = !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder');
+      const needsImage = isPlaceholder;
       const needsDesc = !p.description || p.description.length < 20;
       if (type === 'images') return needsImage;
       if (type === 'descriptions') return needsDesc;
@@ -53,11 +55,11 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     });
 
     if (productsToSync.length === 0) {
-      alert("All products are already up to date!");
+      alert("All products have real images and descriptions! If you want to force updates, please edit them individualy.");
       return;
     }
 
-    if (!window.confirm(`Found ${productsToSync.length} products needing ${type}. Sync them using AI? This might take a few minutes.`)) return;
+    if (!window.confirm(`Found ${productsToSync.length} products needing ${type}. Sync them using Google Search & AI? This will fetch real product photos.`)) return;
 
     setIsSyncing(true);
     setSyncProgress({ current: 0, total: productsToSync.length });
@@ -132,8 +134,22 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     try {
       await Promise.all(selectedIds.map(id => updateDoc(doc(db, 'products', id), { stock })));
       setSelectedIds([]);
+      setBulkStockValue(0);
     } catch (e) {
       console.error("Bulk stock update failed", e);
+    }
+  };
+
+  const handleBulkCategoryUpdate = async () => {
+    const category = window.prompt("Enter new category for selected products:", categories[0]);
+    if (!category) return;
+    
+    try {
+      await Promise.all(selectedIds.map(id => updateDoc(doc(db, 'products', id), { category })));
+      setSelectedIds([]);
+      if (!categories.includes(category)) setCategories(prev => [...prev, category]);
+    } catch (e) {
+      console.error("Bulk category update failed", e);
     }
   };
 
@@ -371,7 +387,6 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
             onClick={async () => {
               if (window.confirm('⚠️ WARNING: This will delete ALL products from your store. This action cannot be undone. Are you absolutely sure?')) {
                 if (window.confirm('FINAL CONFIRMATION: Type "DELETE ALL" (case sensitive) if you are sure.')) {
-                  // Final check - normally we'd provide a prompt for text entry, but we can use window.prompt if available or just another confirm
                   const confirmText = window.prompt('Type "DELETE ALL" to confirm:');
                   if (confirmText === 'DELETE ALL') {
                     setIsSyncing(true);
@@ -407,14 +422,38 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
         </div>
       </div>
 
+      {products.some(p => p.image?.includes('picsum.photos') || !p.image) && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-primary/5 border border-primary/20 p-4 rounded-3xl flex items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900">Professional Images Missing</p>
+              <p className="text-xs text-gray-500">Some products are still using placeholder photos. Use AI Sync to find real official images.</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => handleBulkSync('images')}
+            className="bg-primary text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all"
+          >
+            Enhance Photos Now
+          </button>
+        </motion.div>
+      )}
+
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
           { label: 'Total Products', value: products.length, icon: Package, color: 'primary' },
           { label: 'Low Stock', value: products.filter(p => p.stock <= 5).length, icon: AlertCircle, color: 'red' },
           { label: 'Categories', value: new Set(products.map(p => p.category)).size, icon: Filter, color: 'blue' },
-        ].map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm">
+        ].map((stat) => (
+          <div key={stat.label} className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm">
             <div className={`w-12 h-12 bg-${stat.color === 'primary' ? 'primary' : stat.color}-50 rounded-2xl flex items-center justify-center text-${stat.color === 'primary' ? 'primary' : stat.color}-500 mb-4`}>
               <stat.icon className="w-6 h-6" />
             </div>
@@ -459,28 +498,55 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
               <div className="flex items-center gap-4">
                 <span className="text-xs font-black uppercase tracking-widest">{selectedIds.length} selected</span>
                 <div className="h-4 w-px bg-white/20" />
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleBulkStockUpdate(0)}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 bg-white/10 p-1 rounded-xl border border-white/10">
+                    <input 
+                      type="number" 
+                      value={bulkStockValue}
+                      onChange={(e) => setBulkStockValue(parseInt(e.target.value) || 0)}
+                      className="w-16 bg-transparent border-none text-right text-xs font-black focus:ring-0 placeholder-white/30"
+                      placeholder="Qty"
+                    />
+                    <button
+                      onClick={() => handleBulkStockUpdate(bulkStockValue)}
+                      className="px-3 py-1 bg-primary text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all hover:bg-primary-dark"
+                    >
+                      Update Stock
+                    </button>
+                  </div>
+                  <div className="h-4 w-px bg-white/20" />
+                  <button 
+                    onClick={handleBulkCategoryUpdate}
                     className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all"
                   >
-                    Set Out of Stock
+                    Change Category
                   </button>
-                  <button
-                    onClick={() => handleBulkStockUpdate(50)}
-                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all"
-                  >
-                    Set Stock (50)
-                  </button>
+                  <div className="h-4 w-px bg-white/20" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleBulkStockUpdate(0)}
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Quick: Out of Stock
+                    </button>
+                  </div>
                 </div>
               </div>
-              <button 
-                onClick={handleBulkDelete}
-                className="flex items-center gap-2 bg-red-500 hover:bg-red-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setSelectedIds([])}
+                  className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-white/10"
+                >
+                  Clear
+                </button>
+                <button 
+                  onClick={handleBulkDelete}
+                  className="flex items-center gap-2 bg-red-500 hover:bg-red-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -506,7 +572,12 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
               {filteredProducts.map((product) => {
                 const isSelected = selectedIds.includes(product.id);
                 return (
-                  <tr key={product.id} className={`hover:bg-gray-50/50 transition-colors group ${isSelected ? 'bg-primary/5' : ''} ${(!product.price || product.price <= 0) ? 'bg-red-50/30' : ''}`}>
+                  <tr 
+                    key={product.id} 
+                    onDoubleClick={() => { setEditingProduct(product); setIsEditing(true); }}
+                    className={`hover:bg-gray-50/50 transition-colors group cursor-pointer ${isSelected ? 'bg-primary/5' : ''} ${(!product.price || product.price <= 0) ? 'bg-red-50/30' : ''}`}
+                    title="Double click to edit"
+                  >
                     <td className="px-6 py-4">
                       <button onClick={() => toggleSelect(product.id)} className={`p-1 transition-colors ${isSelected ? 'text-primary' : 'text-gray-300'}`}>
                         {isSelected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
@@ -821,7 +892,13 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Image URL</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Image URL</label>
+                    <span className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
+                      <Cloud className="w-3 h-3" />
+                      Uses 5TB Gmail Storage
+                    </span>
+                  </div>
                   <div className="flex gap-2">
                     <input 
                       type="text" 
@@ -830,9 +907,13 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                       className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
                       placeholder="https://..."
                     />
+                    <label className="bg-primary/10 text-primary p-3 rounded-xl hover:bg-primary hover:text-white transition-all cursor-pointer flex items-center justify-center shrink-0">
+                      {analyzingPhoto ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+                      <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                    </label>
                     <button 
                       onClick={handleAISuggest}
-                      className="bg-secondary/10 text-secondary p-3 rounded-xl hover:bg-secondary hover:text-white transition-all"
+                      className="bg-secondary/10 text-secondary p-3 rounded-xl hover:bg-secondary hover:text-white transition-all shrink-0"
                       title="AI Suggest Image"
                     >
                       <ImageIcon className="w-5 h-5" />

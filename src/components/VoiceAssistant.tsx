@@ -151,7 +151,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
   if (!isVoiceEnabled) return null;
 
   return (
-    <div className="fixed bottom-24 left-6 z-50 flex flex-col items-start gap-4">
+    <motion.div 
+      drag="y"
+      dragConstraints={{ top: -500, bottom: 0 }}
+      className="fixed bottom-24 left-6 z-50 flex flex-col items-start gap-4 touch-none cursor-grab active:cursor-grabbing"
+    >
       <AnimatePresence>
         {isVoiceEnabled && !isListening && (
           <motion.div 
@@ -205,6 +209,6 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
           {isListening ? <Loader2 className="w-6 h-6 animate-spin" /> : <Mic className="w-6 h-6" />}
         </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 };

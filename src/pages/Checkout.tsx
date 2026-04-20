@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { CartItem, UserProfile, Order, Coupon, StoreSettings } from '../types';
 import { DELIVERY_FEE, FREE_DELIVERY_THRESHOLD, LOYALTY_COIN_VALUE, LOYALTY_EARN_RATE } from '../constants';
 import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, ShieldCheck, Clock, XCircle, Navigation, Smartphone, Wallet, Banknote, Sparkles, AlertCircle } from 'lucide-react';
@@ -20,6 +20,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   const [manualAddress, setManualAddress] = useState(user?.address || '');
   const [deliverySlot, setDeliverySlot] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'COD'>('COD');
+  const [liveLocation, setLiveLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
@@ -90,32 +91,26 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
     setCouponError('');
   };
 
-  const isStoreOpen = () => {
-    const now = new Date();
-    const day = now.getDay(); // 0 = Sunday, 1-6 = Mon-Sat
-    const hour = now.getHours();
-    
-    if (day === 0) { // Sunday
-      return hour >= 10 && hour < 15;
-    } else { // Mon-Sat
-      return hour >= 10 && hour < 21;
-    }
-  };
-
   const getAvailableSlots = () => {
     const days = [];
     const now = new Date();
     
-    // Default hours if storeSettings is not available
-    const openTime = storeSettings?.openingTime || "08:30";
-    const closeTime = storeSettings?.closingTime || "21:00";
-    
-    const [openH, openM] = openTime.split(':').map(Number);
-    const [closeH, closeM] = closeTime.split(':').map(Number);
-
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 7; i++) {
       const date = new Date();
       date.setDate(now.getDate() + i);
+      const day = date.getDay();
+      
+      let openTime = storeSettings?.openingTime || "08:30";
+      let closeTime = storeSettings?.closingTime || "21:00";
+      
+      if (day === 0) { // Sunday
+        openTime = storeSettings?.sundayOpeningTime || "10:00";
+        closeTime = storeSettings?.sundayClosingTime || "15:00";
+      }
+      
+      const [openH, openM] = openTime.split(':').map(Number);
+      const [closeH, closeM] = closeTime.split(':').map(Number);
+
       const dayName = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : date.toLocaleDateString('en-US', { weekday: 'long' });
       const dateStr = date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
       
@@ -123,7 +118,6 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       const startTime = openH * 60 + openM;
       const endTime = closeH * 60 + closeM;
       
-      // Generate slots every 1 hour
       for (let m = startTime; m < endTime; m += 30) {
         const h = Math.floor(m / 60);
         const mins = m % 60;
@@ -156,7 +150,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
           
           const slotTime = hour * 60 + parseInt(minute);
           const currentTime = currentHour * 60 + currentMinute;
-          return slotTime > currentTime + 60; // At least 1 hour in advance
+          return slotTime > currentTime + 45; // At least 45 mins in advance
         });
       }
 
@@ -170,6 +164,13 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   };
 
   const availableDays = getAvailableSlots();
+
+  // Auto-select next available day if today is exhausted
+  useEffect(() => {
+    if (availableDays.length > 0 && selectedDate === 0 && availableDays[0].slots.length === 0) {
+      setSelectedDate(1);
+    }
+  }, [availableDays, selectedDate]);
 
   const handleGetLocation = () => {
     setIsLocating(true);
@@ -195,8 +196,10 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
             const data = await response.json();
             const address = data.display_name || `Jharkhand, Ranchi (Live Location: ${latitude}, ${longitude})`;
             setManualAddress(address);
+            setLiveLocation({ lat: latitude, lng: longitude });
           } catch (e) {
             setManualAddress(prev => `Jharkhand, Ranchi\nLive Location: https://www.google.com/maps?q=${latitude},${longitude}`.trim());
+            setLiveLocation({ lat: latitude, lng: longitude });
           }
           setIsLocating(false);
         },
@@ -223,8 +226,18 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
 
   const handlePlaceOrder = async () => {
     setErrors({});
-    if (storeSettings && !storeSettings.isOpen) {
-      alert(storeSettings.message || "Store is currently closed and not accepting new orders.");
+    
+    // Check if it's a pre-order (Tomorrow or beyond)
+    const isPreOrder = selectedDate > 0;
+
+    if (storeSettings && !storeSettings.isFunctionallyOpen && !isPreOrder) {
+      // If store is closed and trying to order for "Today"
+      const proceedAsPreOrder = window.confirm(`${storeSettings.message || "Store is currently closed."}\n\nWould you like to place a PRE-ORDER for tomorrow instead?`);
+      if (proceedAsPreOrder) {
+        setSelectedDate(1); // Set to Tomorrow
+        slotRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
       return;
     }
 
@@ -285,6 +298,9 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       deliveryType,
       address: deliveryType === 'Delivery' ? {
         manual: manualAddress,
+        lat: liveLocation?.lat,
+        lng: liveLocation?.lng,
+        liveLocationUrl: liveLocation ? `https://www.google.com/maps?q=${liveLocation.lat},${liveLocation.lng}` : undefined
       } : undefined,
       deliverySlot,
       paymentMethod,
@@ -572,7 +588,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                   <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                     {availableDays.map((day, i) => (
                       <button
-                        key={i}
+                        key={day.dateStr}
                         onClick={() => setSelectedDate(i)}
                         className={`flex flex-col items-center min-w-[100px] p-3 rounded-2xl border-2 transition-all ${
                           selectedDate === i ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'

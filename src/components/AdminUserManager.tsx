@@ -114,8 +114,8 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
           { label: 'Total Users', value: users.length, icon: User, color: 'primary' },
           { label: 'Administrators', value: users.filter(u => u.role === 'admin').length, icon: Shield, color: 'purple' },
           { label: 'Active Customers', value: users.filter(u => u.role === 'user').length, icon: UserCheck, color: 'blue' },
-        ].map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm">
+        ].map((stat) => (
+          <div key={stat.label} className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm">
             <div className={`w-12 h-12 bg-${stat.color === 'primary' ? 'primary' : stat.color}-50 rounded-2xl flex items-center justify-center text-${stat.color === 'primary' ? 'primary' : stat.color}-500 mb-4`}>
               <stat.icon className="w-6 h-6" />
             </div>

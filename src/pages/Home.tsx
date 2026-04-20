@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ProductCard } from '../components/ProductCard';
 import { Product, Banner, StoreSettings } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -16,14 +16,25 @@ interface HomeProps {
 const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettings }) => {
   const activeBanners = banners.filter(b => b.active);
   const [currentBanner, setCurrentBanner] = React.useState(0);
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     if (activeBanners.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentBanner(prev => (prev + 1) % activeBanners.length);
-    }, 3000);
+    }, 5000); // 5 seconds is better for reading
     return () => clearInterval(timer);
   }, [activeBanners.length]);
+
+  const handleBannerClick = (link?: string) => {
+    if (!link) return;
+    if (link.startsWith('http')) {
+      window.open(link, '_blank', 'noopener,noreferrer');
+    } else {
+      const target = link.startsWith('/') ? link : `/${link}`;
+      navigate(target);
+    }
+  };
 
   return (
     <div className="pb-24">
@@ -44,19 +55,15 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
                 Kalika <span className="text-primary">Store</span>
               </h1>
               
-              {storeSettings && (
+              {storeSettings && !storeSettings.isFunctionallyOpen && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border ${
-                    storeSettings.isOpen 
-                      ? 'bg-green-500/10 border-green-500/20 text-green-400' 
-                      : 'bg-red-500/10 border-red-500/20 text-red-400'
-                  }`}
+                  className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border bg-orange-500/10 border-orange-500/20 text-orange-400"
                 >
-                  <div className={`w-2 h-2 rounded-full animate-pulse ${storeSettings.isOpen ? 'bg-green-400' : 'bg-red-400'}`} />
+                  <div className="w-2 h-2 rounded-full animate-pulse bg-orange-400" />
                   <span className="text-[10px] font-black uppercase tracking-widest">
-                    Store is {storeSettings.isOpen ? 'Open' : 'Closed'}
+                    Store Open: Pre-Ordering Only
                   </span>
                 </motion.div>
               )}
@@ -85,7 +92,8 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -100 }}
                 transition={{ duration: 0.5, ease: "circOut" }}
-                className="absolute inset-0"
+                className={`absolute inset-0 ${activeBanners[currentBanner].link ? 'cursor-pointer' : ''}`}
+                onClick={() => handleBannerClick(activeBanners[currentBanner].link)}
               >
                 <img 
                   src={activeBanners[currentBanner].image} 
@@ -109,12 +117,11 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
                       transition={{ delay: 0.3 }}
                       className="mt-6"
                     >
-                      <Link 
-                        to={activeBanners[currentBanner].link!}
+                      <button 
                         className="inline-flex items-center gap-2 bg-white text-gray-900 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-primary hover:text-white transition-all shadow-xl"
                       >
                         Shop Now <ArrowRight className="w-4 h-4" />
-                      </Link>
+                      </button>
                     </motion.div>
                   )}
                 </div>
@@ -126,7 +133,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
                 {activeBanners.map((_, i) => (
                   <button
-                    key={i}
+                    key={`indicator-${i}`}
                     onClick={() => setCurrentBanner(i)}
                     className={`h-1.5 rounded-full transition-all ${
                       currentBanner === i ? 'w-8 bg-white' : 'w-2 bg-white/40'
@@ -161,6 +168,16 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
               />
             ))}
           </div>
+          
+          <div className="flex justify-center pt-8">
+            <Link 
+              to="/items"
+              className="group flex items-center gap-3 bg-white border-2 border-primary text-primary px-10 py-5 rounded-[24px] font-black text-xs uppercase tracking-[0.2em] hover:bg-primary hover:text-white transition-all shadow-xl shadow-primary/10 active:scale-95"
+            >
+              Explore All Items
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
         </section>
 
         {/* Store Info Section */}
@@ -185,11 +202,11 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
                       Open 7 days a week: {storeSettings?.openingTime || '8:00 AM'} - {storeSettings?.closingTime || '9:00 PM'}
                     </p>
                   </div>
-                  {!storeSettings?.isOpen && (
-                    <div className="flex items-center gap-2 mt-2 p-3 bg-red-50 rounded-xl text-red-500 border border-red-100">
+                  {!storeSettings?.isFunctionallyOpen && (
+                    <div className="flex items-center gap-2 mt-2 p-3 bg-orange-50 rounded-xl text-orange-600 border border-orange-100">
                       <AlertCircle className="w-4 h-4 shrink-0" />
                       <p className="text-[10px] font-bold uppercase tracking-wider leading-relaxed">
-                        {storeSettings?.message || "We are currently closed. You can pre-browse items."}
+                        {storeSettings?.message || "Standard hours ended. We are currently accepting Pre-orders for delivery in the next available slot."}
                       </p>
                     </div>
                   )}

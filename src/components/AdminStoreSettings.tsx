@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, doc, onSnapshot, updateDoc, handleFirestoreError, OperationType } from '../firebase';
+import { db, doc, onSnapshot, setDoc, handleFirestoreError, OperationType } from '../firebase';
 import { StoreSettings } from '../types';
 import { Clock, Store, Save, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -15,11 +15,14 @@ export const AdminStoreSettings: React.FC = () => {
       if (docSnap.exists()) {
         setSettings(docSnap.data() as StoreSettings);
       } else {
-        // Initialize if not exists
+        // Initialize with user requested defaults
         const initial: StoreSettings = {
           isOpen: true,
-          openingTime: '09:00',
-          closingTime: '22:00',
+          autoSchedule: true,
+          openingTime: '10:40',
+          closingTime: '20:00',
+          sundayOpeningTime: '10:40',
+          sundayClosingTime: '15:00',
           updatedAt: Date.now()
         };
         setSettings(initial);
@@ -41,10 +44,10 @@ export const AdminStoreSettings: React.FC = () => {
     setMessage(null);
 
     try {
-      await updateDoc(doc(db, 'settings', 'store'), {
+      await setDoc(doc(db, 'settings', 'store'), {
         ...settings,
         updatedAt: Date.now()
-      });
+      }, { merge: true });
       setMessage({ type: 'success', text: 'Store settings updated successfully!' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
@@ -81,6 +84,30 @@ export const AdminStoreSettings: React.FC = () => {
               <h3 className="text-xl font-black text-gray-900 tracking-tight">Store Status</h3>
               <p className="text-sm font-medium text-gray-500">Enable or disable the store for taking orders.</p>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100">
+            <div className="space-y-1">
+              <span className={`text-xs font-black uppercase tracking-widest ${settings?.autoSchedule ? 'text-primary' : 'text-gray-400'}`}>
+                Automatic Schedule: {settings?.autoSchedule ? 'On' : 'Off'}
+              </span>
+              <p className="text-sm text-gray-500 font-medium">
+                {settings?.autoSchedule ? 'Store follows daily hours automatically.' : 'Store is open/closed strictly by manual toggle.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSettings(prev => prev ? { ...prev, autoSchedule: !prev.autoSchedule } : null)}
+              className={`relative inline-flex h-10 w-20 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                settings?.autoSchedule ? 'bg-primary' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-8 w-8 transform rounded-full bg-white transition-transform duration-300 ${
+                  settings?.autoSchedule ? 'translate-x-11' : 'translate-x-1'
+                } shadow-md`}
+              />
+            </button>
           </div>
 
           <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100">
@@ -134,20 +161,38 @@ export const AdminStoreSettings: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Opening Time</label>
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Mon-Sat Opening Time</label>
               <input
                 type="time"
-                value={settings?.openingTime || '09:00'}
+                value={settings?.openingTime || '10:40'}
                 onChange={(e) => setSettings(prev => prev ? { ...prev, openingTime: e.target.value } : null)}
                 className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Closing Time</label>
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Mon-Sat Closing Time</label>
               <input
                 type="time"
-                value={settings?.closingTime || '22:00'}
+                value={settings?.closingTime || '20:00'}
                 onChange={(e) => setSettings(prev => prev ? { ...prev, closingTime: e.target.value } : null)}
+                className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Sunday Opening Time</label>
+              <input
+                type="time"
+                value={settings?.sundayOpeningTime || '10:40'}
+                onChange={(e) => setSettings(prev => prev ? { ...prev, sundayOpeningTime: e.target.value } : null)}
+                className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Sunday Closing Time</label>
+              <input
+                type="time"
+                value={settings?.sundayClosingTime || '15:00'}
+                onChange={(e) => setSettings(prev => prev ? { ...prev, sundayClosingTime: e.target.value } : null)}
                 className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
               />
             </div>

@@ -641,7 +641,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
 
                           <div className="flex flex-wrap gap-2">
                             {order.items.map((item, i) => (
-                              <div key={i} className="bg-gray-50 px-3 py-2 rounded-xl text-xs font-bold text-gray-600 border border-gray-100 flex items-center gap-2">
+                              <div key={`order-item-${order.id}-${i}`} className="bg-gray-50 px-3 py-2 rounded-xl text-xs font-bold text-gray-600 border border-gray-100 flex items-center gap-2">
                                 {item.image && (
                                   <img src={item.image} alt={item.name} className="w-6 h-6 rounded-lg object-cover" />
                                 )}
@@ -662,23 +662,27 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                                 className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-primary transition-all duration-1000 -z-10" 
                                 style={{ 
                                   width: order.status === 'Pending' ? '0%' : 
-                                         order.status === 'Packed' ? '33%' : 
-                                         order.status === 'Out for Delivery' ? '66%' : '100%' 
+                                         order.status === 'Proceeded' ? '25%' :
+                                         order.status === 'Packed' ? '50%' : 
+                                         order.status === 'Out for Delivery' ? '75%' : '100%' 
                                 }} 
                               />
                               
                               {[
                                 { status: 'Pending', icon: Clock },
+                                { status: 'Proceeded', icon: CheckCircle },
                                 { status: 'Packed', icon: PackageIcon },
                                 { status: 'Out for Delivery', icon: Truck },
                                 { status: 'Delivered', icon: CheckCircle }
                               ].map((step, i) => {
                                 const StepIcon = step.icon;
-                                const isCompleted = ['Pending', 'Packed', 'Out for Delivery', 'Delivered'].indexOf(order.status) >= i;
+                                const stepsArr = ['Pending', 'Proceeded', 'Packed', 'Out for Delivery', 'Delivered'];
+                                const statusIdx = stepsArr.indexOf(order.status);
+                                const isCompleted = statusIdx >= i;
                                 const isCurrent = order.status === step.status;
 
                                 return (
-                                  <div key={i} className="flex flex-col items-center gap-2">
+                                  <div key={`step-${order.id}-${i}`} className="flex flex-col items-center gap-2">
                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ${
                                       isCompleted ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white text-gray-300 border border-gray-100'
                                     } ${isCurrent ? 'scale-125 ring-4 ring-primary/10' : ''}`}>
@@ -869,7 +873,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                     
                     <div className="bg-gray-50 p-6 rounded-3xl text-left space-y-4 max-h-[300px] overflow-y-auto">
                       {helpMessages.map((msg, i) => (
-                        <div key={i} className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                        <div key={`help-${i}`} className={`flex items-start gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                           <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
                             msg.role === 'ai' ? 'bg-primary text-white' : 
                             msg.role === 'admin' ? 'bg-secondary text-white' : 'bg-gray-900 text-white'

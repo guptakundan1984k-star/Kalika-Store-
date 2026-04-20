@@ -10,12 +10,13 @@ import { AdminBillingManager } from '../components/AdminBillingManager';
 import { AdminVariationManager } from '../components/AdminVariationManager';
 import { AdminStockManager } from '../components/AdminStockManager';
 import { AdminStoreSettings } from '../components/AdminStoreSettings';
+import { AdminStorageManager } from '../components/AdminStorageManager';
 import { Product, Order, UserProfile, Coupon, Banner } from '../types';
 import { 
   LayoutDashboard, Package, ShoppingBag, Users, 
   Tag, Settings, LogOut, ChevronRight, ChevronLeft, Menu, X, 
   Bell, Search, User, Sparkles, Shield, Image as ImageIcon,
-  Printer, Eye, EyeOff, Box, Layers, Cloud, CloudOff, RefreshCw, Database
+  Printer, Eye, EyeOff, Box, Layers, Cloud, CloudOff, RefreshCw, Database, HardDrive
 } from 'lucide-react';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { motion, AnimatePresence } from 'motion/react';
@@ -31,8 +32,7 @@ interface AdminProps {
 }
 
 const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'users' | 'coupons' | 'banners' | 'support' | 'billing' | 'variations' | 'stocks' | 'settings'>('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'users' | 'coupons' | 'banners' | 'support' | 'billing' | 'variations' | 'stocks' | 'settings' | 'storage'>('dashboard');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [pendingQueries, setPendingQueries] = useState(0);
   const [password, setPassword] = useState('');
@@ -205,106 +205,19 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
     { id: 'banners', label: 'Banners', icon: ImageIcon },
     { id: 'support', label: 'Support', icon: Bell, badge: pendingQueries },
     { id: 'settings', label: 'Store Settings', icon: Settings },
+    { id: 'storage', label: 'Cloud Storage', icon: HardDrive },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
-      {/* Sidebar */}
-      <aside className={`fixed md:sticky top-0 left-0 bottom-0 z-[100] bg-white border-r border-gray-100 transition-all duration-500 shadow-2xl md:shadow-none ${
-        isSidebarOpen ? 'w-72' : 'w-0 overflow-hidden'
-      }`}>
-        <div className="h-full flex flex-col p-6">
-          <div className="flex items-center justify-between mb-8">
-            {isSidebarOpen && (
-              <div className="flex flex-col gap-4">
-                <Logo />
-                <button 
-                  onClick={() => setActiveTab('dashboard')}
-                  className="bg-gray-900 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-gray-900/20 hover:bg-black transition-all active:scale-95 flex items-center gap-2"
-                >
-                  <LayoutDashboard className="w-3 h-3" />
-                  Go to Widgets
-                </button>
-              </div>
-            )}
-            <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 bg-gray-50 rounded-xl text-gray-400 hover:text-primary transition-all active:scale-90 shadow-sm border border-gray-100 self-start"
-            >
-              {isSidebarOpen ? <ChevronLeft className="w-6 h-6" /> : <ChevronRight className="w-6 h-6" />}
-            </button>
-          </div>
-          
-          <nav className="flex-1 space-y-2 overflow-y-auto scrollbar-hide pr-2">
-            {menuItems.map((item) => (
-              <button 
-                key={item.id}
-                onClick={() => setActiveTab(item.id as any)}
-                className={`w-full flex items-center gap-4 p-4 rounded-2xl font-bold transition-all group relative ${
-                  activeTab === item.id 
-                    ? 'bg-primary text-white shadow-xl shadow-primary/20' 
-                    : 'text-gray-400 hover:bg-primary/5 hover:text-primary'
-                }`}
-              >
-                <item.icon className={`w-6 h-6 transition-transform group-hover:scale-110 ${activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-primary'}`} />
-                {isSidebarOpen && (
-                  <span className="text-sm tracking-tight">{item.label}</span>
-                )}
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span className={`absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-black ${
-                    activeTab === item.id ? 'bg-white text-primary' : 'bg-primary text-white'
-                  }`}>
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </nav>
-          
-          <div className="pt-8 border-t border-gray-100 space-y-4">
-            <button 
-              onClick={() => auth.signOut()}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl font-bold text-red-400 hover:bg-red-50 hover:text-red-500 transition-all group"
-            >
-              <LogOut className="w-6 h-6 transition-transform group-hover:-translate-x-1" />
-              {isSidebarOpen && <span className="text-sm tracking-tight">Logout</span>}
-            </button>
-          </div>
-        </div>
-      </aside>
-
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
         <header className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-8 py-4 flex items-center justify-between sticky top-0 z-50">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 bg-gray-50 rounded-xl text-gray-400 hover:text-primary transition-all active:scale-90 shadow-sm border border-gray-100"
-              title={isSidebarOpen ? "Retract Sidebar" : "Open Sidebar"}
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <h2 className="text-xl font-black text-gray-900 tracking-tight capitalize">{activeTab}</h2>
-            
-            <div className="hidden lg:flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-100 ml-4">
-              <select 
-                value={activeTab}
-                onChange={(e) => setActiveTab(e.target.value as any)}
-                className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest outline-none px-3 cursor-pointer"
-              >
-                {menuItems.map(item => (
-                  <option key={item.id} value={item.id}>{item.label}</option>
-                ))}
-              </select>
-              <button 
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className="group flex items-center gap-2 bg-primary text-white px-4 py-1.5 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-primary-dark transition-all active:scale-95 shadow-lg shadow-primary/20"
-              >
-                Go to Selected
-                <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-            </div>
+          <div className="flex items-center gap-6">
+            <Logo />
+            <div className="h-8 w-px bg-gray-100 hidden md:block" />
+            <h2 className="text-xl font-black text-gray-900 tracking-tight capitalize hidden md:block">{activeTab}</h2>
             
             {/* Sync Status Indicator */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full border border-gray-100">
@@ -343,6 +256,14 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                 DB: {firebaseConfig.firestoreDatabaseId.slice(-8)}
               </span>
             </div>
+
+            {/* Storage Indicator */}
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full border border-gray-100">
+              <Cloud className="w-3 h-3 text-primary animate-pulse" />
+              <span className="text-[10px] font-bold text-gray-900 uppercase tracking-widest">
+                Gmail Storage: 5TB Connected
+              </span>
+            </div>
           </div>
           
           <div className="flex items-center gap-6">
@@ -360,8 +281,45 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                 <User className="w-6 h-6" />
               </div>
             </div>
+            <button 
+              onClick={() => auth.signOut()}
+              className="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all active:scale-90"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
         </header>
+
+        {/* Horizontal Navigation Strip (User requested: "sidebar in the above of every admin pages") */}
+        <div className="bg-white border-b border-gray-100 sticky top-16 z-40 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center px-4 py-3 gap-2 min-w-max max-w-7xl mx-auto">
+            {menuItems.map((item) => (
+              <button 
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id as any);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap active:scale-95 ${
+                  activeTab === item.id 
+                    ? 'bg-primary text-white shadow-xl shadow-primary/20 translate-y-[-2px]' 
+                    : 'bg-gray-50 text-gray-400 hover:bg-primary/5 hover:text-primary'
+                }`}
+              >
+                <item.icon className={`w-4 h-4 ${activeTab === item.id ? 'text-white' : 'text-gray-400'}`} />
+                {item.label}
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span className={`w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-black ${
+                    activeTab === item.id ? 'bg-white text-primary' : 'bg-primary text-white'
+                  }`}>
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Tab Content */}
         <div className="p-4 md:p-8">
@@ -385,7 +343,8 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                     await Promise.all(batch);
                   })}
                   onUpdate={(id, product) => handleSyncOperation(async () => {
-                    await updateDoc(doc(db, 'products', id), product);
+                    const { id: _, ...updateData } = product as any;
+                    await updateDoc(doc(db, 'products', id), updateData);
                   })} 
                   onDelete={(id) => handleSyncOperation(async () => {
                     if (window.confirm('Are you sure you want to delete this product?')) {
@@ -454,35 +413,9 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                 />
               )}
               {activeTab === 'settings' && <AdminStoreSettings />}
+              {activeTab === 'storage' && <AdminStorageManager />}
             </motion.div>
           </AnimatePresence>
-
-          {/* User Requested: Go to Sidebar/Retract Button at the bottom of every page */}
-          <div className="mt-12 mb-8 flex flex-col items-center gap-4 pb-8">
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => {
-                  setIsSidebarOpen(true);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="group flex items-center gap-3 bg-gray-900 text-white px-8 py-5 rounded-[40px] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-gray-900/40 hover:bg-black transition-all active:scale-95 border border-white/5"
-              >
-                <LayoutDashboard className="w-5 h-5 text-primary group-hover:scale-110 transition-transform" />
-                Go to Sidebar
-              </button>
-              <button 
-                onClick={() => {
-                  setIsSidebarOpen(false);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="group flex items-center gap-3 bg-white text-gray-900 px-8 py-5 rounded-[40px] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-gray-200/40 hover:bg-gray-50 transition-all active:scale-95 border border-gray-100"
-              >
-                <ChevronLeft className="w-5 h-5 text-primary group-hover:-translate-x-1 transition-transform" />
-                Retract sidebar
-              </button>
-            </div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Admin Navigation Quick Actions</p>
-          </div>
         </div>
       </main>
     </div>

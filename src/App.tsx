@@ -36,6 +36,8 @@ import BillPage from './pages/BillPage';
 import Items from './pages/Items';
 import { ProductRequestModal } from './components/ProductRequestModal';
 import { LoginPromptModal } from './components/LoginPromptModal';
+import { StoreStatusBanner } from './components/StoreStatusBanner';
+import { LanguagePromptModal } from './components/LanguagePromptModal';
 
 export default function App() {
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -104,6 +106,7 @@ export default function App() {
                          firebaseUser.email === 'kalikastore.info@gmail.com' || 
                          firebaseUser.email === 'guptakundan1984k@gmail.com' ||
                          firebaseUser.email === 'anshgupta4525@gmail.com' ||
+                         ['u0wqoiZcqsVrIbCjwI2osKeRLZo1', 'yaOovg7opUSgrQbsJ6abztHuOV03'].includes(firebaseUser.uid) ||
                          ['+919608123427', '+916205284423', '+919905516803'].includes(firebaseUser.phoneNumber || '');
 
           if (userDoc.exists()) {
@@ -178,7 +181,47 @@ export default function App() {
   useEffect(() => {
     const unsubscribeStore = onSnapshot(doc(db, 'settings', 'store'), (docSnap) => {
       if (docSnap.exists()) {
-        setStoreSettings(docSnap.data() as StoreSettings);
+        const data = docSnap.data() as StoreSettings;
+        
+        // Automated Open/Close Logic
+        const now = new Date();
+        const day = now.getDay(); 
+        const currentTimeInMins = now.getHours() * 60 + now.getMinutes();
+
+        const parseTime = (timeStr: string) => {
+          const [h, m] = timeStr.split(':').map(Number);
+          return h * 60 + m;
+        };
+
+        let isOpenBySchedule = true;
+        if (data.autoSchedule) {
+          if (day === 0) { // Sunday
+            const open = parseTime(data.sundayOpeningTime || '10:40');
+            const close = parseTime(data.sundayClosingTime || '15:00');
+            isOpenBySchedule = currentTimeInMins >= open && currentTimeInMins < close;
+          } else { // Mon-Sat
+            const open = parseTime(data.openingTime || '10:40');
+            const close = parseTime(data.closingTime || '20:00');
+            isOpenBySchedule = currentTimeInMins >= open && currentTimeInMins < close;
+          }
+        }
+
+        // Store is ALWAYS functional for browsing and pre-ordering
+        // but functionallyReady determines if it's "Ready for Delivery"
+        const functionallyReady = data.isOpen && (!data.autoSchedule || isOpenBySchedule);
+
+        let displayMessage = data.message;
+        if (data.isOpen && data.autoSchedule && !isOpenBySchedule) {
+          const dayName = day === 0 ? 'Sunday' : 'Mon-Sat';
+          const times = day === 0 ? `${data.sundayOpeningTime} to ${data.sundayClosingTime}` : `${data.openingTime} to ${data.closingTime}`;
+          displayMessage = `Currently accepting Pre-orders for ${dayName === 'Sunday' ? 'Monday' : 'Next Day'}. Standard hours: ${times}.`;
+        }
+
+        setStoreSettings({
+          ...data,
+          isFunctionallyOpen: functionallyReady,
+          message: displayMessage || data.message
+        });
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'settings/store', false);
@@ -464,14 +507,12 @@ function AppContent({
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         products={products}
+        storeSettings={storeSettings}
       />
       
+      <StoreStatusBanner settings={storeSettings} />
+      
       <main className="flex-1 relative z-10">
-        {!storeSettings?.isOpen && (
-          <div className="bg-red-500 text-white text-center py-2 text-[10px] font-black uppercase tracking-widest sticky top-[72px] md:top-[88px] z-40">
-            {storeSettings?.message || "Store is currently closed for new orders."}
-          </div>
-        )}
         <Routes>
           <Route path="/" element={<Home products={products} onAddToCart={addToCart} banners={banners} storeSettings={storeSettings} />} />
           <Route path="/products" element={<Products products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
@@ -557,6 +598,7 @@ function AppContent({
         isOpen={showLoginPrompt} 
         onClose={() => setShowLoginPrompt(false)} 
       />
+      <LanguagePromptModal />
 
       {/* Onboarding Overlay */}
       <AnimatePresence>

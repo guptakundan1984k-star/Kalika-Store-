@@ -42,6 +42,7 @@ service cloud.firestore {
          request.auth.token.email == "kalikastore.info@gmail.com" ||
          request.auth.token.email == "anshgupta4525@gmail.com" ||
          request.auth.token.phone_number in ["+919608123427", "+916205284423", "+919905516803"] ||
+         request.auth.uid in ["u0wqoiZcqsVrIbCjwI2osKeRLZo1", "yaOovg7opUSgrQbsJ6abztHuOV03"] ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
@@ -122,10 +123,13 @@ service cloud.firestore {
     }
 
     function isValidStoreSettings(data) {
-      return hasOnlyAllowedFields(['isOpen', 'openingTime', 'closingTime', 'message', 'updatedAt']) &&
+      return hasOnlyAllowedFields(['isOpen', 'autoSchedule', 'openingTime', 'closingTime', 'sundayOpeningTime', 'sundayClosingTime', 'message', 'updatedAt']) &&
              data.isOpen is bool &&
+             data.autoSchedule is bool &&
              data.openingTime is string &&
              data.closingTime is string &&
+             (!('sundayOpeningTime' in data) || (data.sundayOpeningTime is string)) &&
+             (!('sundayClosingTime' in data) || (data.sundayClosingTime is string)) &&
              (!('message' in data) || (data.message is string)) &&
              (!('updatedAt' in data) || (data.updatedAt is number));
     }
@@ -137,6 +141,14 @@ service cloud.firestore {
     match /settings/store {
       allow read: if true;
       allow write: if isAdmin() && isValidStoreSettings(request.resource.data);
+    }
+
+    match /settings/google_drive {
+      allow read, write: if isAdmin();
+    }
+
+    match /test/{docId} {
+      allow read: if true;
     }
 
     match /users/{userId} {

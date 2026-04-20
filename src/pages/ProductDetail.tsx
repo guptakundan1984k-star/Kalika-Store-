@@ -165,17 +165,45 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
             className="space-y-8"
           >
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-full">
                   {product.category}
                 </span>
+
+                {/* Status and Low Stock Tag */}
                 {product.stock > 0 ? (
-                  <span className="px-3 py-1 bg-green-50 text-green-600 text-[10px] font-black uppercase tracking-widest rounded-full">
-                    In Stock
+                  <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${
+                    product.stock <= 10 ? 'bg-orange-50 text-orange-600 animate-pulse border border-orange-100' : 'bg-green-50 text-green-600'
+                  }`}>
+                    {product.stock <= 10 ? 'Only a few left!' : 'In Stock'}
                   </span>
                 ) : (
                   <span className="px-3 py-1 bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-full">
                     Out of Stock
+                  </span>
+                )}
+
+                {/* Imported Tag */}
+                {(product.name.toLowerCase().includes('redbull') || 
+                  product.name.toLowerCase().includes('monster') || 
+                  product.name.toLowerCase().includes('imported') ||
+                  product.name.toLowerCase().includes('swiss')) && (
+                  <span className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-indigo-200">
+                    Imported
+                  </span>
+                )}
+
+                {/* Popular Tag */}
+                {(product.rating || 4.5) >= 4.8 && (
+                  <span className="px-3 py-1 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-amber-200">
+                    Most Popular
+                  </span>
+                )}
+
+                {/* Bestseller Tag */}
+                {((reviews.length || product.reviewCount || 0) >= 20 || product.price > 400) && (
+                  <span className="px-3 py-1 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-blue-200">
+                    Bestseller
                   </span>
                 )}
               </div>
@@ -404,7 +432,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                         <div className="flex items-center gap-1">
                           {[...Array(5)].map((_, i) => (
                             <Star 
-                              key={i} 
+                              key={`star-${review.id}-${i}`} 
                               className={`w-3 h-3 ${i < review.rating ? 'text-yellow-400 fill-current' : 'text-gray-200'}`} 
                             />
                           ))}

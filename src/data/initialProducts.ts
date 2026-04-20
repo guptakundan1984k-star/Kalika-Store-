@@ -8,7 +8,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 465,
     purchasePrice: 0,
     category: "Staples",
-    image: "https://picsum.photos/seed/Aashirvaad-Atta-10kg/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/126906_8-aashirvaad-atta-whole-wheat.jpg",
     stock: 19,
     weight: "10kg",
     createdAt: Date.now()
@@ -19,7 +19,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 72,
     purchasePrice: 0,
     category: "Household",
-    image: "https://picsum.photos/seed/Active-Wheel-Surf-1-Kg/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/266986_24-active-wheel-lemon-jasmine-detergent-powder.jpg",
     stock: 121,
     weight: "1kg",
     createdAt: Date.now()
@@ -30,7 +30,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 37,
     purchasePrice: 0,
     category: "Household",
-    image: "https://picsum.photos/seed/Active-Wheel-Surf-2in1-500-Gm/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/266896_23-active-wheel-2in1-detergent-powder.jpg",
     stock: 123,
     weight: "500g",
     createdAt: Date.now()
@@ -93,7 +93,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 10,
     purchasePrice: 0,
     category: "Fruits & Vegetables",
-    image: "https://picsum.photos/seed/Aloo-1kg/400/400",
+    image: "https://images.unsplash.com/photo-1518977676601-b53f02ac6d31?auto=format&fit=crop&q=80&w=400",
     stock: 99,
     weight: "1kg",
     createdAt: Date.now()
@@ -104,7 +104,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 20,
     purchasePrice: 0,
     category: "Dairy",
-    image: "https://picsum.photos/seed/Amul-kool-20/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40012975_5-amul-kool-badam-milk-beverage.jpg",
     stock: 99,
     createdAt: Date.now()
   },
@@ -114,7 +114,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 20,
     purchasePrice: 0,
     category: "Dairy",
-    image: "https://picsum.photos/seed/Amul-lassi-20/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40192801_3-amul-lassi-rose-flavor.jpg",
     stock: 114,
     createdAt: Date.now()
   },
@@ -134,7 +134,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 31,
     purchasePrice: 0,
     category: "Dairy",
-    image: "https://picsum.photos/seed/Amul-milk-500ml/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/306326_1-amul-taaza-fresh-toned-milk.jpg",
     stock: 100,
     weight: "500ml",
     createdAt: Date.now()
@@ -145,7 +145,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 93,
     purchasePrice: 84.8,
     category: "Dairy",
-    image: "https://picsum.photos/seed/Amul-paneer/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/241688_6-amul-fresh-paneer.jpg",
     stock: 28,
     createdAt: Date.now()
   },
@@ -155,7 +155,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 10,
     purchasePrice: 0,
     category: "Dairy",
-    image: "https://picsum.photos/seed/Amulya-10rs/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/10000000_1-amulya-dairy-whitener.jpg",
     stock: 99,
     createdAt: Date.now()
   },
@@ -231,7 +231,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 20,
     purchasePrice: 0,
     category: "Snacks",
-    image: "https://picsum.photos/seed/Bisleri-1L/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/1213470_1-bisleri-mineral-water.jpg",
     stock: 100,
     weight: "1L",
     createdAt: Date.now()
@@ -253,7 +253,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 105,
     purchasePrice: 0,
     category: "Snacks",
-    image: "https://picsum.photos/seed/Cadbury-Celebration-Box-139-Gm/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40003057_10-cadbury-celebrations-rich-memories.jpg",
     stock: 100,
     weight: "139g",
     createdAt: Date.now()
@@ -275,7 +275,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 110,
     purchasePrice: 102,
     category: "Personal Care",
-    image: "https://picsum.photos/seed/Cinthol-Soap/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40126742_5-cinthol-original-soap.jpg",
     stock: 100,
     createdAt: Date.now()
   },
@@ -285,7 +285,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 14,
     purchasePrice: 0,
     category: "Personal Care",
-    image: "https://picsum.photos/seed/Clinic-Plus-Shampoo/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40156711_5-clinic-plus-shampoo-strong-long-with-milk-protein.jpg",
     stock: 99,
     createdAt: Date.now()
   },
@@ -295,7 +295,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 195,
     purchasePrice: 175,
     category: "Personal Care",
-    image: "https://picsum.photos/seed/Dettol-soap-set/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40061245_3-dettol-bathing-soap-bar-original.jpg",
     stock: 50,
     createdAt: Date.now()
   },
@@ -305,7 +305,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 160,
     purchasePrice: 0,
     category: "Dairy",
-    image: "https://picsum.photos/seed/Egg-1-tray/400/400",
+    image: "https://images.unsplash.com/photo-1582722134903-b12ee954e7d1?auto=format&fit=crop&q=80&w=400",
     stock: 87,
     weight: "30 pcs",
     createdAt: Date.now()
@@ -316,7 +316,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 150,
     purchasePrice: 0,
     category: "Staples",
-    image: "https://picsum.photos/seed/Fortune-Soyabean-Oil-1-Lt/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/274145_14-fortune-soyabean-refined-oil.jpg",
     stock: 98,
     weight: "1L",
     createdAt: Date.now()
@@ -327,7 +327,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 66,
     purchasePrice: 0,
     category: "Household",
-    image: "https://picsum.photos/seed/Ghadi-Detergent-1kg/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40127598_11-ghadi-detergent-powder.jpg",
     stock: 99,
     weight: "1kg",
     createdAt: Date.now()
@@ -381,7 +381,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 10,
     purchasePrice: 0,
     category: "Snacks",
-    image: "https://picsum.photos/seed/Kurkure-Masala-Munch/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/141300_13-kurkure-namkeen-masala-munch.jpg",
     stock: 1000,
     createdAt: Date.now()
   },
@@ -391,7 +391,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 10,
     purchasePrice: 0,
     category: "Snacks",
-    image: "https://picsum.photos/seed/Lays-Classic-Salted/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/102579_10-lays-potato-chips-classic-salted.jpg",
     stock: 1000,
     createdAt: Date.now()
   },
@@ -401,7 +401,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 14,
     purchasePrice: 0,
     category: "Snacks",
-    image: "https://picsum.photos/seed/Maggi-2-Minute-Noodles/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/266109_15-maggi-2-minute-instant-noodles-masala.jpg",
     stock: 1000,
     createdAt: Date.now()
   },
@@ -422,7 +422,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 5,
     purchasePrice: 0,
     category: "Snacks",
-    image: "https://picsum.photos/seed/Parle-G-Biscuit/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/102102_4-parle-g-biscuits.jpg",
     stock: 99,
     createdAt: Date.now()
   },
@@ -443,7 +443,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 20,
     purchasePrice: 0,
     category: "Snacks",
-    image: "https://picsum.photos/seed/Sting-Energy-Drink/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40191836_2-sting-energy-drink.jpg",
     stock: 100,
     weight: "250ml",
     createdAt: Date.now()
@@ -465,7 +465,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 28,
     purchasePrice: 0,
     category: "Staples",
-    image: "https://picsum.photos/seed/Tata-Namak-1kg/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/241600_5-tata-salt-iodized.jpg",
     stock: 99,
     weight: "1kg",
     createdAt: Date.now()
@@ -476,7 +476,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 100,
     purchasePrice: 0,
     category: "Snacks",
-    image: "https://picsum.photos/seed/Thums-Up-1L/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/251023_11-thums-up-soft-drink.jpg",
     stock: 1000,
     weight: "1L",
     createdAt: Date.now()
@@ -487,7 +487,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 10,
     purchasePrice: 8,
     category: "Household",
-    image: "https://picsum.photos/seed/Vim-Dishwash-Bar/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/10000000_1-vim-dishwash-bar.jpg",
     stock: 89,
     createdAt: Date.now()
   },
@@ -497,7 +497,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 105,
     purchasePrice: 90,
     category: "Household",
-    image: "https://picsum.photos/seed/Vim-Liquid-500ml/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40156381_6-vim-dishwash-gel-lemon.jpg",
     stock: 150,
     weight: "500ml",
     createdAt: Date.now()
@@ -528,7 +528,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 48,
     purchasePrice: 0,
     category: "Staples",
-    image: "https://picsum.photos/seed/Taaza-Tea-50/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40157973_5-taaza-leaf-tea.jpg",
     stock: 99,
     createdAt: Date.now()
   },
@@ -538,7 +538,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 122,
     purchasePrice: 0,
     category: "Staples",
-    image: "https://picsum.photos/seed/Tata-gold-chaipatti-130/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/266579_25-tata-tea-gold.jpg",
     stock: 50,
     createdAt: Date.now()
   },

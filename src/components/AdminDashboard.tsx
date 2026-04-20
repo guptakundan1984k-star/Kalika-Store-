@@ -329,9 +329,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {stats.map((stat, i) => (
+        {stats.map((stat) => (
           <button 
-            key={i} 
+            key={stat.label} 
             onClick={() => onTabChange?.(stat.tab)}
             className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all group text-left w-full"
           >
@@ -352,8 +352,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
 
       {/* Sales Period Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {salesStats.map((stat, i) => (
-          <div key={i} className="bg-gray-900 p-6 rounded-[32px] border border-gray-800 shadow-2xl group">
+        {salesStats.map((stat) => (
+          <div key={stat.label} className="bg-gray-900 p-6 rounded-[32px] border border-gray-800 shadow-2xl group">
             <div className="flex items-center gap-4 mb-4">
               <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-white">
                 <stat.icon className="w-5 h-5" />

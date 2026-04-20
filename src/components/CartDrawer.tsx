@@ -48,7 +48,21 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
                 <div>
                   <h2 className="text-xl font-black text-gray-900 tracking-tight">Your Cart</h2>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{items.length} Items</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{items.length} Items</p>
+                    {items.length > 0 && (
+                      <button 
+                        onClick={() => {
+                          if (window.confirm('Clear your entire cart?')) {
+                            items.forEach(item => onRemove(item.id));
+                          }
+                        }}
+                        className="text-[8px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 px-2 py-1 rounded-lg transition-all"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">

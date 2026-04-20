@@ -35,6 +35,14 @@ export const translations = {
     discountedPrice: "Discounted Price",
     addedToCart: "Added to my cart",
     usageLimit: "Usage Limit Per Customer",
+    preOrderNow: "Pre-order Now",
+    storeClosedManual: "Store is currently closed for maintenance. You can still pre-order for tomorrow.",
+    standardDelivery: "Standard Delivery",
+    preOrderOnly: "Pre-Order Only",
+    translateHeading: "Translate to Hindi?",
+    translateDesc: "Choose Yes to view the entire store in Hindi language.",
+    yes: "Yes",
+    no: "No",
   },
   hi: {
     home: "होम",
@@ -71,6 +79,14 @@ export const translations = {
     discountedPrice: "रियायती कीमत",
     addedToCart: "मेरे कार्ट में जोड़ा गया",
     usageLimit: "प्रति ग्राहक उपयोग सीमा",
+    preOrderNow: "अभी प्री-ऑर्डर करें",
+    storeClosedManual: "स्टोर वर्तमान में बंद है। आप कल के लिए प्री-ऑर्डर कर सकते हैं।",
+    standardDelivery: "मानक वितरण",
+    preOrderOnly: "केवल प्री-ऑर्डर",
+    translateHeading: "क्या आप हिंदी में अनुवाद करना चाहते हैं?",
+    translateDesc: "पूरे स्टोर को हिंदी भाषा में देखने के लिए हाँ चुनें।",
+    yes: "हाँ",
+    no: "नहीं",
   }
 };
 

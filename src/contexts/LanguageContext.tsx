@@ -20,7 +20,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(() => {
     const saved = localStorage.getItem('app_voice_enabled');
-    return saved === 'true';
+    return saved === null ? true : saved === 'true';
   });
 
   useEffect(() => {

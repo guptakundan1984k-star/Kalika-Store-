@@ -159,7 +159,7 @@ export const AdminSupportManager: React.FC = () => {
 
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/30">
                 {selectedQuery.chatHistory.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div key={`chat-${i}`} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[80%] p-4 rounded-2xl text-sm font-medium shadow-sm ${
                       msg.role === 'user' 
                         ? 'bg-primary text-white rounded-tr-none' 
