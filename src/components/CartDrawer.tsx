@@ -1,6 +1,6 @@
 import React from 'react';
-import { ShoppingCart, X, Plus, Minus, Trash2, ArrowRight, ShoppingBag, Clock, Camera } from 'lucide-react';
-import { CartItem, Product } from '../types';
+import { ShoppingCart, X, Plus, Minus, Trash2, ArrowRight, ShoppingBag, Clock, Camera, Package, AlertCircle } from 'lucide-react';
+import { CartItem, Product, ProductUnit } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { DELIVERY_FEE, FREE_DELIVERY_THRESHOLD } from '../constants';
@@ -121,13 +121,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-1">
                         <h4 className="font-black text-gray-900 text-[10px] line-clamp-1 leading-tight">{item.name}</h4>
-                        <button 
-                          onClick={() => onRemove(item.id)}
-                          className="text-gray-300 hover:text-red-500 transition-colors p-0.5"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => onRemove(item.id)}
+                            className="text-gray-300 hover:text-red-500 transition-colors p-0.5"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
+
+                      {item.weight && (
+                        <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{item.weight}</p>
+                      )}
                       
                       {item.selectedVariations && (
                         <div className="flex flex-wrap gap-0.5 mt-0.5">

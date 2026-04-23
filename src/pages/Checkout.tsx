@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CartItem, UserProfile, Order, Coupon, StoreSettings } from '../types';
-import { DELIVERY_FEE, FREE_DELIVERY_THRESHOLD, LOYALTY_COIN_VALUE, LOYALTY_EARN_RATE } from '../constants';
+import { useStore } from '../contexts/StoreContext';
+import { LOYALTY_COIN_VALUE, LOYALTY_EARN_RATE } from '../constants';
 import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, ShieldCheck, Clock, XCircle, Navigation, Smartphone, Wallet, Banknote, Sparkles, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -37,6 +38,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   const slotRef = useRef<HTMLDivElement>(null);
   const paymentRef = useRef<HTMLDivElement>(null);
 
+  const { deliveryFee: configDeliveryFee, freeDeliveryThreshold: configThreshold } = useStore();
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
   const pointsValue = (user?.loyaltyPoints || 0) * LOYALTY_COIN_VALUE;
@@ -58,7 +60,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   };
 
   const couponDiscount = calculateDiscount();
-  const deliveryFee = deliveryType === 'Delivery' ? (subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE) : 0;
+  const deliveryFee = deliveryType === 'Delivery' ? (subtotal >= configThreshold ? 0 : configDeliveryFee) : 0;
   const total = Math.max(0, subtotal + deliveryFee - couponDiscount - pointsDiscount);
 
   const earnedPoints = total >= 100 ? Math.floor(total / LOYALTY_EARN_RATE) : 0;
@@ -295,6 +297,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       items: cart,
       total,
       status: 'Pending',
+      isPreOrder: !storeSettings?.isFunctionallyOpen,
       deliveryType,
       address: deliveryType === 'Delivery' ? {
         manual: manualAddress,
@@ -750,7 +753,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                     </div>
                     <div>
                       <p className="text-sm font-bold text-gray-900 line-clamp-1">{item.name}</p>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{item.quantity} x ₹{item.price}</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{item.quantity} {item.selectedUnit || 'Piece'} x ₹{item.price}</p>
                     </div>
                   </div>
                   <span className="text-sm font-black text-gray-900">₹{item.price * item.quantity}</span>
@@ -812,7 +815,25 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                 )}
 
                 {user && (user.loyaltyPoints || 0) > 0 && (
-                  <div className="space-y-2">
+                  <div className="space-y-3 p-6 bg-amber-50 rounded-[32px] border border-amber-100 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-200/20 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-amber-200/40 transition-all" />
+                    
+                    <div className="flex items-center gap-3 relative">
+                      <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-amber-900 uppercase tracking-widest">Kalika Coins</p>
+                        <p className="text-[10px] font-bold text-amber-700/60 uppercase tracking-tighter">
+                          Available: {user.loyaltyPoints} coins ≈ ₹{(user.loyaltyPoints * LOYALTY_COIN_VALUE).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] font-medium text-amber-800 leading-relaxed relative">
+                      Use your Kalika Coins to get an instant discount on this order. 1 Coin = ₹{LOYALTY_COIN_VALUE}.
+                    </p>
+
                     <button 
                       onClick={() => {
                         if (subtotal < 100) {
@@ -821,24 +842,25 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                         }
                         setUseLoyaltyPoints(!useLoyaltyPoints);
                       }}
-                      className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${
-                        useLoyaltyPoints ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-gray-50 border-transparent text-gray-500 hover:border-gray-200'
+                      className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative border-2 ${
+                        useLoyaltyPoints 
+                          ? 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-200 active:scale-95' 
+                          : 'bg-white text-amber-600 border-amber-200 hover:border-amber-400'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <Sparkles className={`w-4 h-4 ${useLoyaltyPoints ? 'text-amber-600' : 'text-gray-400'}`} />
-                        <div className="text-left">
-                          <p className="text-[10px] font-black uppercase tracking-widest">Redeem Kalika Coins</p>
-                          <p className="text-[9px] font-bold opacity-60">Available: {user.loyaltyPoints} coins (₹{(user.loyaltyPoints * LOYALTY_COIN_VALUE).toFixed(2)})</p>
-                        </div>
-                      </div>
-                      <div className={`w-10 h-5 rounded-full relative transition-all ${useLoyaltyPoints ? 'bg-amber-500' : 'bg-gray-300'}`}>
-                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${useLoyaltyPoints ? 'right-1' : 'left-1'}`} />
-                      </div>
+                      {useLoyaltyPoints ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <CheckCircle className="w-3 h-3" />
+                          Applied: -₹{pointsDiscount.toFixed(2)}
+                        </span>
+                      ) : (
+                        `Redeem for ₹${Math.min((user.loyaltyPoints || 0) * LOYALTY_COIN_VALUE, subtotal).toFixed(2)} Discount`
+                      )}
                     </button>
+
                     {subtotal < 100 && (
-                      <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest px-2">
-                        Min. order ₹100 to redeem coins
+                      <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest text-center">
+                        Min. order ₹100 required
                       </p>
                     )}
                   </div>
@@ -847,13 +869,13 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
             </div>
 
             <div className="pt-6 border-t border-gray-100 flex flex-col gap-6">
-              {!storeSettings?.isOpen && (
-                <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              {!storeSettings?.isFunctionallyOpen && (
+                <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
                   <div className="space-y-1">
-                    <p className="text-xs font-black text-red-600 uppercase tracking-widest">Store Closed</p>
-                    <p className="text-[10px] text-red-500 font-medium leading-relaxed">
-                      {storeSettings?.message || "Not accepting orders."}
+                    <p className="text-xs font-black text-orange-600 uppercase tracking-widest">Pre-Order Only</p>
+                    <p className="text-[10px] text-orange-500 font-medium leading-relaxed">
+                      {storeSettings?.message || "Store is currently closed. This will be placed as a PRE-ORDER for your selected slot."}
                     </p>
                   </div>
                 </div>
@@ -874,22 +896,17 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
               </div>
             </div>
 
-            {storeSettings?.isOpen ? (
-              <button 
-                onClick={handlePlaceOrder}
-                className="w-full flex items-center justify-center gap-3 bg-primary text-white font-bold px-10 py-5 rounded-3xl shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95 group"
-              >
-                Place Order
-                <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-              </button>
-            ) : (
-              <button 
-                disabled
-                className="w-full flex items-center justify-center gap-3 bg-gray-200 text-gray-400 font-bold px-10 py-5 rounded-3xl cursor-not-allowed uppercase tracking-widest text-xs"
-              >
-                Store Currently Closed
-              </button>
-            )}
+            <button 
+              onClick={handlePlaceOrder}
+              className={`w-full flex items-center justify-center gap-3 text-white font-bold px-10 py-5 rounded-3xl shadow-2xl transition-all active:scale-95 group ${
+                storeSettings?.isFunctionallyOpen 
+                  ? 'bg-primary shadow-primary/30 hover:bg-primary-dark' 
+                  : 'bg-orange-600 shadow-orange-600/30 hover:bg-orange-700'
+              }`}
+            >
+              {storeSettings?.isFunctionallyOpen ? 'Place Order' : 'Place Pre-Order'}
+              <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+            </button>
             
             <p className="text-[10px] text-gray-400 font-medium text-center leading-relaxed">
               By placing this order, you agree to our <br />

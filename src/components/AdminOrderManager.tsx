@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Search, Filter, Eye, CheckCircle, Truck, Package, Clock, 
   ShieldCheck, XCircle, MoreVertical, ArrowUpRight, ArrowDownRight, Calendar,
-  Trash2, FileText, Download, CheckSquare, Square, Bluetooth, Printer, Sparkles,
+  Trash2, FileText, Download, CheckSquare, Square, Bluetooth, Printer, Sparkles, Edit2, Save,
   MapPin, CheckCircle2, ShoppingBag, Navigation
 } from 'lucide-react';
 import { Order } from '../types';
@@ -21,6 +21,55 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
   const [pinError, setPinError] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
+
+  const handleCleanupOldOrders = async () => {
+    const sixMonthsAgo = Date.now() - (180 * 24 * 60 * 60 * 1000);
+    const oldOrders = orders.filter(o => o.createdAt < sixMonthsAgo);
+    
+    if (oldOrders.length === 0) {
+      alert("No orders older than 6 months found.");
+      return;
+    }
+
+    if (!window.confirm(`Warning: You are about to permanently delete ${oldOrders.length} orders older than 6 months. This action follows your updated T&C. Continue?`)) return;
+
+    setIsCleaningUp(true);
+    try {
+      await Promise.all(oldOrders.map(o => deleteDoc(doc(db, 'orders', o.id))));
+      alert(`Successfully removed ${oldOrders.length} old orders.`);
+    } catch (e) {
+      console.error("Cleanup failed", e);
+      alert("Cleanup failed. Check console.");
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+
+  const handleUpdateOrder = async () => {
+    if (!editingOrder) return;
+    try {
+      await updateDoc(doc(db, 'orders', editingOrder.id), {
+        items: editingOrder.items,
+        total: editingOrder.total,
+        address: editingOrder.address,
+        deliveryType: editingOrder.deliveryType,
+        deliverySlot: editingOrder.deliverySlot || null,
+        paymentMethod: editingOrder.paymentMethod || null,
+        status: editingOrder.status
+      });
+      setIsEditing(false);
+      setEditingOrder(null);
+      setSelectedOrder(null);
+      alert('Order updated successfully!');
+    } catch (e) {
+      console.error("Order update failed", e);
+      alert('Failed to update order. Check permissions.');
+    }
+  };
 
   const handleVerifyPin = () => {
     if (selectedOrder && pinInput === selectedOrder.pin) {
@@ -196,16 +245,37 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
   };
 
   const filteredOrders = orders.filter(o => {
-    const matchesSearch = o.id.toLowerCase().includes(search.toLowerCase()) || 
-                         o.userId.toLowerCase().includes(search.toLowerCase());
+    const queryStr = search.toLowerCase();
+    const itemMatch = o.items.some(item => item.name.toLowerCase().includes(queryStr));
+    const userMatch = (o.userName || '').toLowerCase().includes(queryStr) || 
+                     (o.userPhone || '').includes(queryStr);
+    
+    const matchesSearch = o.id.toLowerCase().includes(queryStr) || 
+                         o.userId.toLowerCase().includes(queryStr) ||
+                         itemMatch || userMatch;
+
     const matchesStatus = statusFilter === 'all' || o.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    
+    let matchesDate = true;
+    const now = Date.now();
+    if (dateFilter === 'today') {
+      const startOfDay = new Date().setHours(0,0,0,0);
+      matchesDate = o.createdAt >= startOfDay;
+    } else if (dateFilter === 'week') {
+      const weekAgo = now - (7 * 24 * 60 * 60 * 1000);
+      matchesDate = o.createdAt >= weekAgo;
+    } else if (dateFilter === 'month') {
+      const monthAgo = now - (30 * 24 * 60 * 60 * 1000);
+      matchesDate = o.createdAt >= monthAgo;
+    }
+
+    return matchesSearch && matchesStatus && matchesDate;
   }).sort((a, b) => b.createdAt - a.createdAt);
 
   const getStatusColor = (status: Order['status']) => {
     switch (status) {
       case 'Pending': return 'bg-orange-100 text-orange-600 border-orange-200';
-      case 'Proceeded': return 'bg-cyan-100 text-cyan-600 border-cyan-200';
+      case 'Order Received': return 'bg-cyan-100 text-cyan-600 border-cyan-200';
       case 'Packed': return 'bg-blue-100 text-blue-600 border-blue-200';
       case 'Out for Delivery': return 'bg-purple-100 text-purple-600 border-purple-200';
       case 'Delivered': return 'bg-green-100 text-green-600 border-green-200';
@@ -217,7 +287,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
   const getStatusIcon = (status: Order['status']) => {
     switch (status) {
       case 'Pending': return Clock;
-      case 'Proceeded': return CheckCircle;
+      case 'Order Received': return CheckCircle;
       case 'Packed': return Package;
       case 'Out for Delivery': return Truck;
       case 'Delivered': return CheckCircle;
@@ -250,6 +320,19 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
             <h4 className="text-2xl font-black text-gray-900 tracking-tight">{stat.value}</h4>
           </button>
         ))}
+        <button 
+          onClick={handleCleanupOldOrders}
+          disabled={isCleaningUp}
+          className="bg-red-50 p-6 rounded-[32px] border border-red-100 shadow-sm text-left hover:bg-red-600 group transition-all active:scale-95 disabled:opacity-50"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center text-red-500 group-hover:bg-white/20 group-hover:text-white transition-colors">
+              {isCleaningUp ? <Clock className="w-6 h-6 animate-spin" /> : <Trash2 className="w-6 h-6" />}
+            </div>
+          </div>
+          <p className="text-xs font-black text-red-400 group-hover:text-white/60 uppercase tracking-widest mb-1">Data Retention</p>
+          <h4 className="text-xl font-black text-red-900 group-hover:text-white tracking-tight">Cleanup Old Orders</h4>
+        </button>
       </div>
 
       {/* Filters */}
@@ -264,11 +347,23 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
           />
         </div>
         <div className="flex flex-wrap gap-2">
-          {['all', 'Pending', 'Proceeded', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'].map((status) => (
+          {['all', 'today', 'week', 'month'].map((df) => (
+            <button
+              key={df}
+              onClick={() => setDateFilter(df as any)}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${
+                dateFilter === df ? 'bg-black text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+              }`}
+            >
+              {df}
+            </button>
+          ))}
+          <div className="w-px h-8 bg-gray-100 mx-2" />
+          {['all', 'Pending', 'Order Received', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'].map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${
                 statusFilter === status ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
               }`}
             >
@@ -277,14 +372,14 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
           ))}
           <button 
             onClick={handleCreateBill}
-            className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary-dark transition-all shadow-lg shadow-primary/20"
+            className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary-dark transition-all active:scale-95 shadow-lg shadow-primary/20"
           >
             <Printer className="w-4 h-4" />
             Create Bill
           </button>
           <button 
             onClick={connectBluetoothPrinter}
-            className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all"
+            className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all active:scale-95"
           >
             <Bluetooth className="w-4 h-4" />
             Connect Printer
@@ -304,11 +399,11 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
                 <span className="text-xs font-black uppercase tracking-widest">{selectedIds.length} selected</span>
                 <div className="h-4 w-px bg-white/20" />
                 <div className="flex items-center gap-2">
-                  {['Pending', 'Proceeded', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'].map((s) => (
+                  {['Pending', 'Order Received', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'].map((s) => (
                     <button
                       key={s}
                       onClick={() => handleBulkStatusUpdate(s as Order['status'])}
-                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all"
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all active:scale-95"
                     >
                       {s}
                     </button>
@@ -317,7 +412,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
               </div>
               <button 
                 onClick={handleBulkDelete}
-                className="flex items-center gap-2 bg-red-500 hover:bg-red-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                className="flex items-center gap-2 bg-red-500 hover:bg-red-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
               >
                 <Trash2 className="w-4 h-4" />
                 Delete
@@ -396,34 +491,47 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
                             <StatusIcon className="w-3 h-3" />
                             {order.status}
                           </span>
-                          <div className="absolute left-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden hidden group-hover/status:block z-50">
-                            {['Pending', 'Proceeded', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'].map((s) => (
-                              <button
-                                key={s}
-                                onClick={() => onUpdateStatus(order.id, s as Order['status'])}
-                                className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all text-gray-400 hover:bg-primary/5 hover:text-primary"
-                              >
-                                Mark as {s}
-                              </button>
-                            ))}
-                          </div>
                         </div>
-                        {/* Quick Actions for Proceed & Pack */}
-                        <div className="flex gap-1">
+                        {/* Sequential Actions */}
+                        <div className="flex gap-1 flex-wrap">
                           {order.status === 'Pending' && (
                             <button 
-                              onClick={() => onUpdateStatus(order.id, 'Proceeded')}
-                              className="px-2 py-1 bg-cyan-50 text-cyan-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-cyan-600 hover:text-white transition-all"
+                              onClick={() => onUpdateStatus(order.id, 'Order Received')}
+                              className="px-2 py-1 bg-cyan-50 text-cyan-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-cyan-600 hover:text-white transition-all active:scale-95 border border-cyan-100"
                             >
-                              Proceed
+                              Receive Order
                             </button>
                           )}
-                          {(order.status === 'Pending' || order.status === 'Proceeded') && (
+                          {order.status === 'Order Received' && (
                             <button 
                               onClick={() => onUpdateStatus(order.id, 'Packed')}
-                              className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all"
+                              className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all active:scale-95 border border-blue-100"
                             >
-                              Pack
+                              Pack Order
+                            </button>
+                          )}
+                          {order.status === 'Packed' && (
+                            <button 
+                              onClick={() => onUpdateStatus(order.id, 'Out for Delivery')}
+                              className="px-2 py-1 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-all active:scale-95 border border-purple-100"
+                            >
+                              Dispatch
+                            </button>
+                          )}
+                          {order.status === 'Out for Delivery' && (
+                            <button 
+                              onClick={() => setSelectedOrder(order)}
+                              className="px-2 py-1 bg-green-50 text-green-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all active:scale-95 border border-green-100"
+                            >
+                              Verify PIN
+                            </button>
+                          )}
+                          {order.status !== 'Delivered' && order.status !== 'Cancelled' && (
+                            <button 
+                              onClick={() => onUpdateStatus(order.id, 'Cancelled')}
+                              className="px-2 py-1 bg-red-50 text-red-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all active:scale-95 border border-red-100"
+                            >
+                              Cancel
                             </button>
                           )}
                         </div>
@@ -442,11 +550,11 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
                       <div className="flex items-center justify-end gap-2">
                         <button 
                           onClick={() => setSelectedOrder(order)}
-                          className="p-2 text-gray-300 hover:text-primary hover:bg-primary/5 rounded-xl transition-all"
+                          className="p-2 text-gray-300 hover:text-primary hover:bg-primary/5 rounded-xl transition-all active:scale-95"
                         >
                           <Eye className="w-5 h-5" />
                         </button>
-                        <button className="p-2 text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-all">
+                        <button className="p-2 text-gray-300 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-all active:scale-95">
                           <MoreVertical className="w-5 h-5" />
                         </button>
                       </div>
@@ -510,169 +618,328 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">#{selectedOrder.id}</p>
                   </div>
                 </div>
-                <button onClick={() => setSelectedOrder(null)} className="p-2 hover:bg-white/20 rounded-xl transition-colors">
-                  <XCircle className="w-6 h-6" />
-                </button>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => {
+                      setEditingOrder({...selectedOrder});
+                      setIsEditing(true);
+                    }}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors text-white active:scale-95"
+                    title="Edit Order"
+                  >
+                    <Edit2 className="w-5 h-5" />
+                  </button>
+                  <button onClick={() => setSelectedOrder(null)} className="p-2 hover:bg-white/20 rounded-xl transition-colors active:scale-95">
+                    <XCircle className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Customer Info</h4>
-                    <div className="bg-gray-50 p-4 rounded-2xl space-y-2">
-                      <p className="text-sm font-bold text-gray-900">User ID: {selectedOrder.userId}</p>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest ${
-                          selectedOrder.deliveryType === 'Delivery' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
-                        }`}>
-                          {selectedOrder.deliveryType}
-                        </span>
-                        {selectedOrder.deliverySlot && (
-                          <span className="bg-purple-100 text-purple-600 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest">
-                            {selectedOrder.deliverySlot}
-                          </span>
-                        )}
+                {isEditing && editingOrder ? (
+                  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                       <div className="space-y-4">
+                         <h4 className="text-xs font-black text-primary uppercase tracking-widest">Edit Delivery Info</h4>
+                         <div className="space-y-4">
+                           <div className="space-y-2">
+                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Delivery Type</label>
+                             <select 
+                               value={editingOrder.deliveryType}
+                               onChange={(e) => setEditingOrder(prev => prev ? {...prev, deliveryType: e.target.value as any} : null)}
+                               className="w-full bg-gray-50 border-none rounded-2xl px-4 py-3 text-sm font-bold"
+                             >
+                               <option value="Delivery">Home Delivery</option>
+                               <option value="Pickup">Store Pickup</option>
+                             </select>
+                           </div>
+                           <div className="space-y-2">
+                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Manual Address</label>
+                             <textarea 
+                               value={editingOrder.address?.manual || ''}
+                               onChange={(e) => setEditingOrder(prev => prev ? {
+                                 ...prev, 
+                                 address: { ...prev.address!, manual: e.target.value }
+                               } : null)}
+                               className="w-full bg-gray-50 border-none rounded-2xl px-4 py-3 text-sm font-medium min-h-[80px] resize-none"
+                             />
+                           </div>
+                         </div>
+                       </div>
+                       <div className="space-y-4">
+                         <h4 className="text-xs font-black text-primary uppercase tracking-widest">Order Status</h4>
+                         <select 
+                           value={editingOrder.status}
+                           onChange={(e) => setEditingOrder(prev => prev ? {...prev, status: e.target.value as any} : null)}
+                           className="w-full bg-gray-50 border-none rounded-2xl px-4 py-3 text-sm font-bold"
+                         >
+                           {['Pending', 'Order Received', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'].map(s => (
+                             <option key={s} value={s}>{s}</option>
+                           ))}
+                         </select>
+                       </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black text-primary uppercase tracking-widest">Edit Items</h4>
+                        <div className="flex flex-col items-end">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Manual Total Overide</span>
+                          <input 
+                            type="number"
+                            value={editingOrder.total}
+                            onChange={(e) => setEditingOrder(prev => prev ? {...prev, total: parseInt(e.target.value) || 0} : null)}
+                            className="w-24 bg-gray-50 border-none rounded-xl px-3 py-1.5 text-sm font-black text-right mt-1"
+                          />
+                        </div>
                       </div>
-                      {selectedOrder.paymentMethod && (
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                          Payment: {selectedOrder.paymentMethod}
-                        </p>
-                      )}
-                      {selectedOrder.address && (
-                        <div className="space-y-3">
-                          <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Manual Address</p>
-                            <a 
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedOrder.address.manual || '')}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-gray-700 font-medium hover:text-primary transition-colors block leading-relaxed"
-                            >
-                              {selectedOrder.address.manual || 'No address provided'}
-                            </a>
-                          </div>
-
-                          {selectedOrder.address.liveLocationUrl && (
-                            <a 
-                              href={selectedOrder.address.liveLocationUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-3 bg-primary/10 p-3 rounded-xl border border-primary/20 group/loc transition-all hover:bg-primary/20"
-                            >
-                              <div className="w-8 h-8 bg-primary text-white rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-primary/20 group-hover/loc:scale-110 transition-transform">
-                                <Navigation className="w-4 h-4" />
+                      <div className="space-y-3">
+                        {editingOrder.items.map((item, idx) => (
+                          <div key={`edit-item-${idx}`} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3 flex-1">
+                              <div className="w-10 h-10 rounded-xl bg-white overflow-hidden shadow-sm">
+                                {item.image && <img src={item.image} alt={item.name} className="w-full h-full object-cover" />}
                               </div>
-                              <div>
-                                <p className="text-[10px] font-black text-primary uppercase tracking-widest">Live Location Detected</p>
-                                <p className="text-[9px] font-bold text-primary/60 uppercase tracking-tighter">Click for exact marker on map</p>
+                              <div className="flex-1">
+                                <p className="text-sm font-bold text-gray-900">{item.name}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <input 
+                                    type="number" 
+                                    value={item.price}
+                                    onChange={(e) => {
+                                      const newItems = [...editingOrder.items];
+                                      newItems[idx] = { ...item, price: parseInt(e.target.value) || 0 };
+                                      setEditingOrder(prev => prev ? {...prev, items: newItems} : null);
+                                    }}
+                                    className="w-16 bg-white border-none rounded-lg px-2 py-1 text-[10px] font-black"
+                                  />
+                                  <span className="text-[10px] text-gray-400">/ {item.selectedUnit}</span>
+                                </div>
                               </div>
-                              <ArrowUpRight className="w-4 h-4 text-primary ml-auto group-hover/loc:translate-x-1 group-hover/loc:-translate-y-1 transition-transform" />
-                            </a>
-                          )}
-
-                          <div className="flex items-center justify-between pt-1">
-                            {!selectedOrder.address.verified ? (
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center bg-white rounded-xl p-1 gap-2 border border-gray-100">
+                                <button 
+                                  onClick={() => {
+                                    const newItems = [...editingOrder.items];
+                                    newItems[idx] = { ...item, quantity: Math.max(1, item.quantity - 1) };
+                                    setEditingOrder(prev => prev ? {...prev, items: newItems} : null);
+                                  }}
+                                  className="w-6 h-6 flex items-center justify-center hover:bg-gray-50 rounded-lg text-gray-400 active:scale-95"
+                                >
+                                  -
+                                </button>
+                                <span className="text-xs font-black w-4 text-center">{item.quantity}</span>
+                                <button 
+                                  onClick={() => {
+                                    const newItems = [...editingOrder.items];
+                                    newItems[idx] = { ...item, quantity: item.quantity + 1 };
+                                    setEditingOrder(prev => prev ? {...prev, items: newItems} : null);
+                                  }}
+                                  className="w-6 h-6 flex items-center justify-center hover:bg-gray-50 rounded-lg text-gray-400 active:scale-95"
+                                >
+                                  +
+                                </button>
+                              </div>
                               <button 
-                                onClick={() => handleVerifyAddress(selectedOrder)}
-                                className="flex items-center gap-2 text-[10px] font-black text-primary uppercase tracking-widest hover:underline"
+                                onClick={() => {
+                                  const newItems = editingOrder.items.filter((_, i) => i !== idx);
+                                  setEditingOrder(prev => prev ? {...prev, items: newItems} : null);
+                                }}
+                                className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                               >
-                                <MapPin className="w-3 h-3" />
-                                Verify Address
+                                <Trash2 className="w-4 h-4" />
                               </button>
-                            ) : (
-                              <div className="flex items-center gap-2 text-[10px] font-black text-green-500 uppercase tracking-widest">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Address Verified
-                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Customer Info</h4>
+                        <div className="bg-gray-50 p-4 rounded-2xl space-y-2">
+                          <p className="text-sm font-bold text-gray-900">User ID: {selectedOrder.userId}</p>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest ${
+                              selectedOrder.deliveryType === 'Delivery' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
+                            }`}>
+                              {selectedOrder.deliveryType}
+                            </span>
+                            {selectedOrder.deliverySlot && (
+                              <span className="bg-purple-100 text-purple-600 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest">
+                                {selectedOrder.deliverySlot}
+                              </span>
                             )}
                           </div>
+                          {selectedOrder.paymentMethod && (
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                              Payment: {selectedOrder.paymentMethod}
+                            </p>
+                          )}
+                          {selectedOrder.address && (
+                            <div className="space-y-3">
+                              <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Manual Address</p>
+                                <a 
+                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedOrder.address.manual || '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-gray-700 font-medium hover:text-primary transition-colors block leading-relaxed"
+                                >
+                                  {selectedOrder.address.manual || 'No address provided'}
+                                </a>
+                              </div>
+
+                              {selectedOrder.address.liveLocationUrl && (
+                                <a 
+                                  href={selectedOrder.address.liveLocationUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-3 bg-primary/10 p-3 rounded-xl border border-primary/20 group/loc transition-all hover:bg-primary/20"
+                                >
+                                  <div className="w-8 h-8 bg-primary text-white rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-primary/20 group-hover/loc:scale-110 transition-transform">
+                                    <Navigation className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-black text-primary uppercase tracking-widest">Live Location Detected</p>
+                                    <p className="text-[9px] font-bold text-primary/60 uppercase tracking-tighter">Click for exact marker on map</p>
+                                  </div>
+                                  <ArrowUpRight className="w-4 h-4 text-primary ml-auto group-hover/loc:translate-x-1 group-hover/loc:-translate-y-1 transition-transform" />
+                                </a>
+                              )}
+
+                              <div className="flex items-center justify-between pt-1">
+                                {!selectedOrder.address.verified ? (
+                                  <button 
+                                    onClick={() => handleVerifyAddress(selectedOrder)}
+                                    className="flex items-center gap-2 text-[10px] font-black text-primary uppercase tracking-widest hover:underline active:scale-95"
+                                  >
+                                    <MapPin className="w-3 h-3" />
+                                    Verify Address
+                                  </button>
+                                ) : (
+                                  <div className="flex items-center gap-2 text-[10px] font-black text-green-500 uppercase tracking-widest">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    Address Verified
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Order Verification</h4>
-                    <div className="space-y-3">
-                      <div className={`p-4 rounded-2xl border-2 transition-all ${pinError ? 'bg-red-50 border-red-200' : 'bg-primary/5 border-primary/20'}`}>
-                        <div className="flex items-center gap-2 mb-3">
-                          <ShieldCheck className={`w-5 h-5 ${pinError ? 'text-red-500' : 'text-primary'}`} />
-                          <span className={`text-xs font-bold uppercase tracking-widest ${pinError ? 'text-red-600' : 'text-primary'}`}>
-                            {pinError ? 'Invalid PIN' : 'Verify Delivery PIN'}
-                          </span>
-                        </div>
-                        <div className="flex gap-2">
-                          <input 
-                            type="text" 
-                            maxLength={4}
-                            value={pinInput}
-                            onChange={(e) => setPinInput(e.target.value)}
-                            placeholder="Enter 4-digit PIN"
-                            className="flex-1 bg-white border-none rounded-xl px-4 py-2 text-center text-lg font-black tracking-[0.5em] focus:ring-2 focus:ring-primary/20"
-                          />
+                      </div>
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Order Verification</h4>
+                        <div className="space-y-3">
+                          <div className={`p-4 rounded-2xl border-2 transition-all ${pinError ? 'bg-red-50 border-red-200' : 'bg-primary/5 border-primary/20'}`}>
+                            <div className="flex items-center gap-2 mb-3">
+                              <ShieldCheck className={`w-5 h-5 ${pinError ? 'text-red-500' : 'text-primary'}`} />
+                              <span className={`text-xs font-bold uppercase tracking-widest ${pinError ? 'text-red-600' : 'text-primary'}`}>
+                                {pinError ? 'Invalid PIN' : 'Verify Delivery PIN'}
+                              </span>
+                            </div>
+                            <div className="flex gap-2">
+                              <input 
+                                type="text" 
+                                maxLength={4}
+                                value={pinInput}
+                                onChange={(e) => setPinInput(e.target.value)}
+                                placeholder="Enter 4-digit PIN"
+                                className="flex-1 bg-white border-none rounded-xl px-4 py-2 text-center text-lg font-black tracking-[0.5em] focus:ring-2 focus:ring-primary/20"
+                              />
+                              <button 
+                                onClick={handleVerifyPin}
+                                className="bg-primary text-white px-4 py-2 rounded-xl font-bold hover:bg-primary-dark transition-all active:scale-95"
+                              >
+                                Verify
+                              </button>
+                            </div>
+                            <p className="text-[10px] text-gray-400 font-medium mt-2">Ask the customer for their unique 4-digit verification PIN.</p>
+                          </div>
+
                           <button 
-                            onClick={handleVerifyPin}
-                            className="bg-primary text-white px-4 py-2 rounded-xl font-bold hover:bg-primary-dark transition-all active:scale-95"
+                            onClick={() => {
+                              const msg = `Order ID: ${selectedOrder.id}%0APIN: ${selectedOrder.pin}%0AAddress: ${selectedOrder.address?.manual || 'N/A'}`;
+                              window.open(`https://wa.me/?text=${msg}`, '_blank');
+                            }}
+                            className="w-full bg-green-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 hover:bg-green-600 transition-all active:scale-95 flex items-center justify-center gap-2"
                           >
-                            Verify
+                            <Sparkles className="w-4 h-4" />
+                            Send PIN & Address to WhatsApp
                           </button>
                         </div>
-                        <p className="text-[10px] text-gray-400 font-medium mt-2">Ask the customer for their unique 4-digit verification PIN.</p>
                       </div>
-
-                      <button 
-                        onClick={() => {
-                          const msg = `Order ID: ${selectedOrder.id}%0APIN: ${selectedOrder.pin}%0AAddress: ${selectedOrder.address?.manual || 'N/A'}`;
-                          window.open(`https://wa.me/?text=${msg}`, '_blank');
-                        }}
-                        className="w-full bg-green-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-green-500/20 hover:bg-green-600 transition-all active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        <Sparkles className="w-4 h-4" />
-                        Send PIN & Address to WhatsApp
-                      </button>
                     </div>
-                  </div>
-                </div>
 
-                <div className="space-y-4">
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Order Items</h4>
-                  <div className="space-y-3">
-                    {selectedOrder.items.map((item, i) => (
-                      <div key={`order-item-${selectedOrder.id}-${i}`} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-gray-100">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gray-50 rounded-xl overflow-hidden">
-                            {item.image && <img src={item.image} alt={item.name} className="w-full h-full object-cover" />}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Order Items</h4>
+                      <div className="space-y-3">
+                        {selectedOrder.items.map((item, i) => (
+                          <div key={`order-item-${selectedOrder.id}-${i}`} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-gray-100">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gray-50 rounded-xl overflow-hidden">
+                                {item.image && <img src={item.image} alt={item.name} className="w-full h-full object-cover" />}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-gray-900">{item.name}</p>
+                                <p className="text-[10px] text-gray-400 font-medium">Qty: {item.quantity} {item.selectedUnit || 'Piece'} x ₹{item.price}</p>
+                              </div>
+                            </div>
+                            <span className="text-sm font-black text-gray-900">₹{item.price * item.quantity}</span>
                           </div>
-                          <div>
-                            <p className="text-sm font-bold text-gray-900">{item.name}</p>
-                            <p className="text-[10px] text-gray-400 font-medium">Qty: {item.quantity} x ₹{item.price}</p>
-                          </div>
-                        </div>
-                        <span className="text-sm font-black text-gray-900">₹{item.price * item.quantity}</span>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="p-6 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Total Amount</span>
-                  <span className="text-2xl font-black text-gray-900 tracking-tight">₹{selectedOrder.total}</span>
+                  <span className="text-2xl font-black text-gray-900 tracking-tight">₹{isEditing ? editingOrder?.total : selectedOrder.total}</span>
                 </div>
                 <div className="flex gap-3">
-                  <button 
-                    onClick={() => setSelectedOrder(null)}
-                    className="px-6 py-3 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors"
-                  >
-                    Close
-                  </button>
-                  <button 
-                    onClick={() => handlePrintInvoice(selectedOrder)}
-                    className="bg-gray-900 text-white px-8 py-3 rounded-2xl shadow-xl shadow-gray-900/20 hover:bg-black transition-all active:scale-95 font-bold flex items-center gap-2"
-                  >
-                    <FileText className="w-5 h-5" />
-                    Print Invoice
-                  </button>
+                  {isEditing ? (
+                    <>
+                      <button 
+                        onClick={() => {
+                          setIsEditing(false);
+                          setEditingOrder(null);
+                        }}
+                        className="px-6 py-3 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors active:scale-95"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={handleUpdateOrder}
+                        className="bg-primary text-white px-8 py-3 rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 font-bold flex items-center gap-2"
+                      >
+                        <Save className="w-5 h-5" />
+                        Save Changes
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button 
+                        onClick={() => setSelectedOrder(null)}
+                        className="px-6 py-3 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors active:scale-95"
+                      >
+                        Close
+                      </button>
+                      <button 
+                        onClick={() => handlePrintInvoice(selectedOrder)}
+                        className="bg-gray-900 text-white px-8 py-3 rounded-2xl shadow-xl shadow-gray-900/20 hover:bg-black transition-all active:scale-95 font-bold flex items-center gap-2"
+                      >
+                        <FileText className="w-5 h-5" />
+                        Print Invoice
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </motion.div>

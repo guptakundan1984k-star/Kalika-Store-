@@ -316,7 +316,7 @@ export const AdminBillingManager: React.FC<AdminBillingManagerProps> = ({ orders
                         </div>
                         <button 
                           onClick={() => handleRemoveItem(index)}
-                          className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                          className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
                         >
                           <Trash2 className="w-5 h-5" />
                         </button>
@@ -412,7 +412,7 @@ export const AdminBillingManager: React.FC<AdminBillingManagerProps> = ({ orders
                             e.stopPropagation();
                             handlePrint(order);
                           }}
-                          className="p-2 bg-primary/10 text-primary rounded-xl hover:bg-primary hover:text-white transition-all"
+                          className="p-2 bg-primary/10 text-primary rounded-xl hover:bg-primary hover:text-white transition-all active:scale-95"
                           title="Print Bill"
                         >
                           <Printer className="w-4 h-4" />

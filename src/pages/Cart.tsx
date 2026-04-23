@@ -1,8 +1,8 @@
 import React from 'react';
 import { CartItem, Product, StoreSettings } from '../types';
-import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Truck, ShieldCheck, Clock, Sparkles, AlertCircle } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Truck, ShieldCheck, Clock, Sparkles, AlertCircle, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DELIVERY_FEE, FREE_DELIVERY_THRESHOLD } from '../constants';
+import { useStore } from '../contexts/StoreContext';
 import { Link } from 'react-router-dom';
 
 interface CartProps {
@@ -11,31 +11,45 @@ interface CartProps {
   onRemove: (id: string) => void;
   onClearCart: () => void;
   products: Product[];
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product, quantity?: number) => void;
   storeSettings?: StoreSettings | null;
 }
 
 const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCart, products, onAddToCart, storeSettings }) => {
+  const { deliveryFee: configDeliveryFee, freeDeliveryThreshold: configThreshold } = useStore();
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const deliveryFee = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : (cart.length > 0 ? DELIVERY_FEE : 0);
+  const deliveryFee = subtotal >= configThreshold ? 0 : (cart.length > 0 ? configDeliveryFee : 0);
   const total = subtotal + deliveryFee;
+
+  const inventoryThreshold = configThreshold;
+  const summaryRef = React.useRef<HTMLDivElement>(null);
+  const itemRefs = React.useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   if (cart.length === 0) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center space-y-8">
-        <div className="w-32 h-32 bg-gray-50 rounded-full flex items-center justify-center text-gray-200 shadow-xl shadow-gray-100 animate-pulse">
-          <ShoppingCart className="w-16 h-16" />
+      <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center space-y-12">
+        <div className="relative">
+          <div className="w-40 h-40 bg-gray-50 rounded-[48px] flex items-center justify-center text-gray-200 shadow-inner">
+            <ShoppingBag className="w-20 h-20" />
+          </div>
+          <div className="absolute -bottom-4 -right-4 w-12 h-12 bg-primary text-white rounded-2xl flex items-center justify-center shadow-xl rotate-12">
+            <Plus className="w-6 h-6" />
+          </div>
         </div>
         <div className="space-y-4">
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight">Your cart is empty</h2>
-          <p className="text-gray-500 font-medium max-w-sm mx-auto">Looks like you haven't added any fresh groceries to your cart yet. Let's find something delicious!</p>
+          <h2 className="text-4xl font-black text-gray-900 tracking-tight">Empty Cart</h2>
+          <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">No products in your cart yet</p>
         </div>
         <Link 
           to="/products"
-          className="bg-primary text-white font-bold px-12 py-5 rounded-3xl shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95 flex items-center gap-2 group"
+          className="bg-primary text-white font-black px-12 py-6 rounded-[28px] shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95 flex items-center gap-4 group"
         >
-          Start Shopping
-          <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          <span className="text-sm uppercase tracking-[0.2em]">Add products to cart</span>
+          <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
         </Link>
       </div>
     );
@@ -71,6 +85,7 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                 <motion.div 
                   layout
                   key={item.id}
+                  ref={el => { itemRefs.current[item.id] = el; }}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
@@ -94,7 +109,12 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                   <div className="flex-1 text-center md:text-left space-y-1">
                     <span className="text-[10px] font-bold text-primary uppercase tracking-widest">{item.category}</span>
                     <h3 className="text-lg font-black text-gray-900 tracking-tight">{item.name}</h3>
-                    <p className="text-sm text-gray-500 font-medium line-clamp-1">{item.description}</p>
+                    {item.weight && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Package className="w-3 h-3 text-gray-400" />
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{item.weight}</span>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
@@ -116,7 +136,7 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                     
                     <div className="flex flex-col items-end">
                       <span className="text-xl font-black text-gray-900">₹{item.price * item.quantity}</span>
-                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">₹{item.price} / unit</span>
+                      {item.weight && <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">₹{item.price} / {item.weight}</span>}
                     </div>
                     
                     <button 
@@ -133,7 +153,7 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
         </div>
 
         {/* Order Summary */}
-        <div className="space-y-8">
+        <div className="space-y-8" ref={summaryRef}>
           <div className="bg-white p-8 rounded-[40px] shadow-xl shadow-gray-200/50 border border-gray-100 sticky top-24 space-y-8">
             <h2 className="text-2xl font-black text-gray-900 tracking-tight">Order Summary</h2>
             
@@ -151,7 +171,7 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
               {deliveryFee > 0 && (
                 <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
                   <p className="text-xs font-bold text-primary leading-relaxed">
-                    Add <span className="text-lg font-black">₹{FREE_DELIVERY_THRESHOLD - subtotal}</span> more to unlock <span className="uppercase tracking-widest">FREE Delivery</span>!
+                    Add <span className="text-lg font-black">₹{configThreshold - subtotal}</span> more to unlock <span className="uppercase tracking-widest">FREE Delivery</span>!
                   </p>
                 </div>
               )}

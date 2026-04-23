@@ -6,12 +6,15 @@ export interface Product {
   originalPrice?: number;
   purchasePrice?: number;
   category: string;
-  image: string;
+  image: string; // Keep for backward compatibility, but we'll use primaryImage
+  images?: string[]; // Array of image URLs
+  primaryImage?: string; 
   stock: number;
   createdAt: number;
   rating?: number;
   reviewCount?: number;
   weight?: string; // e.g., "500g", "1kg"
+  tag?: 'Bestseller' | 'Top Rated' | 'New Arrival' | 'Trending';
   variations?: {
     sizes?: string[];
     colors?: string[];
@@ -57,7 +60,7 @@ export interface Order {
   userId: string;
   items: CartItem[];
   total: number;
-  status: 'Pending' | 'Proceeded' | 'Packed' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Order Received' | 'Packed' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
   deliveryType: 'Takeaway' | 'Delivery';
   userName?: string;
   userPhone?: string;
@@ -76,11 +79,34 @@ export interface Order {
   prescriptionImage?: string;
   earnedPoints?: number;
   redeemedPoints?: number;
+  estimatedDelivery?: number;
+  isPreOrder?: boolean;
   tracking?: {
     status: string;
     timestamp: number;
     message: string;
   }[];
+}
+
+export interface FeatureRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  feature: string;
+  status: 'pending' | 'reviewed' | 'implemented';
+  createdAt: number;
+}
+
+export interface Expense {
+  id: string;
+  itemName: string;
+  amount: number;
+  quantity?: string;
+  date: number;
+  notes?: string;
+  photoUrl?: string;
+  category?: string;
+  source: 'voice' | 'photo' | 'manual';
 }
 
 export interface UserProfile {
@@ -95,6 +121,18 @@ export interface UserProfile {
   wishlist?: string[]; // Array of product IDs
   lastActiveAt?: number;
   loyaltyPoints?: number;
+}
+
+export interface BulkEnquiry {
+  id: string;
+  userId: string;
+  storeName: string;
+  name: string;
+  phone: string;
+  email: string;
+  message: string;
+  status: 'Pending' | 'Contacted' | 'Closed';
+  createdAt: number;
 }
 
 export interface Banner {
@@ -125,5 +163,12 @@ export interface StoreSettings {
   sundayOpeningTime: string;
   sundayClosingTime: string;
   message?: string;
+  storeName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  storeAddress?: string;
+  logoUrl?: string;
+  deliveryFee?: number;
+  freeDeliveryThreshold?: number;
   updatedAt: number;
 }

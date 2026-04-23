@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserProfile, Order, Address } from '../types';
+import { UserProfile, Order, Address, BulkEnquiry } from '../types';
 import { SUPPORT_EMAIL } from '../constants';
 import { 
   User, Mail, Phone, MapPin, Package, LogOut, 
@@ -23,8 +23,14 @@ interface ProfileProps {
 const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
   const navigate = useNavigate();
   const { language, setLanguage, t, isVoiceEnabled, setIsVoiceEnabled } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'orders' | 'addresses' | 'help' | 'wishlist'>('orders');
-  const [adminPassword, setAdminPassword] = useState('');
+  const [activeTab, setActiveTab] = useState<'orders' | 'addresses' | 'help' | 'wishlist' | 'bulk'>('orders');
+  const [bulkEnquiries, setBulkEnquiries] = useState<BulkEnquiry[]>([]);
+  const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
+  const [bulkFormData, setBulkFormData] = useState({
+    storeName: '',
+    message: '',
+    phone: user.phone || ''
+  });
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [adminError, setAdminError] = useState('');
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -35,6 +41,10 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [primaryAddress, setPrimaryAddress] = useState(user.address || '');
   const [profileData, setProfileData] = useState({ name: user.name, phone: user.phone });
+  const [adminPassword, setAdminPassword] = useState('');
+  const [isRequestingFeature, setIsRequestingFeature] = useState(false);
+  const [featureDescription, setFeatureDescription] = useState('');
+  const [isSubmittingFeature, setIsSubmittingFeature] = useState(false);
 
   const handleUpdateProfile = async () => {
     try {
@@ -126,6 +136,41 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
       console.error("Error updating primary address:", error);
     }
   };
+  // Listen for bulk enquiries
+  React.useEffect(() => {
+    const q = query(collection(db, 'bulk_enquiries'), where('userId', '==', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setBulkEnquiries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BulkEnquiry)));
+    }, (error) => {
+      console.error("Error fetching bulk enquiries:", error);
+    });
+    return () => unsubscribe();
+  }, [user.uid]);
+
+  const handleBulkSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingBulk(true);
+    try {
+      const enquiry: Omit<BulkEnquiry, 'id'> = {
+        userId: user.uid,
+        name: user.name,
+        email: user.email,
+        phone: bulkFormData.phone,
+        storeName: bulkFormData.storeName,
+        message: bulkFormData.message,
+        status: 'Pending',
+        createdAt: Date.now()
+      };
+      await addDoc(collection(db, 'bulk_enquiries'), enquiry);
+      setBulkFormData({ storeName: '', message: '', phone: user.phone || '' });
+      alert("Bulk Enquiry submitted successfully. We will contact you soon.");
+    } catch (error) {
+      console.error("Error submitting bulk enquiry:", error);
+    } finally {
+      setIsSubmittingBulk(false);
+    }
+  };
+
   const [helpQuery, setHelpQuery] = useState('');
   const [helpLoading, setHelpLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -203,6 +248,31 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
       setHelpMessages(prev => [...prev, { role: 'ai', content: "Error connecting to AI service." }]);
     } finally {
       setHelpLoading(false);
+    }
+  };
+
+  const handleSubmitFeatureRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!featureDescription.trim()) return;
+
+    setIsSubmittingFeature(true);
+    try {
+      const request: Omit<FeatureRequest, 'id'> = {
+        userId: user.uid,
+        userName: user.name,
+        feature: featureDescription,
+        status: 'pending',
+        createdAt: Date.now()
+      };
+      await addDoc(collection(db, 'feature_requests'), request);
+      setFeatureDescription('');
+      setIsRequestingFeature(false);
+      alert("Feature request submitted! Our team will review it.");
+    } catch (error) {
+      console.error("Error submitting feature request:", error);
+      alert("Failed to submit request. Please try again.");
+    } finally {
+      setIsSubmittingFeature(false);
     }
   };
 
@@ -457,10 +527,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
 
             <div className="bg-white p-4 rounded-[32px] border border-gray-100 shadow-xl shadow-gray-200/50 space-y-2">
               <button 
-                onClick={() => setActiveTab('orders')}
-                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all ${
-                  activeTab === 'orders' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'
-                }`}
+                onClick={() => navigate('/orders')}
+                className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
               >
                 <div className="flex items-center gap-3">
                   <ShoppingBag className="w-5 h-5" />
@@ -470,7 +538,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
               </button>
               <button 
                 onClick={() => setActiveTab('addresses')}
-                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all ${
+                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 ${
                   activeTab === 'addresses' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'
                 }`}
               >
@@ -482,7 +550,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
               </button>
               <button 
                 onClick={() => setActiveTab('help')}
-                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all ${
+                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 ${
                   activeTab === 'help' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'
                 }`}
               >
@@ -494,7 +562,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
               </button>
               <button 
                 onClick={() => setActiveTab('wishlist')}
-                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all ${
+                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 ${
                   activeTab === 'wishlist' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'
                 }`}
               >
@@ -505,8 +573,20 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <ChevronRight className="w-4 h-4" />
               </button>
               <button 
+                onClick={() => setActiveTab('bulk')}
+                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 ${
+                  activeTab === 'bulk' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Briefcase className="w-5 h-5" />
+                  Bulk Enquiry
+                </div>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button 
                 onClick={() => navigate('/admin')}
-                className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-primary bg-primary/5 hover:bg-primary/10 transition-all border border-primary/10 mt-4"
+                className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-primary bg-primary/5 hover:bg-primary/10 transition-all border border-primary/10 mt-4 active:scale-95"
               >
                 <div className="flex items-center gap-3">
                   <LayoutDashboard className="w-5 h-5" />
@@ -519,11 +599,28 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
 
           {/* Main Content */}
           <div className="lg:col-span-3 space-y-8">
+            {/* Content Header */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-3xl font-black text-gray-900 tracking-tight">
+                {activeTab === 'orders' ? 'Order History' : 
+                 activeTab === 'addresses' ? 'My Addresses' : 
+                 activeTab === 'help' ? 'Help & Support' : 
+                 activeTab === 'wishlist' ? 'My Wishlist' : 'Bulk Enquiry'}
+              </h3>
+              <button 
+                onClick={() => setIsRequestingFeature(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-white transition-all active:scale-95 shadow-sm"
+              >
+                <Sparkles className="w-4 h-4" />
+                Request Feature
+              </button>
+            </div>
+
             {/* Quick Actions Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <button 
                 onClick={() => setActiveTab('help')}
-                className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3"
+                className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95"
               >
                 <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                   <Sparkles className="w-6 h-6" />
@@ -533,7 +630,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
 
               <button 
                 onClick={() => setActiveTab('wishlist')}
-                className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3"
+                className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95"
               >
                 <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
                   <Heart className="w-6 h-6" />
@@ -568,13 +665,23 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
               )}
 
               <button 
-                onClick={() => setActiveTab('orders')}
-                className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3"
+                onClick={() => navigate('/orders')}
+                className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95"
               >
                 <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
                   <Package className="w-6 h-6" />
                 </div>
                 <span className="text-xs font-black uppercase tracking-widest text-gray-900">Orders</span>
+              </button>
+
+              <button 
+                onClick={() => setActiveTab('bulk')}
+                className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95"
+              >
+                <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                  <Briefcase className="w-6 h-6" />
+                </div>
+                <span className="text-xs font-black uppercase tracking-widest text-gray-900">Bulk Enquiry</span>
               </button>
             </div>
 
@@ -587,7 +694,6 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                   exit={{ opacity: 0, y: -20 }}
                   className="space-y-6"
                 >
-                  <h3 className="text-3xl font-black text-gray-900 tracking-tight">Order History</h3>
                   {orders.length > 0 ? (
                     orders.map((order) => {
                       const StatusIcon = getStatusIcon(order.status);
@@ -662,21 +768,21 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                                 className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-primary transition-all duration-1000 -z-10" 
                                 style={{ 
                                   width: order.status === 'Pending' ? '0%' : 
-                                         order.status === 'Proceeded' ? '25%' :
+                                         order.status === 'Order Received' ? '25%' :
                                          order.status === 'Packed' ? '50%' : 
                                          order.status === 'Out for Delivery' ? '75%' : '100%' 
                                 }} 
                               />
                               
                               {[
-                                { status: 'Pending', icon: Clock },
-                                { status: 'Proceeded', icon: CheckCircle },
-                                { status: 'Packed', icon: PackageIcon },
-                                { status: 'Out for Delivery', icon: Truck },
-                                { status: 'Delivered', icon: CheckCircle }
+                                { status: 'Pending', label: 'Order Placed', icon: Clock },
+                                { status: 'Order Received', label: 'Order Received', icon: CheckCircle, small: true },
+                                { status: 'Packed', label: 'Packed', icon: PackageIcon },
+                                { status: 'Out for Delivery', label: 'Out for Delivery', icon: Truck },
+                                { status: 'Delivered', label: 'Delivered', icon: CheckCircle }
                               ].map((step, i) => {
                                 const StepIcon = step.icon;
-                                const stepsArr = ['Pending', 'Proceeded', 'Packed', 'Out for Delivery', 'Delivered'];
+                                const stepsArr = ['Pending', 'Order Received', 'Packed', 'Out for Delivery', 'Delivered'];
                                 const statusIdx = stepsArr.indexOf(order.status);
                                 const isCompleted = statusIdx >= i;
                                 const isCurrent = order.status === step.status;
@@ -688,11 +794,13 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                                     } ${isCurrent ? 'scale-125 ring-4 ring-primary/10' : ''}`}>
                                       <StepIcon className="w-5 h-5" />
                                     </div>
-                                    <span className={`text-[8px] font-black uppercase tracking-widest text-center max-w-[60px] ${
-                                      isCompleted ? 'text-gray-900' : 'text-gray-300'
-                                    }`}>
-                                      {step.status}
-                                    </span>
+                                    <div className="flex flex-col items-center">
+                                      <span className={`text-[8px] font-black uppercase tracking-tight text-center max-w-[60px] leading-tight ${
+                                        isCompleted ? 'text-gray-900' : 'text-gray-300'
+                                      } ${step.small ? 'scale-90 opacity-60' : ''}`}>
+                                        {step.label}
+                                      </span>
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -708,11 +816,117 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                       <p className="text-sm font-medium text-gray-400 max-w-xs mx-auto">
                         You don't have any active orders. Note: Orders older than 3 months are automatically archived.
                       </p>
-                      <Link to="/products" className="inline-block mt-6 bg-primary text-white font-black px-8 py-4 rounded-2xl shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all">
+                      <Link to="/products" className="inline-block mt-6 bg-primary text-white font-black px-8 py-4 rounded-2xl shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95">
                         Start Shopping
                       </Link>
                     </div>
                   )}
+                </motion.div>
+              ) : activeTab === 'bulk' ? (
+                <motion.div 
+                  key="bulk"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="space-y-8"
+                >
+                  <div className="bg-gradient-to-br from-indigo-600 to-primary p-12 rounded-[50px] text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                    <div className="relative z-10 space-y-6">
+                      <div className="w-16 h-16 bg-white/20 rounded-3xl flex items-center justify-center backdrop-blur-xl">
+                        <Briefcase className="w-8 h-8" />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-4xl font-black tracking-tight">Bulk Enquiry</h3>
+                        <p className="text-indigo-100 font-medium max-w-md">Are you a store owner or bulk purchaser? Submit your inquiry below for special pricing and terms.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleBulkSubmit} className="bg-white p-10 rounded-[40px] border border-gray-100 shadow-xl shadow-gray-200/50 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Store/Business Name</label>
+                        <input 
+                          required
+                          type="text"
+                          value={bulkFormData.storeName}
+                          onChange={(e) => setBulkFormData({ ...bulkFormData, storeName: e.target.value })}
+                          className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-4 focus:ring-primary/10 transition-all"
+                          placeholder="Name of your enterprise"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Contact Phone</label>
+                        <input 
+                          required
+                          type="tel"
+                          value={bulkFormData.phone}
+                          onChange={(e) => setBulkFormData({ ...bulkFormData, phone: e.target.value })}
+                          className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-4 focus:ring-primary/10 transition-all"
+                          placeholder="Your direct mobile number"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">How can we help? (Products, Quantities, Target Price)</label>
+                      <textarea 
+                        required
+                        value={bulkFormData.message}
+                        onChange={(e) => setBulkFormData({ ...bulkFormData, message: e.target.value })}
+                        rows={5}
+                        className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-4 focus:ring-primary/10 transition-all resize-none"
+                        placeholder="Tell us about your requirements..."
+                      />
+                    </div>
+                    <button 
+                      type="submit"
+                      disabled={isSubmittingBulk}
+                      className="w-full bg-primary text-white font-black py-5 rounded-2xl shadow-xl shadow-primary/20 hover:bg-black transition-all active:scale-95 uppercase tracking-widest text-xs flex items-center justify-center gap-3 disabled:opacity-50"
+                    >
+                      {isSubmittingBulk ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                      Submit Bulk Enquiry
+                    </button>
+                  </form>
+
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xl font-black text-gray-900 tracking-tight">Previous Inquiries</h4>
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{bulkEnquiries.length} Total</span>
+                    </div>
+                    {bulkEnquiries.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-4">
+                        {bulkEnquiries.map((enquiry) => (
+                          <div key={enquiry.id} className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-3">
+                                <h5 className="font-black text-gray-900">{enquiry.storeName}</h5>
+                                <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                                  enquiry.status === 'Pending' ? 'bg-orange-100 text-orange-600' :
+                                  enquiry.status === 'Contacted' ? 'bg-blue-100 text-blue-600' :
+                                  'bg-green-100 text-green-600'
+                                }`}>
+                                  {enquiry.status}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500 font-medium line-clamp-2">{enquiry.message}</p>
+                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{new Date(enquiry.createdAt).toLocaleDateString()}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button className="p-3 bg-gray-50 text-gray-400 rounded-xl hover:text-primary transition-colors">
+                                <Eye className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 bg-white rounded-[40px] border border-dashed border-gray-200">
+                        <Briefcase className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                        <p className="text-sm font-bold text-gray-400">No previous inquiries found.</p>
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
               ) : activeTab === 'addresses' ? (
                 <motion.div 
@@ -954,9 +1168,9 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                           </div>
                         </div>
                       </div>
-                  </div>
+                    </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm flex items-center gap-6">
                       <div className="w-14 h-14 bg-green-50 text-green-500 rounded-2xl flex items-center justify-center">
                         <Phone className="w-6 h-6" />
@@ -999,6 +1213,75 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
           </div>
           <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">&copy; 2026 Kalika Store Ranchi</p>
         </div>
+        {/* Feature Request Modal */}
+        <AnimatePresence>
+          {isRequestingFeature && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsRequestingFeature(false)}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              />
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white w-full max-w-lg rounded-[40px] p-8 shadow-2xl relative z-10 space-y-6"
+              >
+                <div className="text-center space-y-2">
+                  <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mx-auto mb-4">
+                    <Sparkles className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">Request a Feature</h3>
+                  <p className="text-sm text-gray-500 font-medium">Tell us what you'd like to see in our app!</p>
+                </div>
+
+                <form onSubmit={handleSubmitFeatureRequest} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Your Name</label>
+                    <input 
+                      type="text"
+                      disabled
+                      value={user.name}
+                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-bold text-gray-400 cursor-not-allowed"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Feature Description</label>
+                    <textarea 
+                      required
+                      value={featureDescription}
+                      onChange={(e) => setFeatureDescription(e.target.value)}
+                      placeholder="I would like to have a feature that..."
+                      rows={4}
+                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-4 focus:ring-primary/10 transition-all resize-none outline-none"
+                    />
+                  </div>
+
+                  <div className="flex gap-4">
+                    <button 
+                      type="button"
+                      onClick={() => setIsRequestingFeature(false)}
+                      className="flex-1 bg-gray-50 text-gray-400 font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] active:scale-95"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isSubmittingFeature}
+                      className="flex-1 bg-primary text-white font-black py-4 rounded-2xl shadow-xl shadow-primary/20 hover:bg-black transition-all active:scale-95 uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isSubmittingFeature ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit Request'}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
         {/* Admin Login Modal */}
         <AnimatePresence>
           {isAdminModalOpen && (

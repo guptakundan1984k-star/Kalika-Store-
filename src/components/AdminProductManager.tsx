@@ -11,6 +11,7 @@ import { generateProductDescription, analyzeProductImage, searchProductDetails }
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { db, doc, deleteDoc, updateDoc, storage, ref, uploadBytes, getDownloadURL, handleFirestoreError, OperationType } from '../firebase';
+import { aiService } from '../services/aiService';
 
 interface AdminProductManagerProps {
   products: Product[];
@@ -29,23 +30,53 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [duplicateProduct, setDuplicateProduct] = useState<Product | null>(null);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const [editingProduct, setEditingProduct] = useState<Partial<Product>>({
     name: '',
     price: 0,
-    category: 'Vegetables',
+    category: 'Staples',
     stock: 0,
     description: '',
     image: '',
-    weight: ''
+    images: [],
+    weight: '',
+    tag: undefined
   });
   const [bulkStockValue, setBulkStockValue] = useState<number>(0);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categories, setCategories] = useState(['Vegetables', 'Fruits', 'Dairy', 'Bakery', 'Meat', 'Snacks', 'Beverages', 'Staples', 'Oils', 'Household']);
 
+  const [bulkPriceValue, setBulkPriceValue] = useState<number>(0);
+  const [priceAdjustType, setPriceAdjustType] = useState<'fixed' | 'percent'>('fixed');
+
+  const handleBulkPriceUpdate = async (value: number, type: 'fixed' | 'percent') => {
+    if (!window.confirm(`Adjust price of ${selectedIds.length} items by ${value}${type === 'percent' ? '%' : ''}?`)) return;
+    try {
+      await Promise.all(selectedIds.map(id => {
+        const product = products.find(p => p.id === id);
+        if (!product) return Promise.resolve();
+        let newPrice = product.price;
+        if (type === 'fixed') newPrice += value;
+        else newPrice = Math.round(newPrice * (1 + value / 100));
+        return updateDoc(doc(db, 'products', id), { price: Math.max(0, newPrice) });
+      }));
+      setSelectedIds([]);
+      setBulkPriceValue(0);
+    } catch (e) {
+      console.error("Bulk price update failed", e);
+    }
+  };
+
   const handleBulkSync = async (type: 'images' | 'descriptions' | 'all') => {
     const productsToSync = products.filter(p => {
+      // "Leave locals" logic: Skip products in highly local/generic categories 
+      // or those with very short generic names like "Aloo", "Pyaj"
+      const isLocalCategory = ['Fruits & Vegetables', 'Dairy', 'Bakery'].includes(p.category);
+      const isShortGenericName = p.name.split(' ').length <= 1; // Generic names usually 1 word
+      if (isLocalCategory || isShortGenericName) return false;
+
       const isPlaceholder = !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder');
       const needsImage = isPlaceholder;
       const needsDesc = !p.description || p.description.length < 20;
@@ -55,11 +86,11 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     });
 
     if (productsToSync.length === 0) {
-      alert("All products have real images and descriptions! If you want to force updates, please edit them individualy.");
+      alert("All products have real images and descriptions!");
       return;
     }
 
-    if (!window.confirm(`Found ${productsToSync.length} products needing ${type}. Sync them using Google Search & AI? This will fetch real product photos.`)) return;
+    if (!window.confirm(`Sync ${productsToSync.length} products using Google Image Search & Gemini?`)) return;
 
     setIsSyncing(true);
     setSyncProgress({ current: 0, total: productsToSync.length });
@@ -70,15 +101,20 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
       setSyncProgress({ current: i + 1, total: productsToSync.length });
 
       try {
-        const details = await searchProductDetails(product.name);
         const updates: any = {};
         
-        if ((type === 'images' || type === 'all') && details.imageUrl?.startsWith('http')) {
-          updates.image = details.imageUrl;
+        if (type === 'images' || type === 'all') {
+          const urls = await aiService.findProductImages(product.name, product.category);
+          if (urls.length > 0) {
+            updates.image = urls[0];
+            updates.primaryImage = urls[0];
+            updates.images = urls;
+          }
         }
         
-        if ((type === 'descriptions' || type === 'all') && details.description) {
-          updates.description = details.description;
+        if (type === 'descriptions' || type === 'all') {
+          const desc = await generateProductDescription(product.name, product.category);
+          if (desc) updates.description = desc;
         }
 
         if (Object.keys(updates).length > 0) {
@@ -89,12 +125,11 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
         console.error(`Failed to sync ${product.name}:`, error);
       }
       
-      // Small delay to avoid rate limits
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     setIsSyncing(false);
-    alert(`Successfully synced ${successCount} products.`);
+    alert(`Successfully synced ${successCount} products with AI images.`);
   };
 
   const handleAddCategory = () => {
@@ -174,19 +209,17 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     if (!editingProduct.name) return;
     setSearchingGoogle(true);
     try {
-      const details = await searchProductDetails(editingProduct.name);
-      setEditingProduct(prev => ({
-        ...prev,
-        description: details.description || prev.description,
-        price: details.price || prev.price,
-        category: details.category || prev.category,
-        image: details.imageUrl?.startsWith('http') 
-          ? details.imageUrl 
-          : `https://picsum.photos/seed/${details.imageUrl || editingProduct.name}/800/800`
-      }));
+      const urls = await aiService.findProductImages(editingProduct.name, editingProduct.category);
+      if (urls.length > 0) {
+        setEditingProduct(prev => ({
+          ...prev,
+          image: urls[0],
+          images: Array.from(new Set([...(prev.images || []), ...urls]))
+        }));
+      }
     } catch (error) {
-      console.error("Google Search failed", error);
-      alert("Failed to fetch details from Google. Please try again.");
+      console.error("Image search failed", error);
+      alert("Failed to fetch images. Please try again.");
     } finally {
       setSearchingGoogle(false);
     }
@@ -261,10 +294,34 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
   const processImportedData = async (data: any[]) => {
     setIsImporting(true);
     const newProducts: Partial<Product>[] = [];
-    
-    data.forEach((row: any) => {
+
+    // Preparation for auto-fixing images during import
+    const rowsRequiringAI = data.filter((row: any) => {
       const name = row.name || row.ItemName || row.Name || row['Item Name'];
-      if (name) {
+      const img = row.image || row.Image || row['Product Photo Link'];
+      return name && (!img || img.includes('picsum.photos') || img.includes('placeholder'));
+    });
+
+    if (rowsRequiringAI.length > 0 && window.confirm(`Found ${rowsRequiringAI.length} items without clear images. Should I automatically find real product photos using AI?`)) {
+      for (const row of data) {
+        const name = row.name || row.ItemName || row.Name || row['Item Name'];
+        if (!name) continue;
+        
+        let img = row.image || row.Image || row['Product Photo Link'];
+        let images: string[] = [];
+
+        if (!img || img.includes('picsum.photos') || img.includes('placeholder')) {
+          try {
+            const urls = await aiService.findProductImages(name, row.category || row.Category);
+            if (urls.length > 0) {
+              img = urls[0];
+              images = urls;
+            }
+          } catch (e) {
+            console.error(`AI Image fetch failed for ${name}`, e);
+          }
+        }
+
         newProducts.push({
           name: name,
           price: parseFloat(row.price || row.SalePrice || row.Price || row['Sale Price']) || 0,
@@ -272,11 +329,30 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
           category: row.category || row.Category || 'Staples',
           stock: parseInt(row.stock || row.Stock || row.Quantity || row['Item Stock quantity']) || 0,
           description: row.description || row.Description || '',
-          image: row.image || row.Image || row['Product Photo Link'] || `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/800/800`,
+          image: img || `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/800/800`,
+          images: images.length > 0 ? images : [img || `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/800/800`],
           weight: row.weight || row.Weight || ''
         });
       }
-    });
+    } else {
+      data.forEach((row: any) => {
+        const name = row.name || row.ItemName || row.Name || row['Item Name'];
+        if (name) {
+          const img = row.image || row.Image || row['Product Photo Link'] || `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/800/800`;
+          newProducts.push({
+            name: name,
+            price: parseFloat(row.price || row.SalePrice || row.Price || row['Sale Price']) || 0,
+            purchasePrice: parseFloat(row.purchasePrice || row.PurchasePrice || row['Purchase Price']) || 0,
+            category: row.category || row.Category || 'Staples',
+            stock: parseInt(row.stock || row.Stock || row.Quantity || row['Item Stock quantity']) || 0,
+            description: row.description || row.Description || '',
+            image: img,
+            images: [img],
+            weight: row.weight || row.Weight || ''
+          });
+        }
+      });
+    }
 
     try {
       if (onBulkAdd) {
@@ -316,6 +392,15 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
   };
 
   const handleSave = () => {
+    // Check for duplicate name if adding new product
+    if (!editingProduct.id) {
+      const existing = products.find(p => p.name.toLowerCase() === editingProduct.name?.toLowerCase());
+      if (existing) {
+        setDuplicateProduct(existing);
+        return;
+      }
+    }
+
     if (editingProduct.id) {
       onUpdate(editingProduct.id, editingProduct);
     } else {
@@ -325,11 +410,13 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     setEditingProduct({
       name: '',
       price: 0,
-      category: 'Vegetables',
+      category: 'Staples',
       stock: 0,
       description: '',
       image: '',
-      weight: ''
+      images: [],
+      weight: '',
+      tag: undefined
     });
   };
 
@@ -347,7 +434,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
           <p className="text-sm text-gray-500 font-medium">Manage your products, stock levels, and pricing.</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative group">
             <button 
               disabled={isSyncing}
@@ -359,7 +446,36 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
             <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
               <button onClick={() => handleBulkSync('images')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-primary/5 hover:text-primary transition-colors">Sync Images Only</button>
               <button onClick={() => handleBulkSync('descriptions')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-primary/5 hover:text-primary transition-colors">Sync Descriptions Only</button>
-              <button onClick={() => handleBulkSync('all')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-primary/5 hover:text-primary transition-colors border-t border-gray-50 mt-1 pt-3">Sync Everything</button>
+              <button 
+                onClick={async () => {
+                  if (!window.confirm("FORCE SYNC ALL? This will search and replace images for ALL products regardless of whether they already have images. Continue?")) return;
+                  setIsSyncing(true);
+                  let count = 0;
+                  setSyncProgress({ current: 0, total: products.length });
+                  for (let i = 0; i < products.length; i++) {
+                    const p = products[i];
+                    setSyncProgress({ current: i + 1, total: products.length });
+                    try {
+                      const urls = await aiService.findProductImages(p.name, p.category);
+                      if (urls.length > 0) {
+                        await updateDoc(doc(db, 'products', p.id), {
+                          image: urls[0],
+                          primaryImage: urls[0],
+                          images: urls
+                        });
+                        count++;
+                      }
+                    } catch (err) { console.error(err); }
+                    await new Promise(r => setTimeout(r, 600));
+                  }
+                  setIsSyncing(false);
+                  alert(`Successfully force-synced ${count} products.`);
+                }} 
+                className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors border-t border-gray-50 mt-1 pt-3"
+              >
+                Force Sync All (Images)
+              </button>
+              <button onClick={() => handleBulkSync('all')} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-primary/5 hover:text-primary transition-colors border-t border-gray-50 mt-1 pt-2">Sync Missing Only</button>
             </div>
           </div>
           <button 
@@ -500,6 +616,28 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                 <div className="h-4 w-px bg-white/20" />
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2 bg-white/10 p-1 rounded-xl border border-white/10">
+                    <button 
+                      onClick={() => setPriceAdjustType(t => t === 'fixed' ? 'percent' : 'fixed')}
+                      className="px-2 py-1 bg-white/10 rounded-lg text-[8px] font-black"
+                    >
+                      {priceAdjustType === 'fixed' ? '₹' : '%'}
+                    </button>
+                    <input 
+                      type="number" 
+                      value={bulkPriceValue}
+                      onChange={(e) => setBulkPriceValue(parseFloat(e.target.value) || 0)}
+                      className="w-16 bg-transparent border-none text-right text-xs font-black focus:ring-0 placeholder-white/30"
+                      placeholder="Add"
+                    />
+                    <button
+                      onClick={() => handleBulkPriceUpdate(bulkPriceValue, priceAdjustType)}
+                      className="px-3 py-1 bg-green-500 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all hover:bg-green-600"
+                    >
+                      Adj. Price
+                    </button>
+                  </div>
+                  <div className="h-4 w-px bg-white/20" />
+                  <div className="flex items-center gap-2 bg-white/10 p-1 rounded-xl border border-white/10">
                     <input 
                       type="number" 
                       value={bulkStockValue}
@@ -528,6 +666,12 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                       className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all"
                     >
                       Quick: Out of Stock
+                    </button>
+                    <button
+                      onClick={() => handleBulkSync('all')}
+                      className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all border border-blue-400"
+                    >
+                      AI Mass Sync (Images + Desc)
                     </button>
                   </div>
                 </div>
@@ -594,7 +738,14 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                         />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-sm font-bold text-gray-900 group-hover:text-primary transition-colors">{product.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-gray-900 group-hover:text-primary transition-colors">{product.name}</span>
+                          {product.images && product.images.length > 1 && (
+                            <span className="text-[8px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-black">
+                              {product.images.length} IMAGES
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-gray-400 font-medium">ID: {product.id.slice(0, 8)}</span>
                         {(!product.price || product.price <= 0) && (
                           <span className="text-[8px] font-black text-red-500 uppercase tracking-widest flex items-center gap-1 mt-1">
@@ -614,7 +765,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                   </td>
                   <td className="px-6 py-4">
                     <span className={`text-sm font-bold ${product.stock <= 5 ? 'text-orange-500' : 'text-gray-700'}`}>
-                      {product.stock} units
+                      {product.stock} items
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -653,6 +804,67 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
       {/* Edit Modal */}
       <AnimatePresence>
+        {duplicateProduct && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDuplicateProduct(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[40px] shadow-2xl overflow-hidden border border-red-100"
+            >
+              <div className="p-8 text-center space-y-6">
+                <div className="w-20 h-20 bg-red-100 rounded-[30px] flex items-center justify-center text-red-600 mx-auto">
+                  <AlertCircle className="w-10 h-10" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">Product Already Added!</h3>
+                  <p className="text-sm font-bold text-red-500 uppercase tracking-widest">Action Required</p>
+                </div>
+
+                <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 flex items-center gap-4 text-left">
+                  <img 
+                    src={duplicateProduct.image} 
+                    alt={duplicateProduct.name} 
+                    className="w-20 h-20 object-cover rounded-2xl shadow-lg"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div>
+                    <p className="text-xl font-black text-gray-900 tracking-tight">{duplicateProduct.name}</p>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{duplicateProduct.category}</p>
+                    <p className="text-lg font-black text-primary mt-1">₹{duplicateProduct.price}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-4">
+                  <button 
+                    onClick={() => setDuplicateProduct(null)}
+                    className="px-6 py-4 bg-gray-100 text-gray-500 font-black rounded-2xl hover:bg-gray-200 transition-all uppercase tracking-widest text-[10px]"
+                  >
+                    Cancel Add
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setEditingProduct(duplicateProduct);
+                      setDuplicateProduct(null);
+                      setIsEditing(true);
+                    }}
+                    className="px-6 py-4 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all uppercase tracking-widest text-[10px]"
+                  >
+                    Edit Existing
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {isEditing && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
             <motion.div 
@@ -681,29 +893,81 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
               </div>
 
               <div className="flex-1 overflow-y-auto p-8 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Product Photo (AI Analyze)</label>
-                    <div className="flex items-center gap-4">
-                      <label className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-2xl p-6 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer group">
+          <div className="grid grid-cols-1 gap-6">
+                  {/* Image Gallery Manager */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Product Images (Multi-Support)</label>
+                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">{editingProduct.images?.length || 0} Images Attached</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      {editingProduct.images?.map((img, i) => (
+                        <div key={i} className={`relative group aspect-square rounded-2xl overflow-hidden border-2 transition-all ${editingProduct.image === img ? 'border-primary shadow-lg shadow-primary/10' : 'border-gray-50'}`}>
+                          <img src={img} alt="" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 px-2">
+                            <button 
+                              onClick={() => setEditingProduct(prev => ({ ...prev, image: img }))}
+                              className="w-full py-1.5 bg-white text-gray-900 rounded-lg text-[8px] font-black uppercase tracking-tighter hover:bg-primary hover:text-white transition-all"
+                            >
+                              Set Primary
+                            </button>
+                            <button 
+                              onClick={() => setEditingProduct(prev => ({ ...prev, images: prev.images?.filter((_, idx) => idx !== i), image: prev.image === img ? prev.images?.[0] || '' : prev.image }))}
+                              className="w-full py-1.5 bg-red-500 text-white rounded-lg text-[8px] font-black uppercase tracking-tighter hover:bg-black transition-all"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                          {editingProduct.image === img && (
+                            <div className="absolute top-2 left-2 px-2 py-0.5 bg-primary text-white rounded-lg text-[8px] font-black uppercase tracking-tighter shadow-sm">
+                              Primary
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-2xl aspect-square hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer group">
                         {analyzingPhoto ? (
                           <div className="flex flex-col items-center gap-2">
-                            <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-primary">Analyzing...</span>
+                            <Loader2 className="w-6 h-6 text-primary animate-spin" />
                           </div>
-                        ) : editingProduct.image ? (
-                          <img src={editingProduct.image} alt="Preview" className="w-20 h-20 object-cover rounded-xl" />
                         ) : (
-                          <div className="flex flex-col items-center">
-                            <ImageIcon className="w-8 h-8 text-gray-300 group-hover:text-primary transition-colors" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary mt-2">Click to upload photo</span>
+                          <div className="flex flex-col items-center gap-1">
+                            <Plus className="w-6 h-6 text-gray-300 group-hover:text-primary transition-colors" />
+                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary text-center">Add Photo</span>
                           </div>
                         )}
-                        <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                        <input type="file" accept="*/*" onChange={handlePhotoUpload} className="hidden" />
                       </label>
                     </div>
+
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={handleGoogleSearch}
+                        disabled={searchingGoogle || !editingProduct.name}
+                        className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-3 rounded-xl hover:bg-blue-600 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest disabled:opacity-50"
+                      >
+                        {searchingGoogle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                        AI Search Images
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          if (!editingProduct.name) return;
+                          setSearchingGoogle(true);
+                          const urls = await aiService.findProductImages(editingProduct.name, editingProduct.category);
+                          setEditingProduct(prev => ({ ...prev, images: Array.from(new Set([...(prev.images || []), ...urls])), image: prev.image || urls[0] }));
+                          setSearchingGoogle(false);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 bg-primary/10 text-primary py-3 rounded-xl hover:bg-primary hover:text-white transition-all font-black text-[10px] uppercase tracking-widest"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        AI Auto-Fill
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-6">
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Product Name</label>
                       <div className="flex gap-2">
@@ -798,25 +1062,43 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Stock</label>
-                    <input 
-                      type="number" 
-                      value={isNaN(editingProduct.stock!) ? '' : editingProduct.stock}
-                      onChange={(e) => setEditingProduct(prev => ({ ...prev, stock: parseInt(e.target.value) }))}
-                      className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
-                      aria-label="Stock"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Stock</label>
+                      <input 
+                        type="number" 
+                        value={isNaN(editingProduct.stock!) ? '' : editingProduct.stock}
+                        onChange={(e) => setEditingProduct(prev => ({ ...prev, stock: parseInt(e.target.value) }))}
+                        className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
+                        aria-label="Stock"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Weight / Volume</label>
-                    <input 
-                      type="text" 
-                      value={editingProduct.weight}
-                      onChange={(e) => setEditingProduct(prev => ({ ...prev, weight: e.target.value }))}
-                      className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
-                      placeholder="e.g. 500g, 1L"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Weight / Volume</label>
+                      <input 
+                        type="text" 
+                        value={editingProduct.weight}
+                        onChange={(e) => setEditingProduct(prev => ({ ...prev, weight: e.target.value }))}
+                        className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
+                        placeholder="e.g. 500g, 1L"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Special Tag</label>
+                      <select 
+                        value={editingProduct.tag || ''}
+                        onChange={(e) => setEditingProduct(prev => ({ ...prev, tag: (e.target.value || undefined) as any }))}
+                        className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
+                      >
+                        <option value="">None</option>
+                        <option value="Bestseller">Bestseller</option>
+                        <option value="Top Rated">Top Rated</option>
+                        <option value="New Arrival">New Arrival</option>
+                        <option value="Trending">Trending</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -893,10 +1175,10 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Image URL</label>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Primary Image URL</label>
                     <span className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
                       <Cloud className="w-3 h-3" />
-                      Uses 5TB Gmail Storage
+                      5TB Gmail Storage
                     </span>
                   </div>
                   <div className="flex gap-2">
@@ -905,19 +1187,8 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                       value={editingProduct.image}
                       onChange={(e) => setEditingProduct(prev => ({ ...prev, image: e.target.value }))}
                       className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
-                      placeholder="https://..."
+                      placeholder="Paste main image URL"
                     />
-                    <label className="bg-primary/10 text-primary p-3 rounded-xl hover:bg-primary hover:text-white transition-all cursor-pointer flex items-center justify-center shrink-0">
-                      {analyzingPhoto ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-                      <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-                    </label>
-                    <button 
-                      onClick={handleAISuggest}
-                      className="bg-secondary/10 text-secondary p-3 rounded-xl hover:bg-secondary hover:text-white transition-all shrink-0"
-                      title="AI Suggest Image"
-                    >
-                      <ImageIcon className="w-5 h-5" />
-                    </button>
                   </div>
                 </div>
               </div>

@@ -50,7 +50,7 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({ coupons,
               </div>
               <button 
                 onClick={() => onDelete(coupon.id)}
-                className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
               >
                 <Trash2 className="w-5 h-5" />
               </button>

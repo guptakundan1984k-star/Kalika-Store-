@@ -2,26 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Fields: uid, name, email, phone, role, address
-    //
-    // Collection: products
-    // Fields: id, name, description, price, category, image, stock, createdAt
-    //
-    // Collection: orders
-    // Fields: id, userId, items, total, status, deliveryType, address, pin, createdAt
-    //
-    // Collection: coupons
-    // Fields: id, code, discount, type, minOrder
-    //
-    // Collection: banners
-    // Fields: id, image, title, link, active, createdAt
-    //
-    // ===============================================================
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
     // ===============================================================
     // Helper Functions
@@ -31,57 +15,94 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Identity Integrity: Verification of verified email (optional but recommended)
+    function isVerified() {
+      return isAuthenticated() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'phone');
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
     function isAdmin() {
-      return isAuthenticated() &&
-        (request.auth.token.email == "customercare@kalikastore.in" ||
-         request.auth.token.email == "guptakundan1984k@gmail.com" ||
-         request.auth.token.email == "kalikastore.info@gmail.com" ||
-         request.auth.token.email == "anshgupta4525@gmail.com" ||
-         request.auth.token.phone_number in ["+919608123427", "+916205284423", "+919905516803"] ||
-         request.auth.uid in ["u0wqoiZcqsVrIbCjwI2osKeRLZo1", "yaOovg7opUSgrQbsJ6abztHuOV03"] ||
-         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+      return isAuthenticated() && (
+        request.auth.token.email in [
+          "customercare@kalikastore.in",
+          "guptakundan1984k@gmail.com",
+          "kalikastore.info@gmail.com",
+          "anshgupta4525@gmail.com"
+        ] ||
+        request.auth.token.phone_number in [
+          "+919608123427",
+          "+916205284423",
+          "+919905516803"
+        ] ||
+        request.auth.uid in [
+          "u0wqoiZcqsVrIbCjwI2osKeRLZo1",
+          "yaOovg7opUSgrQbsJ6abztHuOV03"
+        ] ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
     }
 
     function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
+      return incoming().keys().hasOnly(fields);
     }
 
-    function isValidEmail(email) {
-      return email == "" || (email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"));
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     // ===============================================================
-    // Domain Validators
+    // Domain Validators (The Blueprints)
     // ===============================================================
 
     function isValidUser(data) {
       return hasOnlyAllowedFields(['uid', 'name', 'email', 'phone', 'role', 'password', 'address', 'addresses', 'wishlist', 'lastActiveAt', 'loyaltyPoints']) &&
              data.uid is string && data.uid.size() > 0 &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             (!('email' in data) || (data.email is string && isValidEmail(data.email))) &&
+             (!('email' in data) || (data.email is string)) &&
+             (!('phone' in data) || (data.phone is string)) &&
              data.role in ['user', 'admin'] &&
-             (!('password' in data) || (data.password is string && data.password.size() < 100)) &&
-             (!('loyaltyPoints' in data) || (data.loyaltyPoints is number));
+             (!('password' in data) || (data.password is string)) &&
+             (!('loyaltyPoints' in data) || (data.loyaltyPoints is number)) &&
+             (!('lastActiveAt' in data) || (data.lastActiveAt is number));
     }
 
     function isValidProduct(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() < 500 &&
+      return hasOnlyAllowedFields(['id', 'name', 'description', 'price', 'originalPrice', 'purchasePrice', 'category', 'image', 'stock', 'createdAt', 'rating', 'reviewCount', 'weight', 'unit', 'tag', 'variations']) &&
+             data.name is string && data.name.size() > 0 &&
              data.price is number && data.price >= 0 &&
-             (!('stock' in data) || (data.stock is number && data.stock >= 0));
+             data.category is string &&
+             data.image is string &&
+             data.stock is number &&
+             data.createdAt is number &&
+             (!('rating' in data) || (data.rating is number)) &&
+             (!('reviewCount' in data) || (data.reviewCount is number)) &&
+             (!('weight' in data) || (data.weight is string)) &&
+             (!('unit' in data) || (data.unit is string)) &&
+             (!('tag' in data) || (data.tag is string)) &&
+             (!('variations' in data) || (data.variations is map));
     }
 
     function isValidOrder(data) {
-      return hasOnlyAllowedFields(['id', 'userId', 'items', 'total', 'status', 'deliveryType', 'address', 'pin', 'createdAt', 'tracking', 'deliverySlot', 'paymentMethod', 'prescriptionImage', 'earnedPoints', 'redeemedPoints', 'inBag']) &&
+      return hasOnlyAllowedFields(['id', 'userId', 'userName', 'userPhone', 'items', 'total', 'status', 'deliveryType', 'address', 'pin', 'createdAt', 'tracking', 'deliverySlot', 'paymentMethod', 'prescriptionImage', 'earnedPoints', 'redeemedPoints', 'inBag']) &&
              data.userId is string && data.userId.size() > 0 &&
              data.total is number && data.total >= 0 &&
              data.status in ['Pending', 'Proceeded', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'] &&
              data.deliveryType in ['Takeaway', 'Delivery'] &&
              data.pin is string && data.pin.size() == 4 &&
+             data.createdAt is number &&
+             data.items is list &&
              (!('address' in data) || (data.address is map)) &&
              (!('tracking' in data) || (data.tracking is list)) &&
              (!('deliverySlot' in data) || (data.deliverySlot is string)) &&
@@ -95,52 +116,47 @@ service cloud.firestore {
       return hasOnlyAllowedFields(['id', 'productId', 'userId', 'userName', 'rating', 'comment', 'createdAt']) &&
              data.productId is string && data.userId is string &&
              data.rating is number && data.rating >= 1 && data.rating <= 5 &&
-             data.comment is string && data.comment.size() > 0 && data.comment.size() < 1000;
+             data.comment is string && data.comment.size() > 0 && data.comment.size() < 2000 &&
+             data.createdAt is number;
     }
 
     function isValidBanner(data) {
       return hasOnlyAllowedFields(['id', 'image', 'title', 'link', 'active', 'createdAt']) &&
-             data.image is string && data.image.size() > 0 && data.image.size() < 1000 &&
-             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
-             (!('link' in data) || (data.link is string && data.link.size() < 500)) &&
-             data.active is bool &&
-             (!('createdAt' in data) || (data.createdAt is string));
+             data.image is string && data.image.size() > 0 &&
+             data.title is string && data.title.size() > 0 &&
+             data.active is bool;
+    }
+
+    function isValidCoupon(data) {
+      return hasOnlyAllowedFields(['id', 'code', 'discount', 'type', 'minOrder', 'maxDiscount', 'expiryDate', 'usageLimitPerCustomer', 'createdAt']) &&
+             data.code is string && data.code.size() > 0 &&
+             data.discount is number && data.discount >= 0 &&
+             data.type in ['percentage', 'fixed'];
     }
 
     function isValidSupportQuery(data) {
       return hasOnlyAllowedFields(['userId', 'userName', 'userEmail', 'userPhone', 'chatHistory', 'status', 'updatedAt', 'createdAt']) &&
-             data.userId is string && data.userId.size() > 0 &&
-             data.userName is string && data.userName.size() > 0 &&
-             data.chatHistory is list &&
+             data.userId is string &&
              data.status in ['pending', 'resolved'] &&
-             (!('userEmail' in data) || (data.userEmail is string)) &&
-             (!('userPhone' in data) || (data.userPhone is string));
-    }
-
-    function isValidCoupon(data) {
-      return data.code is string && data.code.size() > 0 &&
-             data.discount is number && data.discount >= 0;
+             data.chatHistory is list;
     }
 
     function isValidStoreSettings(data) {
-      return hasOnlyAllowedFields(['isOpen', 'autoSchedule', 'openingTime', 'closingTime', 'sundayOpeningTime', 'sundayClosingTime', 'message', 'updatedAt']) &&
+      return hasOnlyAllowedFields(['isOpen', 'autoSchedule', 'isFunctionallyOpen', 'openingTime', 'closingTime', 'sundayOpeningTime', 'sundayClosingTime', 'message', 'storeName', 'contactPhone', 'contactEmail', 'storeAddress', 'logoUrl', 'deliveryFee', 'freeDeliveryThreshold', 'updatedAt']) &&
              data.isOpen is bool &&
              data.autoSchedule is bool &&
              data.openingTime is string &&
              data.closingTime is string &&
-             (!('sundayOpeningTime' in data) || (data.sundayOpeningTime is string)) &&
-             (!('sundayClosingTime' in data) || (data.sundayClosingTime is string)) &&
-             (!('message' in data) || (data.message is string)) &&
-             (!('updatedAt' in data) || (data.updatedAt is number));
+             data.updatedAt is number;
     }
 
     // ===============================================================
-    // Rules
+    // Resource Rules
     // ===============================================================
 
     match /settings/store {
       allow read: if true;
-      allow write: if isAdmin() && isValidStoreSettings(request.resource.data);
+      allow write: if isAdmin() && isValidStoreSettings(incoming());
     }
 
     match /settings/google_drive {
@@ -148,55 +164,54 @@ service cloud.firestore {
     }
 
     match /test/{docId} {
-      allow read: if true;
+      allow read: if isValidId(docId);
     }
 
     match /users/{userId} {
-      allow read, list: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
-                    ((isOwner(userId) && request.resource.data.role == 'user') || isAdmin());
-      // Allow user to update their own profile, including role (needed for password-based admin access)
-      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
-                    (isOwner(userId) || isAdmin());
+      allow read: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAuthenticated() && isValidUser(incoming()) && (isOwner(userId) || isAdmin());
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming());
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow write: if isAdmin() && isValidProduct(request.resource.data);
+      allow write: if isAdmin() && isValidProduct(incoming());
     }
 
     match /orders/{orderId} {
-      allow read, list: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && isValidOrder(request.resource.data) && 
-                    (request.resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isAdmin() && isValidOrder(request.resource.data);
+      allow read: if (isAuthenticated() && (existing().userId == request.auth.uid || isAdmin()));
+      allow list: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidOrder(incoming()) && (incoming().userId == request.auth.uid || isAdmin());
+      allow update: if isAdmin() && isValidOrder(incoming());
+      allow delete: if isAdmin();
     }
 
     match /coupons/{couponId} {
       allow read: if true;
-      allow write: if isAdmin() && isValidCoupon(request.resource.data);
+      allow write: if isAdmin() && isValidCoupon(incoming());
     }
 
     match /reviews/{reviewId} {
       allow read: if true;
-      allow create: if isAuthenticated() && isValidReview(request.resource.data) && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidReview(incoming()) && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isAuthenticated() && existing().userId == request.auth.uid);
     }
 
     match /banners/{bannerId} {
       allow read: if true;
-      allow write: if isAdmin() && isValidBanner(request.resource.data);
+      allow write: if isAdmin() && isValidBanner(incoming());
     }
 
     match /support_queries/{queryId} {
       allow read: if isAdmin() || isOwner(queryId);
-      allow create: if isAuthenticated() && isOwner(queryId) && isValidSupportQuery(request.resource.data);
-      allow update: if (isAdmin() || isOwner(queryId)) && isValidSupportQuery(request.resource.data);
+      allow create: if isAuthenticated() && isOwner(queryId) && isValidSupportQuery(incoming());
+      allow update: if (isAdmin() || isOwner(queryId)) && isValidSupportQuery(incoming());
     }
 
     match /product_requests/{requestId} {
       allow read: if isAdmin();
-      allow create: if true; // Allow anyone to request a product
+      allow create: if true;
     }
   }
 }

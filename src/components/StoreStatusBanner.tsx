@@ -15,8 +15,11 @@ export const StoreStatusBanner: React.FC<StoreStatusBannerProps> = ({ settings }
 
   // Manual closed is RED
   const isManuallyClosed = settings.isOpen === false;
-  // Schedule closed is ORANGE (if not manually closed)
-  const isScheduleClosed = !isManuallyClosed && !settings.isFunctionallyOpen;
+  // Schedule closed is ORANGE
+  const isScheduleClosed = settings.isOpen === true && settings.isFunctionallyOpen === false;
+
+  // USER REQUEST: remove pre order banner from store only when store is closed (Manually Closed)
+  if (isManuallyClosed) return null;
 
   return (
     <AnimatePresence>

@@ -65,13 +65,13 @@ export const AdminBannerManager: React.FC<AdminBannerManagerProps> = ({ banners,
               <div className="absolute top-4 right-4 flex gap-2">
                 <button 
                   onClick={() => onUpdate(banner.id, { active: !banner.active })}
-                  className={`p-2 rounded-xl shadow-lg transition-all ${banner.active ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'}`}
+                  className={`p-2 rounded-xl shadow-lg transition-all active:scale-95 ${banner.active ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'}`}
                 >
                   <Power className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={() => onDelete(banner.id)}
-                  className="p-2 bg-white text-red-500 rounded-xl shadow-lg hover:bg-red-50 transition-all"
+                  className="p-2 bg-white text-red-500 rounded-xl shadow-lg hover:bg-red-50 transition-all active:scale-95"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

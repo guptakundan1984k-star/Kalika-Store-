@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Search, Filter, User, Shield, Mail, Phone, MoreVertical, Trash2, Edit2, 
-  UserPlus, UserCheck, UserX, CheckSquare, Square, Key, Eye, EyeOff, Loader2, Lock
+  UserPlus, UserCheck, UserX, CheckSquare, Square, Key, Eye, EyeOff, Loader2, Lock, Save
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,12 +20,39 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
   
   // Password Change State
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    email: ''
+  });
+
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState('');
   const [updateSuccess, setUpdateSuccess] = useState('');
+
+  const handleEditProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    setIsUpdating(true);
+    try {
+      await updateDoc(doc(db, 'users', selectedUser.uid), {
+        ...editForm,
+        updatedAt: Date.now()
+      });
+      setIsEditProfileModalOpen(false);
+      setSelectedUser(null);
+      alert('User profile updated successfully!');
+    } catch (err) {
+      alert('Failed to update profile');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,7 +182,7 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
               <button
                 key={role}
                 onClick={() => setRoleFilter(role)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${
                   roleFilter === role ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
                 }`}
               >
@@ -295,16 +322,32 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                       <button 
                         onClick={() => {
                           setSelectedUser(user);
+                          setEditForm({
+                            name: user.name,
+                            phone: user.phone,
+                            address: user.address || '',
+                            email: user.email
+                          });
+                          setIsEditProfileModalOpen(true);
+                        }}
+                        className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-xl transition-all active:scale-95"
+                        title="Edit Profile"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setSelectedUser(user);
                           setIsPasswordModalOpen(true);
                         }}
-                        className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-xl transition-all"
+                        className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-xl transition-all active:scale-95"
                         title="Change Password"
                       >
                         <Key className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => onDelete(user.uid)}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -317,6 +360,96 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
           </table>
         </div>
       </div>
+
+      {/* Edit Profile Modal */}
+      <AnimatePresence>
+        {isEditProfileModalOpen && selectedUser && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsEditProfileModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white w-full max-w-lg rounded-[40px] p-10 shadow-2xl relative z-10 space-y-8 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="text-center space-y-2">
+                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mx-auto mb-4">
+                  <Edit2 className="w-8 h-8" />
+                </div>
+                <h3 className="text-2xl font-black text-gray-900 tracking-tight">Edit Profile</h3>
+                <p className="text-sm text-gray-500 font-medium">Modifying details for <span className="text-primary font-bold">{selectedUser.name}</span></p>
+              </div>
+
+              <form onSubmit={handleEditProfile} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Full Name</label>
+                    <input 
+                      type="text" 
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                      required
+                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Phone Number</label>
+                    <input 
+                      type="tel" 
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
+                      required
+                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Email Address</label>
+                    <input 
+                      type="email" 
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({...editForm, email: e.target.value})}
+                      required
+                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Delivery Address</label>
+                    <textarea 
+                      value={editForm.address}
+                      onChange={(e) => setEditForm({...editForm, address: e.target.value})}
+                      className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all min-h-[100px] resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  <button 
+                    type="button"
+                    onClick={() => setIsEditProfileModalOpen(false)}
+                    className="flex-1 bg-gray-100 text-gray-500 font-bold py-4 rounded-2xl hover:bg-gray-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isUpdating}
+                    className="flex-1 bg-primary text-white font-bold py-4 rounded-2xl shadow-xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                    Save Profile
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Password Change Modal */}
       <AnimatePresence>

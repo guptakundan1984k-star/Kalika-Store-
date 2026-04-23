@@ -32,7 +32,7 @@ export const AdminStockManager: React.FC<AdminStockManagerProps> = ({ products, 
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+              className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 ${
                 filter === f ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-400 hover:text-gray-600'
               }`}
             >
@@ -83,7 +83,6 @@ export const AdminStockManager: React.FC<AdminStockManagerProps> = ({ products, 
                       <span className={`text-xl font-black ${product.stock <= 5 ? 'text-red-500' : 'text-gray-900'}`}>
                         {product.stock}
                       </span>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Units</span>
                     </div>
                   </td>
                   <td className="px-8 py-6">
@@ -108,19 +107,19 @@ export const AdminStockManager: React.FC<AdminStockManagerProps> = ({ products, 
                     <div className="flex items-center justify-end gap-2">
                       <button 
                         onClick={() => onUpdateStock(product.id, Math.max(0, product.stock - 10))}
-                        className="p-2 bg-gray-50 text-gray-400 hover:text-red-500 rounded-xl transition-all"
+                        className="p-2 bg-gray-50 text-gray-400 hover:text-red-500 rounded-xl transition-all active:scale-95"
                       >
                         -10
                       </button>
                       <button 
                         onClick={() => onUpdateStock(product.id, product.stock + 10)}
-                        className="p-2 bg-gray-50 text-gray-400 hover:text-green-500 rounded-xl transition-all"
+                        className="p-2 bg-gray-50 text-gray-400 hover:text-green-500 rounded-xl transition-all active:scale-95"
                       >
                         +10
                       </button>
                       <button 
                         onClick={() => onUpdateStock(product.id, product.stock + 50)}
-                        className="p-2 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl transition-all"
+                        className="p-2 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl transition-all active:scale-95"
                       >
                         +50
                       </button>

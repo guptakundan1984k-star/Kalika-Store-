@@ -1,12 +1,12 @@
 import React from 'react';
 import { Product } from '../types';
-import { ShoppingCart, Plus, Minus, Heart, Star, Eye, ShoppingBag } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Heart, Star, ShoppingBag, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 
 interface ProductCardProps {
   product: Product;
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product, quantity?: number) => void;
   quantityInCart?: number;
   onRemoveFromCart?: (id: string) => void;
   toggleWishlist?: (productId: string) => void;
@@ -21,6 +21,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   toggleWishlist,
   isWishlisted = false
 }) => {
+  const [quantity, setQuantity] = React.useState(quantityInCart || 1);
+
+  React.useEffect(() => {
+    if (quantityInCart > 0) {
+      setQuantity(quantityInCart);
+    } else {
+      setQuantity(0);
+    }
+  }, [quantityInCart]);
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -68,19 +78,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </span>
           )}
 
-          {/* Popular Tag */}
-          {(product.rating || 4.5) >= 4.8 && (
-            <span className="px-2 py-1 bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-amber-200">
-              Most Popular
+          {/* Tags from Admin */}
+          {product.tag && (
+            <span className={`px-2 py-1 text-white text-[9px] font-black uppercase tracking-widest rounded-lg shadow-lg ${
+              product.tag === 'Bestseller' ? 'bg-blue-600 shadow-blue-200' :
+              product.tag === 'Top Rated' ? 'bg-amber-500 shadow-amber-200' :
+              product.tag === 'New Arrival' ? 'bg-green-600 shadow-green-200' :
+              'bg-purple-600 shadow-purple-200'
+            }`}>
+              {product.tag}
             </span>
           )}
 
-          {/* Bestseller Tag */}
-          {((product.reviewCount || 0) >= 20 || product.price > 400) && (
-            <span className="px-2 py-1 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-blue-200">
-              Bestseller
-            </span>
-          )}
+          {/* Low Stock Tag */}
         </div>
 
         {/* Wishlist Button */}
@@ -115,66 +125,79 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-        <div className="flex flex-col">
-          {product.originalPrice && product.originalPrice > product.price && (
-            <span className="text-xs font-bold text-gray-400 line-through tracking-tighter">₹{product.originalPrice}</span>
-          )}
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-black text-primary tracking-tighter">₹{product.price}</span>
-            {product.originalPrice && product.originalPrice > product.price && (
-              <span className="bg-green-100 text-green-700 text-[10px] font-black px-1.5 py-0.5 rounded-lg uppercase tracking-widest">
-                {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
-              </span>
-            )}
-          </div>
-          {product.weight && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{product.weight}</span>}
-        </div>
+        <div className="flex flex-col gap-3 pt-4 border-t border-gray-50">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              {product.originalPrice && product.originalPrice > product.price && (
+                <span className="text-xs font-bold text-gray-400 line-through tracking-tighter">₹{product.originalPrice}</span>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black text-primary tracking-tighter">₹{product.price}</span>
+                {product.originalPrice && product.originalPrice > product.price && (
+                  <span className="bg-green-100 text-green-700 text-[10px] font-black px-1.5 py-0.5 rounded-lg uppercase tracking-widest">
+                    {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
+                  </span>
+                )}
+              </div>
+              {product.weight && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{product.weight}</span>}
+            </div>
 
-          <AnimatePresence mode="wait">
-            {quantityInCart > 0 ? (
-              <motion.div 
-                key="quantity"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                className="flex items-center gap-2"
-              >
-                <div className="flex items-center bg-gray-900 rounded-xl p-0.5 shadow-lg shadow-gray-900/20">
-                  <button 
-                    onClick={() => onRemoveFromCart?.(product.id)}
-                    aria-label="Decrease quantity"
-                    className="p-1.5 text-white hover:bg-white/10 rounded-lg transition-colors"
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
-                  <span className="w-6 text-center text-white font-black text-xs" aria-live="polite">{quantityInCart}</span>
-                  <button 
-                    onClick={() => onAddToCart(product)}
-                    aria-label="Increase quantity"
-                    className="p-1.5 text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
-                    disabled={quantityInCart >= product.stock}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
+            <div className="flex items-center gap-2">
+              {/* Quantity Selector */}
+              <div className="flex items-center bg-gray-50 rounded-xl p-0.5 border border-gray-100 group/qty">
+                <button 
+                  onClick={() => setQuantity(prev => Math.max(0, prev - 1))}
+                  className="p-1 px-2 text-gray-400 hover:text-primary transition-colors"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                
+                <div className="relative flex items-center">
+                  <input 
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val)) {
+                        setQuantity(Math.min(product.stock, Math.max(0, val)));
+                      } else {
+                        setQuantity(0);
+                      }
+                    }}
+                    className="w-8 bg-transparent text-center text-[10px] font-black text-gray-700 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
                 </div>
-                <span className="text-[10px] font-black text-primary uppercase tracking-widest animate-pulse">Added</span>
-              </motion.div>
-            ) : (
+
+                <button 
+                  onClick={() => setQuantity(prev => (prev === 0 ? 1 : Math.min(product.stock, prev + 1)))}
+                  disabled={quantity >= product.stock}
+                  className="p-1 px-2 text-gray-400 hover:text-primary transition-colors disabled:opacity-20"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
+
               <motion.button 
-                key="add"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                onClick={() => onAddToCart(product)}
-                disabled={product.stock <= 0}
-                aria-label={`Add ${product.name} to cart`}
-                className="p-3 bg-primary text-white rounded-xl shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all active:scale-90 disabled:opacity-50 group/btn"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  if (quantity === 0) {
+                    if (quantityInCart > 0 && onRemoveFromCart) {
+                      onRemoveFromCart(product.id);
+                    }
+                    return;
+                  }
+                  
+                  // When item is added, proceed to checkout
+                  onAddToCart(product, quantity, true);
+                }}
+                disabled={product.stock <= 0 && quantity === 0}
+                className="p-3 rounded-xl shadow-lg transition-all flex items-center justify-center bg-primary text-white shadow-primary/20 hover:bg-primary-dark"
               >
-                <ShoppingCart className="w-5 h-5 group-hover/btn:scale-110 transition-transform" />
+                {quantity === 0 ? <ShoppingCart className="w-5 h-5" /> : <Check className="w-5 h-5" />}
               </motion.button>
-            )}
-          </AnimatePresence>
+            </div>
+          </div>
         </div>
       </div>
     </motion.div>

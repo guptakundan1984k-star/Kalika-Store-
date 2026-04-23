@@ -42,15 +42,20 @@
         "name": { "type": "string" },
         "description": { "type": "string" },
         "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "purchasePrice": { "type": "number" },
         "category": { "type": "string" },
         "image": { "type": "string" },
         "stock": { "type": "number" },
         "createdAt": { "type": "number" },
         "rating": { "type": "number" },
         "reviewCount": { "type": "number" },
-        "weight": { "type": "string" }
+        "weight": { "type": "string" },
+        "unit": { "type": "string" },
+        "tag": { "type": "string" },
+        "variations": { "type": "object" }
       },
-      "required": ["name", "price", "category", "stock"]
+      "required": ["name", "price", "category", "stock", "createdAt"]
     },
     "Order": {
       "title": "Order",
@@ -59,19 +64,69 @@
       "properties": {
         "id": { "type": "string" },
         "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhone": { "type": "string" },
         "items": { "type": "array", "items": { "type": "object" } },
         "total": { "type": "number" },
-        "status": { "type": "string", "enum": ["Pending", "Packed", "Out for Delivery", "Delivered", "Cancelled"] },
+        "status": { "type": "string", "enum": ["Pending", "Order Received", "Packed", "Out for Delivery", "Delivered", "Cancelled"] },
         "deliveryType": { "type": "string", "enum": ["Takeaway", "Delivery"] },
         "address": { "type": "object" },
         "pin": { "type": "string" },
+        "deliverySlot": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "inBag": { "type": "boolean" },
         "createdAt": { "type": "number" },
         "prescriptionImage": { "type": "string" },
         "earnedPoints": { "type": "number" },
         "redeemedPoints": { "type": "number" },
         "tracking": { "type": "array", "items": { "type": "object" } }
       },
-      "required": ["userId", "total", "status", "deliveryType", "pin"]
+      "required": ["userId", "total", "status", "deliveryType", "pin", "createdAt", "items"]
+    },
+    "FeatureRequest": {
+      "title": "Feature Request",
+      "description": "User requested app features",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "feature": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "implemented"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["userId", "userName", "feature", "status", "createdAt"]
+    },
+    "BulkEnquiry": {
+      "title": "Bulk Enquiry",
+      "description": "B2B and bulk purchase inquiries",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "storeName": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Contacted", "Closed"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["storeName", "name", "phone", "email", "message", "status", "createdAt"]
+    },
+    "SupportQuery": {
+      "title": "Support Query",
+      "description": "Customer support conversations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "chatHistory": { "type": "array", "items": { "type": "object" } },
+        "status": { "type": "string", "enum": ["pending", "resolved"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["userId", "userName", "chatHistory", "status", "createdAt"]
     },
     "Coupon": {
       "title": "Coupon",
@@ -108,9 +163,19 @@
       "type": "object",
       "properties": {
         "isOpen": { "type": "boolean" },
+        "autoSchedule": { "type": "boolean" },
         "openingTime": { "type": "string" },
         "closingTime": { "type": "string" },
+        "sundayOpeningTime": { "type": "string" },
+        "sundayClosingTime": { "type": "string" },
         "message": { "type": "string" },
+        "storeName": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "storeAddress": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "deliveryFee": { "type": "number" },
+        "freeDeliveryThreshold": { "type": "number" },
         "updatedAt": { "type": "number" }
       },
       "required": ["isOpen", "openingTime", "closingTime"]
@@ -128,6 +193,18 @@
     }
   },
   "firestore": {
+    "/feature_requests/{requestId}": {
+      "schema": "FeatureRequest",
+      "description": "User feature requests"
+    },
+    "/bulk_enquiries/{enquiryId}": {
+      "schema": "BulkEnquiry",
+      "description": "Business enquiries"
+    },
+    "/support_queries/{queryId}": {
+      "schema": "SupportQuery",
+      "description": "Support chat history"
+    },
     "/settings/store": {
       "schema": "StoreSettings",
       "description": "Global store operating settings"

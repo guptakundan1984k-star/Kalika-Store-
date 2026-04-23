@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AdminDashboard } from '../components/AdminDashboard';
 import { AdminProductManager } from '../components/AdminProductManager';
 import { AdminOrderManager } from '../components/AdminOrderManager';
+import { AdminOrderWorkflow } from '../components/AdminOrderWorkflow';
 import { AdminUserManager } from '../components/AdminUserManager';
 import { AdminCouponManager } from '../components/AdminCouponManager';
 import { AdminBannerManager } from '../components/AdminBannerManager';
@@ -11,12 +12,16 @@ import { AdminVariationManager } from '../components/AdminVariationManager';
 import { AdminStockManager } from '../components/AdminStockManager';
 import { AdminStoreSettings } from '../components/AdminStoreSettings';
 import { AdminStorageManager } from '../components/AdminStorageManager';
-import { Product, Order, UserProfile, Coupon, Banner } from '../types';
+import { AdminBulkAIUploader } from '../components/AdminBulkAIUploader';
+import { AdminExpenseManager } from '../components/AdminExpenseManager';
+import { AdminBulkEnquiryManager } from '../components/AdminBulkEnquiryManager';
+import { Product, Order, UserProfile, Coupon, Banner, Expense } from '../types';
 import { 
   LayoutDashboard, Package, ShoppingBag, Users, 
   Tag, Settings, LogOut, ChevronRight, ChevronLeft, Menu, X, 
   Bell, Search, User, Sparkles, Shield, Image as ImageIcon,
-  Printer, Eye, EyeOff, Box, Layers, Cloud, CloudOff, RefreshCw, Database, HardDrive
+  Printer, Eye, EyeOff, Box, Layers, Cloud, CloudOff, RefreshCw, Database, HardDrive, CheckSquare,
+  IndianRupee, Zap, AlertCircle
 } from 'lucide-react';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { motion, AnimatePresence } from 'motion/react';
@@ -32,9 +37,11 @@ interface AdminProps {
 }
 
 const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'users' | 'coupons' | 'banners' | 'support' | 'billing' | 'variations' | 'stocks' | 'settings' | 'storage'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'bulk-ai' | 'expenses' | 'orders' | 'workflow' | 'users' | 'coupons' | 'banners' | 'support' | 'billing' | 'variations' | 'stocks' | 'settings' | 'storage' | 'bulk-enquiries'>('dashboard');
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [isDbConnected, setIsDbConnected] = useState<boolean | null>(null);
   const [pendingQueries, setPendingQueries] = useState(0);
+  const [pendingEnquiries, setPendingEnquiries] = useState(0);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -141,9 +148,29 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
       handleFirestoreError(error, OperationType.LIST, 'support_queries', false);
     });
 
+    const qEnquiries = query(collection(db, 'bulk_enquiries'), where('status', '==', 'Pending'));
+    const unsubscribeEnquiries = onSnapshot(qEnquiries, (snapshot) => {
+      setPendingEnquiries(snapshot.size);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'bulk_enquiries', false);
+    });
+
+    // Connectivity Check
+    const checkConnection = () => {
+      const isOnline = navigator.onLine;
+      setIsDbConnected(isOnline);
+    };
+
+    window.addEventListener('online', checkConnection);
+    window.addEventListener('offline', checkConnection);
+    checkConnection();
+
     return () => {
       unsubscribeUsers();
       unsubscribeQueries();
+      unsubscribeEnquiries();
+      window.removeEventListener('online', checkConnection);
+      window.removeEventListener('offline', checkConnection);
     };
   }, [isAuthorized]);
 
@@ -196,14 +223,18 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
   const menuItems = [
     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
     { id: 'products', label: 'Inventory', icon: Package },
+    { id: 'bulk-ai', label: 'Bulk AI Add', icon: Zap },
+    { id: 'expenses', label: 'Expenses', icon: IndianRupee },
     { id: 'stocks', label: 'Stocks', icon: Box },
     { id: 'variations', label: 'Variations', icon: Layers },
     { id: 'orders', label: 'Orders', icon: ShoppingBag, badge: orders.filter(o => o.status === 'Pending').length },
+    { id: 'workflow', label: 'Workflow', icon: CheckSquare, badge: orders.filter(o => ['Proceeded', 'Packed'].includes(o.status)).length },
     { id: 'users', label: 'Customers', icon: Users },
     { id: 'coupons', label: 'Coupons', icon: Tag },
     { id: 'billing', label: 'Billing', icon: Printer },
     { id: 'banners', label: 'Banners', icon: ImageIcon },
     { id: 'support', label: 'Support', icon: Bell, badge: pendingQueries },
+    { id: 'bulk-enquiries', label: 'Business Inquiries', icon: Briefcase, badge: pendingEnquiries },
     { id: 'settings', label: 'Store Settings', icon: Settings },
     { id: 'storage', label: 'Cloud Storage', icon: HardDrive },
   ];
@@ -221,33 +252,33 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
             
             {/* Sync Status Indicator */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full border border-gray-100">
-              {syncStatus === 'syncing' && (
-                <div className="flex items-center gap-2 text-primary">
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Syncing...</span>
-                </div>
-              )}
-              {syncStatus === 'success' && (
-                <div className="flex items-center gap-2 text-green-500">
-                  <Cloud className="w-3 h-3" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Saved</span>
-                </div>
-              )}
-              {syncStatus === 'error' && (
+              {isDbConnected === false ? (
                 <div className="flex items-center gap-2 text-red-500">
-                  <CloudOff className="w-3 h-3" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Sync Error</span>
+                  <CloudOff className="w-3 h-3 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Not Connected</span>
                 </div>
-              )}
-              {syncStatus === 'idle' && (
-                <div className="flex items-center gap-2 text-gray-400">
-                  <Cloud className="w-3 h-3" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">
-                    {lastSyncTime ? `Synced ${new Date(lastSyncTime).toLocaleTimeString()}` : 'Connected'}
-                  </span>
+              ) : (
+                <div className="flex items-center gap-2 text-green-500">
+                  <Cloud className="w-3 h-3 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Connected</span>
                 </div>
               )}
             </div>
+
+            {syncStatus !== 'idle' && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full border border-gray-100">
+                {syncStatus === 'syncing' ? (
+                  <RefreshCw className="w-3 h-3 animate-spin text-primary" />
+                ) : syncStatus === 'success' ? (
+                  <CheckSquare className="w-3 h-3 text-green-500" />
+                ) : (
+                  <AlertCircle className="w-3 h-3 text-red-500" />
+                )}
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                  {syncStatus === 'syncing' ? 'Saving...' : syncStatus === 'success' ? 'Saved' : 'Error'}
+                </span>
+              </div>
+            )}
 
             {/* Database ID Indicator (Small) */}
             <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full border border-gray-100">
@@ -332,6 +363,16 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
               transition={{ duration: 0.2 }}
             >
               {activeTab === 'dashboard' && <AdminDashboard onTabChange={setActiveTab} user={user} />}
+              {activeTab === 'bulk-ai' && (
+                <AdminBulkAIUploader 
+                  categories={['Vegetables', 'Fruits', 'Dairy', 'Bakery', 'Meat', 'Snacks', 'Beverages', 'Staples', 'Oils', 'Household']}
+                  onBulkAdd={(newProducts) => handleSyncOperation(async () => {
+                    const batch = newProducts.map(p => addDoc(collection(db, 'products'), { ...p, createdAt: Date.now() }));
+                    await Promise.all(batch);
+                  })}
+                />
+              )}
+              {activeTab === 'expenses' && <AdminExpenseManager />}
               {activeTab === 'products' && (
                 <AdminProductManager 
                   products={products} 
@@ -355,6 +396,14 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
               )}
               {activeTab === 'orders' && (
                 <AdminOrderManager 
+                  orders={orders} 
+                  onUpdateStatus={(id, status) => handleSyncOperation(async () => {
+                    await updateDoc(doc(db, 'orders', id), { status });
+                  })} 
+                />
+              )}
+              {activeTab === 'workflow' && (
+                <AdminOrderWorkflow 
                   orders={orders} 
                   onUpdateStatus={(id, status) => handleSyncOperation(async () => {
                     await updateDoc(doc(db, 'orders', id), { status });
@@ -412,6 +461,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                   })} 
                 />
               )}
+              {activeTab === 'bulk-enquiries' && <AdminBulkEnquiryManager />}
               {activeTab === 'settings' && <AdminStoreSettings />}
               {activeTab === 'storage' && <AdminStorageManager />}
             </motion.div>

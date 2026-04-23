@@ -74,6 +74,100 @@ export const AdminStoreSettings: React.FC = () => {
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
+        {/* Basic Information */}
+        <div className="bg-white p-8 rounded-[40px] shadow-xl shadow-gray-200/50 border border-gray-100 space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+              <Store className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Basic Information</h3>
+              <p className="text-sm font-medium text-gray-500">Store identity and contact details.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Store Name</label>
+              <input
+                type="text"
+                value={settings?.storeName || 'Kalika Store'}
+                onChange={(e) => setSettings(prev => prev ? { ...prev, storeName: e.target.value } : null)}
+                className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Contact Number</label>
+              <input
+                type="text"
+                value={settings?.contactPhone || ''}
+                onChange={(e) => setSettings(prev => prev ? { ...prev, contactPhone: e.target.value } : null)}
+                className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Store Email</label>
+              <input
+                type="email"
+                value={settings?.contactEmail || ''}
+                onChange={(e) => setSettings(prev => prev ? { ...prev, contactEmail: e.target.value } : null)}
+                className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Logo URL</label>
+              <input
+                type="text"
+                value={settings?.logoUrl || ''}
+                onChange={(e) => setSettings(prev => prev ? { ...prev, logoUrl: e.target.value } : null)}
+                className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Physical Address</label>
+              <textarea
+                value={settings?.storeAddress || ''}
+                onChange={(e) => setSettings(prev => prev ? { ...prev, storeAddress: e.target.value } : null)}
+                className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none resize-none min-h-[80px]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Delivery Configuration */}
+        <div className="bg-white p-8 rounded-[40px] shadow-xl shadow-gray-200/50 border border-gray-100 space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Delivery Configuration</h3>
+              <p className="text-sm font-medium text-gray-500">Manage delivery fees and free shipping thresholds.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Standard Delivery Fee (₹)</label>
+              <input
+                type="number"
+                value={settings?.deliveryFee ?? 30}
+                onChange={(e) => setSettings(prev => prev ? { ...prev, deliveryFee: parseInt(e.target.value) || 0 } : null)}
+                className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-2">Free Delivery Above (₹)</label>
+              <input
+                type="number"
+                value={settings?.freeDeliveryThreshold ?? 500}
+                onChange={(e) => setSettings(prev => prev ? { ...prev, freeDeliveryThreshold: parseInt(e.target.value) || 0 } : null)}
+                className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Status Toggle */}
         <div className="bg-white p-8 rounded-[40px] shadow-xl shadow-gray-200/50 border border-gray-100 space-y-6">
           <div className="flex items-center gap-4">
@@ -98,7 +192,7 @@ export const AdminStoreSettings: React.FC = () => {
             <button
               type="button"
               onClick={() => setSettings(prev => prev ? { ...prev, autoSchedule: !prev.autoSchedule } : null)}
-              className={`relative inline-flex h-10 w-20 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+              className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
                 settings?.autoSchedule ? 'bg-primary' : 'bg-gray-300'
               }`}
             >
@@ -122,7 +216,7 @@ export const AdminStoreSettings: React.FC = () => {
             <button
               type="button"
               onClick={() => setSettings(prev => prev ? { ...prev, isOpen: !prev.isOpen } : null)}
-              className={`relative inline-flex h-10 w-20 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+              className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
                 settings?.isOpen ? 'bg-primary' : 'bg-gray-300'
               }`}
             >

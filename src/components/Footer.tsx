@@ -156,7 +156,7 @@ export const Footer: React.FC = () => {
                     Order History Policy
                   </h4>
                   <p className="text-sm font-medium text-gray-500 leading-relaxed">
-                    To maintain system performance and security, order history is preserved for a maximum of 3 months. If a customer is inactive for more than 3 months, their previous order records will be automatically removed from the active database.
+                    To maintain system performance and security, order history is preserved for a maximum of 6 months. Order records will be automatically removed from the active database after this period.
                   </p>
                 </section>
 

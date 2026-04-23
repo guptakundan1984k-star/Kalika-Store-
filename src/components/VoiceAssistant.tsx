@@ -151,18 +151,14 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
   if (!isVoiceEnabled) return null;
 
   return (
-    <motion.div 
-      drag="y"
-      dragConstraints={{ top: -500, bottom: 0 }}
-      className="fixed bottom-24 left-6 z-50 flex flex-col items-start gap-4 touch-none cursor-grab active:cursor-grabbing"
-    >
+    <div className="floating-container !left-auto">
       <AnimatePresence>
         {isVoiceEnabled && !isListening && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.8, x: -20 }}
-            animate={{ opacity: 1, scale: 1, x: 0 }}
-            exit={{ opacity: 0, scale: 0.8, x: -20 }}
-            className="bg-white/80 backdrop-blur-md p-4 rounded-3xl shadow-xl border border-gray-100 max-w-[200px] space-y-2"
+            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            className="bg-white/80 backdrop-blur-md p-4 rounded-3xl shadow-xl border border-gray-100 max-w-[200px] space-y-2 mr-0"
           >
             <div className="flex items-center gap-2 text-primary">
               <Sparkles className="w-4 h-4" />
@@ -178,17 +174,17 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
       <AnimatePresence>
         {feedback && (
           <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="bg-primary text-white px-4 py-2 rounded-2xl shadow-xl text-xs font-bold"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-primary text-white px-4 py-2 rounded-2xl shadow-xl text-xs font-bold mr-0"
           >
             {feedback}
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="relative">
+      <div className="relative pointer-events-auto">
         {isListening && (
           <motion.div 
             initial={{ scale: 0 }}
@@ -197,18 +193,16 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
             transition={{ repeat: Infinity, duration: 1.5 }}
           />
         )}
-        <motion.button 
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+        <button 
           onClick={() => setIsListening(!isListening)}
-          className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all ${
+          className={`floating-btn ${
             isListening ? 'bg-red-500 text-white' : 'bg-primary text-white hover:bg-primary-dark'
           }`}
           aria-label={isListening ? "Stop listening" : "Start listening"}
         >
           {isListening ? <Loader2 className="w-6 h-6 animate-spin" /> : <Mic className="w-6 h-6" />}
-        </motion.button>
+        </button>
       </div>
-    </motion.div>
+    </div>
   );
 };

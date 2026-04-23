@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ProductCard } from '../components/ProductCard';
-import { Product } from '../types';
+import { Product, CartItem } from '../types';
 import { motion } from 'motion/react';
 import { Search, ArrowLeft, LayoutGrid, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -8,9 +8,13 @@ import { Link } from 'react-router-dom';
 interface CategoriesProps {
   products: Product[];
   onAddToCart: (product: Product) => void;
+  cart: CartItem[];
+  onRemoveFromCart?: (id: string) => void;
+  toggleWishlist?: (productId: string) => void;
+  wishlist?: string[];
 }
 
-const Categories: React.FC<CategoriesProps> = ({ products, onAddToCart }) => {
+const Categories: React.FC<CategoriesProps> = ({ products, onAddToCart, cart, onRemoveFromCart, toggleWishlist, wishlist = [] }) => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'price-low' | 'price-high' | 'newest'>('newest');
@@ -69,19 +73,19 @@ const Categories: React.FC<CategoriesProps> = ({ products, onAddToCart }) => {
               <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden hidden group-hover:block z-50">
                 <button 
                   onClick={() => setSortBy('newest')} 
-                  className={`w-full text-left px-4 py-3 text-xs font-bold transition-all ${sortBy === 'newest' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-primary/5 hover:text-primary'}`}
+                  className={`w-full text-left px-4 py-3 text-xs font-bold transition-all active:scale-[0.98] ${sortBy === 'newest' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-primary/5 hover:text-primary'}`}
                 >
                   Newest First
                 </button>
                 <button 
                   onClick={() => setSortBy('price-low')} 
-                  className={`w-full text-left px-4 py-3 text-xs font-bold transition-all ${sortBy === 'price-low' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-primary/5 hover:text-primary'}`}
+                  className={`w-full text-left px-4 py-3 text-xs font-bold transition-all active:scale-[0.98] ${sortBy === 'price-low' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-primary/5 hover:text-primary'}`}
                 >
                   Price: Low to High
                 </button>
                 <button 
                   onClick={() => setSortBy('price-high')} 
-                  className={`w-full text-left px-4 py-3 text-xs font-bold transition-all ${sortBy === 'price-high' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-primary/5 hover:text-primary'}`}
+                  className={`w-full text-left px-4 py-3 text-xs font-bold transition-all active:scale-[0.98] ${sortBy === 'price-high' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-primary/5 hover:text-primary'}`}
                 >
                   Price: High to Low
                 </button>
@@ -93,7 +97,7 @@ const Categories: React.FC<CategoriesProps> = ({ products, onAddToCart }) => {
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2">
             <button 
               onClick={() => setSelectedCategory('')}
-              className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+              className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap active:scale-95 ${
                 !selectedCategory ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
             >
@@ -103,7 +107,7 @@ const Categories: React.FC<CategoriesProps> = ({ products, onAddToCart }) => {
               <button 
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap active:scale-95 ${
                   selectedCategory === cat.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
               >
@@ -120,7 +124,11 @@ const Categories: React.FC<CategoriesProps> = ({ products, onAddToCart }) => {
             <ProductCard 
               key={product.id} 
               product={product} 
+              quantityInCart={cart.find(c => c.id === product.id)?.quantity}
               onAddToCart={onAddToCart} 
+              onRemoveFromCart={onRemoveFromCart}
+              toggleWishlist={toggleWishlist}
+              isWishlisted={wishlist.includes(product.id)}
             />
           ))}
         </div>

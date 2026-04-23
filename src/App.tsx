@@ -6,7 +6,7 @@ import { CartDrawer } from './components/CartDrawer';
 import { LoadingScreen } from './components/LoadingScreen';
 import { VoiceAssistant } from './components/VoiceAssistant';
 import ScrollToTop from './components/ScrollToTop';
-import { Product, CartItem, UserProfile, Order, Category, Coupon, Banner, StoreSettings } from './types';
+import { Product, CartItem, UserProfile, Order, Category, Coupon, Banner, StoreSettings, ProductUnit } from './types';
 import { CATEGORIES } from './constants';
 import { INITIAL_PRODUCTS } from './data/initialProducts';
 import { motion, AnimatePresence } from 'motion/react';
@@ -34,6 +34,8 @@ import ProductDetail from './pages/ProductDetail';
 import Wishlist from './pages/Wishlist';
 import BillPage from './pages/BillPage';
 import Items from './pages/Items';
+import { MyOrders } from './pages/MyOrders';
+import { OrderTracking } from './pages/OrderTracking';
 import { ProductRequestModal } from './components/ProductRequestModal';
 import { LoginPromptModal } from './components/LoginPromptModal';
 import { StoreStatusBanner } from './components/StoreStatusBanner';
@@ -367,11 +369,11 @@ export default function App() {
     return () => unsubscribe();
   }, [isAuthReady, user]);
 
-  const addToCart = (product: Product, quantity: number = 1) => {
+  const addToCart = (product: Product, quantity: number = 1, redirectToCheckout: boolean = false) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
-        return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item);
+        return prev.map(item => (item.id === product.id) ? { ...item, quantity: item.quantity + quantity } : item);
       }
       return [...prev, { ...product, quantity }];
     });
@@ -379,6 +381,13 @@ export default function App() {
     // Show notification
     setCartNotification({ show: true, productName: product.name });
     setTimeout(() => setCartNotification(null), 3000);
+
+    if (redirectToCheckout) {
+      // Small delay to allow state to settle
+      setTimeout(() => {
+        window.location.href = '/checkout';
+      }, 100);
+    }
   };
 
   const updateCartQuantity = (id: string, delta: number) => {
@@ -508,37 +517,50 @@ function AppContent({
         setSearchQuery={setSearchQuery}
         products={products}
         storeSettings={storeSettings}
+        onAddToCart={addToCart}
       />
       
       <StoreStatusBanner settings={storeSettings} />
       
       <main className="flex-1 relative z-10">
-        <Routes>
-          <Route path="/" element={<Home products={products} onAddToCart={addToCart} banners={banners} storeSettings={storeSettings} />} />
-          <Route path="/products" element={<Products products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
-          <Route path="/items" element={<Items products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
-          <Route path="/product/:id" element={<ProductDetail products={products} onAddToCart={addToCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} user={user} storeSettings={storeSettings} />} />
-          <Route path="/categories" element={<Categories products={products} onAddToCart={addToCart} />} />
-          <Route path="/wishlist" element={user ? <Wishlist products={products} wishlist={user.wishlist || []} onAddToCart={addToCart} toggleWishlist={toggleWishlist} /> : <Navigate to="/login" />} />
-          <Route path="/bill" element={<BillPage products={products} onAddItems={(items) => {
-            items.forEach(({ product, quantity }) => {
-              addToCart(product, quantity);
-            });
-          }} />} />
-          <Route path="/cart" element={<Cart cart={cart} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClearCart={handleClearCart} products={products} onAddToCart={addToCart} storeSettings={storeSettings} />} />
-          <Route path="/checkout" element={<Checkout cart={cart} user={user} coupons={coupons} storeSettings={storeSettings} onOrderPlaced={async (order: any) => {
-            try {
-              await setDoc(doc(db, 'orders', order.id), order);
-              setCart([]); // Clear cart after successful order
-            } catch (e) {
-              console.error("Order creation failed", e);
-            }
-          }} />} />
-          <Route path="/profile" element={user ? <Profile user={user} orders={orders} /> : <Navigate to="/login" />} />
-          <Route path="/admin" element={<Admin products={products} orders={orders} coupons={coupons} banners={banners} user={user} />} />
-          <Route path="/login" element={<Login onLogin={(u: any) => setUser(u)} />} />
-          <Route path="/register" element={<Register onRegister={(u: any) => setUser(u)} />} />
-        </Routes>
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={location.pathname}>
+            <Route path="/" element={<Home products={products} onAddToCart={addToCart} banners={banners} storeSettings={storeSettings} cart={cart} />} />
+            <Route path="/products" element={<Products products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
+            <Route path="/items" element={<Items products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
+            <Route path="/product/:id" element={<ProductDetail products={products} onAddToCart={addToCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} user={user} storeSettings={storeSettings} />} />
+            <Route path="/categories" element={<Categories 
+              products={products} 
+              onAddToCart={addToCart} 
+              cart={cart}
+              onRemoveFromCart={removeFromCart}
+              toggleWishlist={toggleWishlist}
+              wishlist={user?.wishlist || []}
+            />} />
+            <Route path="/wishlist" element={user ? <Wishlist products={products} wishlist={user.wishlist || []} onAddToCart={addToCart} toggleWishlist={toggleWishlist} /> : <Navigate to="/login" />} />
+            <Route path="/bill" element={<BillPage products={products} onAddItems={(items) => {
+              items.forEach(({ product, quantity }) => {
+                addToCart(product, quantity);
+              });
+            }} />} />
+            <Route path="/cart" element={<Cart cart={cart} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClearCart={handleClearCart} products={products} onAddToCart={addToCart} storeSettings={storeSettings} />} />
+            <Route path="/checkout" element={<Checkout cart={cart} user={user} coupons={coupons} storeSettings={storeSettings} onOrderPlaced={async (order: any) => {
+              try {
+                await setDoc(doc(db, 'orders', order.id), order);
+                setCart([]); // Clear cart after successful order
+                navigate('/orders'); // Redirect to My Orders after placing order
+              } catch (e) {
+                console.error("Order creation failed", e);
+              }
+            }} />} />
+            <Route path="/profile" element={user ? <Profile user={user} orders={orders} /> : <Navigate to="/login" />} />
+            <Route path="/orders" element={user ? <MyOrders orders={orders} /> : <Navigate to="/login" />} />
+            <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
+            <Route path="/admin" element={<Admin products={products} orders={orders} coupons={coupons} banners={banners} user={user} />} />
+            <Route path="/login" element={<Login onLogin={(u: any) => setUser(u)} />} />
+            <Route path="/register" element={<Register onRegister={(u: any) => setUser(u)} />} />
+          </Routes>
+        </AnimatePresence>
       </main>
 
       <Footer />
@@ -576,16 +598,18 @@ function AppContent({
       {/* Back to Top Button */}
       <AnimatePresence>
         {showBackToTop && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.5, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.5, y: 20 }}
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="fixed bottom-24 right-6 z-[100] px-6 py-3 bg-white text-gray-900 rounded-full shadow-2xl flex items-center gap-2 border border-gray-100 hover:text-primary transition-all active:scale-90 group"
-          >
-            <ArrowUp className="w-4 h-4 group-hover:-translate-y-1 transition-transform" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Back to Top</span>
-          </motion.button>
+          <div className="floating-container !bottom-32">
+            <motion.button
+              initial={{ opacity: 0, scale: 0.5, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.5, y: 20 }}
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="floating-btn bg-white text-gray-900 border border-gray-100 px-6 hover:text-primary transition-all group"
+            >
+              <ArrowUp className="w-4 h-4 group-hover:-translate-y-1 transition-transform" />
+              <span className="text-[10px] font-black uppercase tracking-widest ml-2">Back to Top</span>
+            </motion.button>
+          </div>
         )}
       </AnimatePresence>
       
@@ -669,6 +693,7 @@ function AppContent({
         }}
         onCheckout={() => {
           setIsCartOpen(false);
+          navigate('/checkout');
         }}
       />
 

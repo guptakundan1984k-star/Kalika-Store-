@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ProductCard } from '../components/ProductCard';
-import { Product, Banner, StoreSettings } from '../types';
+import { Product, Banner, StoreSettings, CartItem } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, MapPin, Clock, AlertCircle } from 'lucide-react';
 import { Logo } from '../components/Logo';
@@ -11,9 +11,10 @@ interface HomeProps {
   onAddToCart: (product: Product) => void;
   banners: Banner[];
   storeSettings?: StoreSettings | null;
+  cart: CartItem[];
 }
 
-const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettings }) => {
+const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettings, cart }) => {
   const activeBanners = banners.filter(b => b.active);
   const [currentBanner, setCurrentBanner] = React.useState(0);
   const navigate = useNavigate();
@@ -37,7 +38,13 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
   };
 
   return (
-    <div className="pb-24">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      className="pb-24"
+    >
       {/* FMCG Hero Section - Now at the top */}
       <section className="px-4 md:px-6 max-w-7xl mx-auto mt-8">
         <div className="relative h-[300px] md:h-[400px] rounded-[50px] overflow-hidden bg-gray-900 shadow-2xl">
@@ -55,19 +62,6 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
                 Kalika <span className="text-primary">Store</span>
               </h1>
               
-              {storeSettings && !storeSettings.isFunctionallyOpen && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border bg-orange-500/10 border-orange-500/20 text-orange-400"
-                >
-                  <div className="w-2 h-2 rounded-full animate-pulse bg-orange-400" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">
-                    Store Open: Pre-Ordering Only
-                  </span>
-                </motion.div>
-              )}
-
               <p className="text-gray-300 font-black uppercase tracking-[0.4em] text-xs md:text-sm">
                 Authentic Indian Grocery & Essentials
               </p>
@@ -163,6 +157,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
               <ProductCard 
                 key={product.id} 
                 product={product} 
+                quantityInCart={cart.find(c => c.id === product.id)?.quantity}
                 onAddToCart={onAddToCart} 
                 onRemoveFromCart={() => {}} 
               />
@@ -245,7 +240,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
           </div>
         </section>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

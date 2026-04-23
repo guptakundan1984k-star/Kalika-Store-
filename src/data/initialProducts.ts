@@ -471,14 +471,36 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     createdAt: Date.now()
   },
   {
-    name: "Thums Up 1L",
-    description: "Strong and fizzy cola drink.",
-    price: 100,
-    purchasePrice: 0,
+    name: "Thums Up 2 Ltr",
+    description: "Extra large bottle of strong and fizzy cola drink.",
+    price: 95,
+    purchasePrice: 85,
     category: "Snacks",
     image: "https://www.bigbasket.com/media/uploads/p/l/251023_11-thums-up-soft-drink.jpg",
-    stock: 1000,
-    weight: "1L",
+    stock: 500,
+    weight: "2 Ltr",
+    createdAt: Date.now()
+  },
+  {
+    name: "Coca Cola 750ml",
+    description: "Classic refreshing cola drink.",
+    price: 45,
+    purchasePrice: 38,
+    category: "Snacks",
+    image: "https://www.bigbasket.com/media/uploads/p/l/251023_11-thums-up-soft-drink.jpg",
+    stock: 300,
+    weight: "750ml",
+    createdAt: Date.now()
+  },
+  {
+    name: "Tropicana Orange 1L",
+    description: "100% pure orange juice.",
+    price: 120,
+    purchasePrice: 105,
+    category: "Snacks",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40115814_6-tropicana-100-juice-orange.jpg",
+    stock: 150,
+    weight: "1 Ltr",
     createdAt: Date.now()
   },
   {

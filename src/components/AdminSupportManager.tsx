@@ -17,8 +17,11 @@ interface SupportQuery {
 }
 
 export const AdminSupportManager: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'support' | 'features'>('support');
   const [queries, setQueries] = useState<SupportQuery[]>([]);
+  const [featureRequests, setFeatureRequests] = useState<FeatureRequest[]>([]);
   const [selectedQuery, setSelectedQuery] = useState<SupportQuery | null>(null);
+  const [selectedFeature, setSelectedFeature] = useState<FeatureRequest | null>(null);
   const [adminReply, setAdminReply] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -60,8 +63,29 @@ export const AdminSupportManager: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const q = query(collection(db, 'feature_requests'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setFeatureRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeatureRequest)));
+    }, (error) => {
+      console.error("Error fetching feature requests:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const handleResolve = async (id: string) => {
     await updateDoc(doc(db, 'support_queries', id), { status: 'resolved' });
+  };
+
+  const handleUpdateFeatureStatus = async (id: string, status: FeatureRequest['status']) => {
+    try {
+      await updateDoc(doc(db, 'feature_requests', id), { status });
+      if (selectedFeature?.id === id) {
+        setSelectedFeature(prev => prev ? { ...prev, status } : null);
+      }
+    } catch (error) {
+      console.error("Error updating feature status:", error);
+    }
   };
 
   const handleSendReply = async () => {
@@ -87,55 +111,115 @@ export const AdminSupportManager: React.FC = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-6">
-      {/* List */}
-      <div className="lg:col-span-1 space-y-4">
-        <h3 className="text-xl font-black text-gray-900 tracking-tight mb-6">Support Requests</h3>
-        <div className="space-y-3">
-          {queries.map((q) => (
-            <button
-              key={q.id}
-              onClick={() => setSelectedQuery(q)}
-              className={`w-full text-left p-4 rounded-2xl border transition-all ${
-                selectedQuery?.id === q.id 
-                  ? 'bg-primary/5 border-primary shadow-sm' 
-                  : 'bg-white border-gray-100 hover:border-primary/30'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                  q.status === 'pending' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'
-                }`}>
-                  {q.status}
-                </span>
-                <span className="text-[10px] text-gray-400 font-bold">
-                  {new Date(q.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-              <h4 className="font-bold text-gray-900 truncate">{q.userName}</h4>
-              <p className="text-xs text-gray-500 truncate">{q.chatHistory[q.chatHistory.length - 1]?.content}</p>
-            </button>
-          ))}
-          {queries.length === 0 && (
-            <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-gray-200">
-              <MessageSquare className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-              <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">No support requests</p>
-            </div>
-          )}
-        </div>
+    <div className="space-y-6 p-6">
+      <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm w-fit">
+        <button 
+          onClick={() => setActiveTab('support')}
+          className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            activeTab === 'support' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-400 hover:bg-gray-50'
+          }`}
+        >
+          Support Queries
+        </button>
+        <button 
+          onClick={() => setActiveTab('features')}
+          className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            activeTab === 'features' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-400 hover:bg-gray-50'
+          }`}
+        >
+          Feature Requests
+        </button>
       </div>
 
-      {/* Detail */}
-      <div className="lg:col-span-2">
-        <AnimatePresence mode="wait">
-          {selectedQuery ? (
-            <motion.div
-              key={selectedQuery.id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[500px] max-h-[800px]"
-            >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* List */}
+        <div className="lg:col-span-1 space-y-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-black text-gray-900 tracking-tight">
+              {activeTab === 'support' ? 'Support Requests' : 'Feature Requests'}
+            </h3>
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              {activeTab === 'support' ? queries.length : featureRequests.length} Total
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {activeTab === 'support' ? (
+              queries.map((q) => (
+                <button
+                  key={q.id}
+                  onClick={() => setSelectedQuery(q)}
+                  className={`w-full text-left p-4 rounded-2xl border transition-all active:scale-95 ${
+                    selectedQuery?.id === q.id 
+                      ? 'bg-primary/5 border-primary shadow-sm' 
+                      : 'bg-white border-gray-100 hover:border-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                      q.status === 'pending' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'
+                    }`}>
+                      {q.status}
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-bold">
+                      {new Date(q.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-gray-900 truncate">{q.userName}</h4>
+                  <p className="text-xs text-gray-500 truncate">{q.chatHistory[q.chatHistory.length - 1]?.content}</p>
+                </button>
+              ))
+            ) : (
+              featureRequests.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setSelectedFeature(f)}
+                  className={`w-full text-left p-4 rounded-2xl border transition-all active:scale-95 ${
+                    selectedFeature?.id === f.id 
+                      ? 'bg-primary/5 border-primary shadow-sm' 
+                      : 'bg-white border-gray-100 hover:border-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                      f.status === 'pending' ? 'bg-orange-100 text-orange-600' : 
+                      f.status === 'reviewed' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'
+                    }`}>
+                      {f.status}
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-bold">
+                      {new Date(f.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-gray-900 truncate">{f.userName}</h4>
+                  <p className="text-xs text-gray-500 truncate">{f.feature}</p>
+                </button>
+              ))
+            )}
+
+            {(activeTab === 'support' ? queries.length : featureRequests.length) === 0 && (
+              <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-gray-200">
+                <MessageSquare className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">
+                  No {activeTab === 'support' ? 'support requests' : 'feature requests'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Detail */}
+        <div className="lg:col-span-2">
+          <AnimatePresence mode="wait">
+            {activeTab === 'support' && selectedQuery ? (
+              <motion.div
+                key={selectedQuery.id}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[600px] max-h-[800px]"
+              >
+                {/* Keep existing detail content */}
               <div className="p-6 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
@@ -242,17 +326,79 @@ export const AdminSupportManager: React.FC = () => {
                 </p>
               </div>
             </motion.div>
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center bg-white rounded-[32px] border border-gray-100 shadow-sm p-12 text-center">
-              <div className="w-20 h-20 bg-gray-50 rounded-[32px] flex items-center justify-center text-gray-300 mb-6">
-                <AlertCircle className="w-10 h-10" />
+          ) : activeTab === 'features' && selectedFeature ? (
+            <motion.div
+                key={selectedFeature.id}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[600px]"
+              >
+                <div className="p-8 bg-gray-50 border-b border-gray-100">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shadow-inner">
+                        <Sparkles className="w-7 h-7" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Feature Request from</p>
+                        <h3 className="text-2xl font-black text-gray-900 tracking-tight">{selectedFeature.userName}</h3>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {['pending', 'reviewed', 'implemented'].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => handleUpdateFeatureStatus(selectedFeature.id, s as any)}
+                          className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${
+                            selectedFeature.status === s 
+                              ? s === 'pending' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' :
+                                s === 'reviewed' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' :
+                                'bg-green-500 text-white shadow-lg shadow-green-500/20'
+                              : 'bg-white text-gray-400 hover:bg-gray-100 border border-gray-100'
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Clock className="w-4 h-4 text-gray-400" />
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Submitted on {new Date(selectedFeature.createdAt).toLocaleString()}</p>
+                    </div>
+                    <p className="text-lg font-medium text-gray-700 leading-relaxed italic">
+                      "{selectedFeature.feature}"
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-8 flex flex-col items-center justify-center text-center space-y-6 flex-1">
+                  <div className="w-20 h-20 bg-gray-50 rounded-[40px] flex items-center justify-center text-gray-300">
+                    <Sparkles className="w-10 h-10" />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-black text-gray-900 tracking-tight mb-2">Review Process</h4>
+                    <p className="text-sm text-gray-500 font-medium max-w-sm mx-auto">
+                      Review this feature request and update its status. This helps in prioritizing product development based on user feedback.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            ) : !selectedQuery && !selectedFeature ? (
+              <div className="h-[600px] flex flex-col items-center justify-center bg-white rounded-[32px] border border-gray-100 shadow-sm p-12 text-center">
+                <div className="w-20 h-20 bg-gray-50 rounded-[32px] flex items-center justify-center text-gray-300 mb-6">
+                  <AlertCircle className="w-10 h-10" />
+                </div>
+                <h3 className="text-xl font-black text-gray-900 tracking-tight mb-2">Select a request</h3>
+                <p className="text-sm text-gray-500 font-medium">Choose a support or feature request from the list to view details.</p>
               </div>
-              <h3 className="text-xl font-black text-gray-900 tracking-tight mb-2">Select a request</h3>
-              <p className="text-sm text-gray-500 font-medium">Choose a support request from the list to view the conversation history.</p>
-            </div>
-          )}
+            ) : null}
         </AnimatePresence>
       </div>
     </div>
-  );
+  </div>
+);
 };

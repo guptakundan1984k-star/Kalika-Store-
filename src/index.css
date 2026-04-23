@@ -2,12 +2,12 @@
 @import "leaflet/dist/leaflet.css";
 
 @theme {
-  --color-primary: #06b6d4; /* Cyan-500 */
-  --color-primary-light: #22d3ee; /* Cyan-400 */
-  --color-primary-dark: #0891b2; /* Cyan-600 */
-  --color-secondary: #2563eb; /* Blue-600 (Flipkart Blue) */
-  --color-secondary-light: #3b82f6; /* Blue-500 */
-  --color-secondary-dark: #1d4ed8; /* Blue-700 */
+  --color-primary: #f59e0b; /* Amber 500 */
+  --color-primary-light: #fbbf24; /* Amber 400 */
+  --color-primary-dark: #d97706; /* Amber 600 */
+  --color-secondary: #000000; /* Rich Black */
+  --color-secondary-light: #1f2937;
+  --color-secondary-dark: #000000;
   
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 
@@ -16,21 +16,74 @@
     50% { background-position: 100% 50%; }
   }
   --animate-gradient-x: gradient-x 3s ease infinite;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  --animate-float: float 6s ease-in-out infinite;
+
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  --animate-slide-up: slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+
+  @keyframes pulse-soft {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+  }
+  --animate-pulse-soft: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Floating Action Button (FAB) Fix */
+.floating-container {
+  @apply fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-4;
+  pointer-events: none;
+}
+
+.floating-btn {
+  @apply pointer-events-auto p-4 rounded-full shadow-2xl transition-all duration-300;
+  @apply flex items-center justify-center;
+  @apply hover:scale-110 active:scale-95;
+  max-width: fit-content;
+}
+
+@media (max-width: 640px) {
+  .floating-container {
+    @apply bottom-20 right-4;
+  }
 }
 
 @layer base {
   html, body {
-    @apply min-h-screen overflow-x-hidden;
+    @apply min-h-screen overflow-x-hidden bg-gray-50/50;
     scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+  button, 
+  .btn, 
+  [role="button"],
+  input[type="submit"],
+  input[type="button"],
+  nav a,
+  .nav-item {
+    @apply active:scale-95 transition-transform duration-100 cursor-pointer;
+  }
+
+  ::selection {
+    @apply bg-primary/30 text-primary-dark;
+  }
+}
+
+@layer components {
+  .smooth-transition {
+    @apply transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)];
   }
   
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-xl;
   }
 }

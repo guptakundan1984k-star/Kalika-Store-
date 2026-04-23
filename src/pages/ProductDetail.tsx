@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Product, Review, UserProfile } from '../types';
 import { 
   Star, ShoppingCart, Heart, ArrowLeft, ShieldCheck, 
-  Truck, Clock, MessageSquare, Send, User, Trash2
+  Truck, Clock, MessageSquare, Send, User, Trash2, Plus, Minus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, collection, query, where, onSnapshot, addDoc, Timestamp, deleteDoc, doc, getDocs } from '../firebase';
@@ -11,7 +11,7 @@ import { Logo } from '../components/Logo';
 
 interface ProductDetailProps {
   products: Product[];
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean) => void;
   toggleWishlist: (productId: string) => void;
   wishlist: string[];
   user: UserProfile | null;
@@ -32,6 +32,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
     color?: string;
     flavor?: string;
   }>({});
+  const [quantity, setQuantity] = useState(1);
 
   const isWishlisted = wishlist.includes(id || '');
 
@@ -239,7 +240,34 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
             </p>
 
             {/* Variations Selectors */}
-            {product.variations && (
+            <div className="space-y-8">
+              {/* Quantity Selection */}
+              <div className="space-y-4">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Quantity</label>
+                <div className="flex items-center gap-6">
+                  <div className="flex items-center bg-white border-2 border-gray-100 rounded-2xl p-1 shadow-sm">
+                    <button 
+                      onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+                      className="p-3 hover:bg-gray-50 rounded-xl transition-colors text-gray-400 hover:text-primary"
+                    >
+                      <Minus className="w-5 h-5" />
+                    </button>
+                    <span className="w-12 text-center text-lg font-black text-gray-900">{quantity}</span>
+                    <button 
+                      onClick={() => setQuantity(prev => Math.min(product.stock, prev + 1))}
+                      disabled={quantity >= product.stock}
+                      className="p-3 hover:bg-gray-50 rounded-xl transition-colors text-gray-400 hover:text-primary disabled:opacity-20"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </div>
+                  {quantity >= product.stock && (
+                    <span className="text-xs font-bold text-orange-500 uppercase tracking-widest animate-pulse">Max Stock Reached</span>
+                  )}
+                </div>
+              </div>
+
+              {product.variations && (
               <div className="space-y-6">
                 {product.variations.sizes && product.variations.sizes.length > 0 && (
                   <div className="space-y-3">
@@ -305,6 +333,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                 )}
               </div>
             )}
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white p-4 rounded-3xl border border-gray-100 flex items-center gap-4">
@@ -327,14 +356,32 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
               </div>
             </div>
 
-            <div className="flex gap-4 pt-4">
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <button 
-                onClick={() => onAddToCart({ ...product, selectedVariations } as any)}
+                onClick={() => {
+                  onAddToCart({ 
+                    ...product, 
+                    selectedVariations
+                  } as any, quantity, true);
+                }}
                 disabled={product.stock <= 0}
-                className="flex-1 flex items-center justify-center gap-3 bg-primary text-white font-black px-8 py-5 rounded-[24px] shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-primary text-white shadow-primary/30 hover:bg-primary-dark"
               >
                 <ShoppingCart className="w-6 h-6" />
                 Add to Cart
+              </button>
+
+              <button 
+                onClick={() => {
+                  onAddToCart({ 
+                    ...product, 
+                    selectedVariations
+                  } as any, quantity, true);
+                }}
+                disabled={product.stock <= 0}
+                className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-gray-900 text-white shadow-xl shadow-gray-200 hover:bg-black"
+              >
+                Buy Now
               </button>
             </div>
           </motion.div>
