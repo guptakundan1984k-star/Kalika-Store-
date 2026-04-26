@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   Briefcase, Mail, Phone, MessageSquare, 
   Clock, CheckCircle, XCircle, Search, Filter,
-  ExternalLink, Eye, Trash2, Loader2, Sparkles, User, ChevronRight
+  ExternalLink, Eye, Trash2, Loader2, Sparkles, User, ChevronRight, ShoppingBag
 } from 'lucide-react';
 import { BulkEnquiry } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -294,20 +294,46 @@ export const AdminBulkEnquiryManager: React.FC = () => {
                   </div>
                 </div>
 
+                {selectedEnquiry.billUrl && (
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Paper Bill Attachment</p>
+                    <div className="bg-gray-50 p-4 rounded-[40px] border border-gray-100 overflow-hidden">
+                      <img 
+                        src={selectedEnquiry.billUrl} 
+                        alt="Bulk Enquiry Bill" 
+                        className="w-full h-auto rounded-3xl"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="mt-4 flex justify-center">
+                        <a 
+                          href={selectedEnquiry.billUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-[10px] font-black text-white bg-indigo-600 px-6 py-3 rounded-xl hover:bg-black transition-all shadow-lg shadow-indigo-600/20 uppercase tracking-widest"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          View Full Size
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="pt-10 border-t border-gray-100 space-y-6">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Update Inquiry Progress</p>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-4 gap-4">
                     {[
                       { status: 'Pending', icon: Clock, color: 'orange' },
                       { status: 'Contacted', icon: MessageSquare, color: 'blue' },
-                      { status: 'Closed', icon: CheckCircle, color: 'green' }
+                      { status: 'Accepted', icon: CheckCircle, color: 'indigo' },
+                      { status: 'Closed', icon: XCircle, color: 'green' }
                     ].map((s) => (
                       <button
                         key={s.status}
                         onClick={() => handleUpdateStatus(selectedEnquiry.id, s.status as any)}
                         className={`flex flex-col items-center gap-3 p-6 rounded-[32px] transition-all border-2 active:scale-95 ${
                           selectedEnquiry.status === s.status 
-                            ? `bg-${s.color}-500 text-white border-${s.color}-600 shadow-xl shadow-${s.color}-500/20 scale-105` 
+                            ? `bg-${s.color === 'indigo' ? 'indigo-600' : `${s.color}-500`} text-white border-${s.color}-600 shadow-xl shadow-${s.color}-500/20 scale-105` 
                             : `bg-white text-gray-400 border-gray-50 hover:border-${s.color}-200 hover:text-${s.color}-500`
                         }`}
                       >
@@ -316,6 +342,23 @@ export const AdminBulkEnquiryManager: React.FC = () => {
                       </button>
                     ))}
                   </div>
+
+                  {selectedEnquiry.status === 'Accepted' && (
+                    <div className="mt-8 pt-8 border-t border-gray-100 flex flex-col gap-4">
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Order Actions</p>
+                       <button
+                         onClick={() => {
+                           // Dispatch custom event to be picked up by Admin.tsx
+                           window.dispatchEvent(new CustomEvent('createOrderFromEnquiry', { detail: selectedEnquiry }));
+                           setSelectedEnquiry(null);
+                         }}
+                         className="w-full bg-black text-white hover:bg-primary py-6 rounded-[32px] font-black flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95"
+                       >
+                         <ShoppingBag className="w-6 h-6" />
+                         CREATE ORDER FROM BILL
+                       </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>

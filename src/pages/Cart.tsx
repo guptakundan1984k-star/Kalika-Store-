@@ -1,9 +1,10 @@
 import React from 'react';
-import { CartItem, Product, StoreSettings } from '../types';
-import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Truck, ShieldCheck, Clock, Sparkles, AlertCircle, Package } from 'lucide-react';
+import { CartItem, Product, StoreSettings, UserProfile, Order } from '../types';
+import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Truck, ShieldCheck, Clock, Sparkles, AlertCircle, Package, Smartphone, MapPin, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../contexts/StoreContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { db, collection, addDoc, doc, updateDoc } from '../firebase';
 
 interface CartProps {
   cart: CartItem[];
@@ -13,13 +14,61 @@ interface CartProps {
   products: Product[];
   onAddToCart: (product: Product, quantity?: number) => void;
   storeSettings?: StoreSettings | null;
+  user: UserProfile | null;
 }
 
-const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCart, products, onAddToCart, storeSettings }) => {
+const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCart, products, onAddToCart, storeSettings, user }) => {
+  const navigate = useNavigate();
   const { deliveryFee: configDeliveryFee, freeDeliveryThreshold: configThreshold } = useStore();
+  const [isPlacingQuickOrder, setIsPlacingQuickOrder] = React.useState(false);
+  
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const deliveryFee = subtotal >= configThreshold ? 0 : (cart.length > 0 ? configDeliveryFee : 0);
   const total = subtotal + deliveryFee;
+
+  const handleQuickOrder = async () => {
+    if (!user || !user.phone || !user.address) {
+      navigate('/checkout');
+      return;
+    }
+
+    if (!window.confirm("Place order INSTANTLY using your saved address and phone?")) return;
+
+    setIsPlacingQuickOrder(true);
+    try {
+      const pin = Math.floor(1000 + Math.random() * 9000).toString();
+      const newOrder: Order = {
+        id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+        userId: user.uid,
+        userName: user.name,
+        userPhone: user.phone,
+        items: cart,
+        total,
+        status: 'Pending',
+        deliveryType: 'Delivery',
+        address: { manual: user.address },
+        deliverySlot: 'ASAP (Quick Order)',
+        paymentMethod: 'COD',
+        pin,
+        createdAt: Date.now(),
+      };
+
+      await addDoc(collection(db, 'orders'), newOrder);
+      onClearCart();
+      
+      // Speak & Play
+      const speech = new SpeechSynthesisUtterance("Quick Order Placed Successfully!");
+      window.speechSynthesis.speak(speech);
+
+      alert("Quick Order Placed! Redirecting to tracking...");
+      navigate('/profile');
+    } catch (e) {
+      console.error("Quick order failed", e);
+      alert("Quick order failed. Please use standard checkout.");
+    } finally {
+      setIsPlacingQuickOrder(false);
+    }
+  };
 
   const inventoryThreshold = configThreshold;
   const summaryRef = React.useRef<HTMLDivElement>(null);
@@ -71,7 +120,11 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
               </div>
             </div>
             <button 
-              onClick={onClearCart}
+              onClick={() => {
+                if (window.confirm("Are you sure you want to remove all items from your cart?")) {
+                  onClearCart();
+                }
+              }}
               className="text-xs font-bold text-red-500 hover:text-red-600 uppercase tracking-widest flex items-center gap-1.5 hover:bg-red-50 px-4 py-2 rounded-xl transition-all"
             >
               <Trash2 className="w-4 h-4" />
@@ -196,13 +249,32 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                   <span className="text-4xl font-black text-gray-900 tracking-tighter">₹{total}</span>
                 </div>
                 {storeSettings?.isOpen ? (
-                  <Link 
-                    to="/checkout"
-                    className="flex items-center gap-2 bg-primary text-white font-bold px-10 py-5 rounded-3xl shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95 group"
-                  >
-                    Checkout
-                    <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-                  </Link>
+                  <div className="flex flex-col gap-3">
+                    <Link 
+                      to="/checkout"
+                      className="flex items-center justify-center gap-2 bg-primary text-white font-bold px-10 py-5 rounded-3xl shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95 group"
+                    >
+                      Checkout
+                      <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                    
+                    {user?.phone && user?.address && (
+                      <button 
+                        onClick={handleQuickOrder}
+                        disabled={isPlacingQuickOrder}
+                        className="flex items-center justify-center gap-2 bg-orange-500 text-white font-bold px-10 py-4 rounded-3xl shadow-xl shadow-orange-500/20 hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        {isPlacingQuickOrder ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <>
+                            <Sparkles className="w-5 h-5" />
+                            <span>Quick Order (1-Click)</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <button 
                     disabled

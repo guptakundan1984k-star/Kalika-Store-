@@ -5,6 +5,7 @@ import { Logo } from './Logo';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Product, StoreSettings } from '../types';
+import { SearchOverlay } from './SearchOverlay';
 
 interface NavbarProps {
   cartCount: number;
@@ -16,13 +17,12 @@ interface NavbarProps {
   onAddToCart: (product: Product, quantity: number, redirectToCheckout?: boolean) => void;
 }
 
-import { SearchOverlay } from './SearchOverlay';
-
 export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, setSearchQuery, products, storeSettings, onAddToCart }) => {
   const location = useLocation();
-  const isAdmin = user?.role === 'admin';
   const { language, setLanguage, t, isVoiceEnabled, setIsVoiceEnabled } = useLanguage();
   const [showSearchOverlay, setShowSearchOverlay] = React.useState(false);
+
+  const hideBottomNav = ['/admin', '/order-tracking', '/checkout', '/scan'].some(path => location.pathname.startsWith(path));
 
   const mobileNavItems = [
     { path: '/', icon: Home, label: t('home') },
@@ -42,45 +42,29 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
         setSearchQuery={setSearchQuery}
         onAddToCart={onAddToCart}
       />
-      <nav className="sticky top-0 z-50 w-full bg-white border-b border-gray-100 px-4 md:px-6 py-2 md:py-3 shadow-sm overflow-hidden">
-        <div className="max-w-7xl mx-auto space-y-3 relative z-10">
-          {/* Top Row: Location & Profile */}
+      <nav className="fixed top-0 z-50 w-full bg-white px-4 md:px-6 py-2 shadow-sm border-b border-gray-100">
+        <div className="max-w-7xl mx-auto space-y-2">
+          {/* Top Row: Location & Profile Icons (Matched exactly to screenshot) */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link to="/" className="hidden md:block">
-                <Logo className="h-8" />
-              </Link>
-              
+            <div className="flex items-center gap-3">
               <div className="flex flex-col">
-                <div className="flex items-center gap-1.5 text-gray-900 font-black text-sm tracking-tight">
-                  <span className="text-primary">⚡</span> 2 Hours delivery
+                <div className="flex items-center gap-1.5 text-black font-black text-[13px] tracking-tight">
+                  <span className="text-primary italic">⚡</span> 2 Hours delivery
                 </div>
-                <div className="flex items-center gap-1 text-gray-500 text-[10px] font-bold uppercase tracking-widest">
-                  Home - Ranchi, Jharkhand <ChevronDown className="w-3 h-3" />
+                <div className="flex items-center gap-1 text-[#6B7280] text-[10px] font-black uppercase tracking-widest leading-none">
+                  Home - Ranchi, Jharkhand <ChevronDown className="w-3 h-3 translate-y-[-1px]" />
                 </div>
-              </div>
-
-              <div className="hidden md:flex items-center gap-6 ml-8">
-                <Link to="/categories" className={`text-xs font-black uppercase tracking-widest transition-colors ${location.pathname === '/categories' ? 'text-primary' : 'text-gray-500 hover:text-gray-900'}`}>
-                  {t('categories')}
-                </Link>
-                <Link to="/items" className={`text-xs font-black uppercase tracking-widest transition-colors ${location.pathname === '/items' ? 'text-primary' : 'text-gray-500 hover:text-gray-900'}`}>
-                  Items
-                </Link>
-                <Link to="/wishlist" className={`text-xs font-black uppercase tracking-widest transition-colors ${location.pathname === '/wishlist' ? 'text-primary' : 'text-gray-500 hover:text-gray-900'}`}>
-                  Wishlist
-                </Link>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <Link to="/profile" className="p-2 hover:bg-gray-50 rounded-full transition-colors active:scale-95" aria-label="Profile">
-                <User className="w-6 h-6 text-gray-700" />
+            <div className="flex items-center gap-5">
+              <Link to="/profile" className="p-1" aria-label="Profile">
+                <User className="w-7 h-7 text-[#1F2937] stroke-[1.5]" />
               </Link>
-              <Link to="/cart" className="relative p-2 hover:bg-gray-50 rounded-full transition-colors active:scale-95" aria-label={`Cart with ${cartCount} items`}>
-                <ShoppingCart className="w-6 h-6 text-gray-700" />
+              <Link to="/cart" className="relative p-1" aria-label="Cart">
+                <ShoppingCart className="w-7 h-7 text-[#1F2937] stroke-[1.5]" />
                 {cartCount > 0 && (
-                  <span className="absolute top-0 right-0 bg-primary text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-lg">
+                  <span className="absolute -top-1 -right-1 bg-primary text-white text-[9px] font-black w-4 h-4 flex items-center justify-center rounded-full border-2 border-white">
                     {cartCount}
                   </span>
                 )}
@@ -88,48 +72,64 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
             </div>
           </div>
 
-          <div className="relative group cursor-pointer" onClick={() => setShowSearchOverlay(true)}>
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              <Search className="w-5 h-5 text-gray-400" />
+          {/* Search Bar (Matched pill shape and icons from screenshot) */}
+          <div 
+            className="relative group cursor-pointer" 
+            onClick={() => setShowSearchOverlay(true)}
+          >
+            <div className="absolute left-4 top-1/2 -translate-y-1/2">
+              <Search className="w-5 h-5 text-black stroke-[2.5]" />
             </div>
-            <div className="w-full bg-gray-50 border border-gray-100 rounded-xl pl-12 pr-24 py-3 text-sm font-medium text-gray-400">
-              {searchQuery || t('search')}
+            <div className="w-full bg-[#F3F4F6] border border-gray-100 rounded-2xl pl-12 pr-28 py-3 text-[14px] font-bold text-gray-400/80 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)] flex items-center">
+              Search products...
             </div>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
-              <Mic className="w-5 h-5 text-gray-400" />
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-4 text-gray-400">
+              <Mic className="w-5 h-5 stroke-[2]" />
               <div className="w-[1px] h-4 bg-gray-200" />
-              <FileText className="w-5 h-5 text-gray-400" />
+              <FileText className="w-5 h-5 stroke-[2]" />
             </div>
           </div>
         </div>
       </nav>
+      {/* Spacer for fixed navbar */}
+      <div className="h-[104px]" />
 
-      {/* Removed old Search Results Popup */}
-
-      {/* Mobile Bottom Navbar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-2xl border-t border-gray-100 px-2 py-3 flex items-center justify-around shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
-        {mobileNavItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.path;
-          
-          return (
-            <Link 
-              key={item.path} 
-              to={item.path}
-              className={`relative flex flex-col items-center gap-1 transition-all active:scale-90 ${
-                isActive ? 'text-primary' : 'text-gray-400'
-              }`}
-            >
-              <div className={`p-2 rounded-2xl transition-all ${
-                isActive ? 'bg-primary/10 text-primary scale-110' : ''
-              }`}>
-                <Icon className="w-6 h-6" />
-              </div>
-              <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      {/* Bottom Navbar (Floating pill design matching screenshot) */}
+      {!hideBottomNav && (
+        <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-[400px]">
+          <nav className="bg-white rounded-[32px] px-2 py-2 flex items-center justify-between shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100">
+            {mobileNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path;
+              
+              return (
+                <Link 
+                  key={item.path} 
+                  to={item.path}
+                  className="flex flex-col items-center gap-1 flex-1 relative px-1 py-1"
+                >
+                  <div className={`p-2.5 rounded-full transition-all duration-300 ${
+                    isActive ? 'bg-[#F0F7FF] text-[#00AEEF] scale-110' : 'text-gray-400'
+                  }`}>
+                    <Icon className={`w-6 h-6 ${isActive ? 'stroke-[3]' : 'stroke-[2]'}`} />
+                  </div>
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${
+                    isActive ? 'text-[#00AEEF]' : 'text-gray-400'
+                  }`}>
+                    {item.label}
+                  </span>
+                  {isActive && (
+                    <motion.div 
+                      layoutId="nav-pill"
+                      className="absolute inset-0 bg-gray-50/20 rounded-[28px] -z-10"
+                    />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      )}
     </>
   );
 };

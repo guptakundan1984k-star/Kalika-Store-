@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "node server.ts",
-    "build": "vite build",
+    "build": "vite build && echo 'Client build complete'",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit && eslint firestore.rules",
@@ -26,6 +26,7 @@
     "firebase": "^12.11.0",
     "firebase-admin": "^13.7.0",
     "googleapis": "^171.4.0",
+    "html5-qrcode": "^2.3.8",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.546.0",
     "motion": "^12.38.0",

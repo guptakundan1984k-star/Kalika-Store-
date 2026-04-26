@@ -15,13 +15,16 @@ import { AdminStorageManager } from '../components/AdminStorageManager';
 import { AdminBulkAIUploader } from '../components/AdminBulkAIUploader';
 import { AdminExpenseManager } from '../components/AdminExpenseManager';
 import { AdminBulkEnquiryManager } from '../components/AdminBulkEnquiryManager';
-import { Product, Order, UserProfile, Coupon, Banner, Expense } from '../types';
+import { AdminManualOrderCreator } from '../components/AdminManualOrderCreator';
+import { AdminPartyPricingManager } from '../components/AdminPartyPricingManager';
+import { AdminDuesManager } from '../components/AdminDuesManager';
+import { Product, Order, UserProfile, Coupon, Banner, Expense, BulkEnquiry } from '../types';
 import { 
   LayoutDashboard, Package, ShoppingBag, Users, 
   Tag, Settings, LogOut, ChevronRight, ChevronLeft, Menu, X, 
   Bell, Search, User, Sparkles, Shield, Image as ImageIcon,
   Printer, Eye, EyeOff, Box, Layers, Cloud, CloudOff, RefreshCw, Database, HardDrive, CheckSquare,
-  IndianRupee, Zap, AlertCircle
+  IndianRupee, Zap, AlertCircle, Briefcase
 } from 'lucide-react';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { motion, AnimatePresence } from 'motion/react';
@@ -37,7 +40,7 @@ interface AdminProps {
 }
 
 const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'bulk-ai' | 'expenses' | 'orders' | 'workflow' | 'users' | 'coupons' | 'banners' | 'support' | 'billing' | 'variations' | 'stocks' | 'settings' | 'storage' | 'bulk-enquiries'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'bulk-ai' | 'party-pricing' | 'expenses' | 'orders' | 'workflow' | 'users' | 'coupons' | 'banners' | 'support' | 'billing' | 'variations' | 'stocks' | 'settings' | 'storage' | 'bulk-enquiries' | 'dues'>('dashboard');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isDbConnected, setIsDbConnected] = useState<boolean | null>(null);
   const [pendingQueries, setPendingQueries] = useState(0);
@@ -47,6 +50,15 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
+  const [selectedEnquiryForOrder, setSelectedEnquiryForOrder] = useState<BulkEnquiry | null>(null);
+
+  useEffect(() => {
+    const handleCreateOrderEvent = (e: any) => {
+      setSelectedEnquiryForOrder(e.detail);
+    };
+    window.addEventListener('createOrderFromEnquiry', handleCreateOrderEvent);
+    return () => window.removeEventListener('createOrderFromEnquiry', handleCreateOrderEvent);
+  }, []);
 
   const handleSyncOperation = async (op: () => Promise<any>) => {
     setSyncStatus('syncing');
@@ -78,6 +90,28 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
     }
   }, []);
 
+  useEffect(() => {
+    if (lockoutTime) {
+      const timer = setInterval(() => {
+        const now = Date.now();
+        if (now >= lockoutTime) {
+          setLockoutTime(null);
+          localStorage.removeItem('admin_lockout');
+          localStorage.removeItem('admin_attempts');
+          setError('');
+          clearInterval(timer);
+        } else {
+          const diff = lockoutTime - now;
+          const h = Math.floor(diff / (1000 * 60 * 60));
+          const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          const s = Math.floor((diff % (1000 * 60)) / 1000);
+          setError(`Device disabled. Try again in ${h}h ${m}m ${s}s`);
+        }
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [lockoutTime]);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -108,31 +142,38 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
       localStorage.setItem('admin_attempts', attempts.toString());
       
       if (attempts >= 5) {
-        const phase2Attempts = parseInt(localStorage.getItem('admin_phase2_attempts') || '0');
-        
-        if (phase2Attempts >= 3) {
-          // 12 hours lockout
-          const time = now + 12 * 60 * 60 * 1000;
-          localStorage.setItem('admin_lockout', time.toString());
-          setLockoutTime(time);
-          setError('Access disabled for 12 hours due to repeated failures.');
-        } else {
-          // 5 minutes lockout
-          const time = now + 5 * 60 * 1000;
-          localStorage.setItem('admin_lockout', time.toString());
-          localStorage.setItem('admin_phase2_attempts', (phase2Attempts + 1).toString());
-          localStorage.setItem('admin_attempts', '0'); // Reset phase 1 attempts
-          setLockoutTime(time);
-          setError('Too many attempts. Access disabled for 5 minutes.');
-        }
+        // 24 hours lockout for this device
+        const time = now + 24 * 60 * 60 * 1000;
+        localStorage.setItem('admin_lockout', time.toString());
+        setLockoutTime(time);
+        setError('Device disabled for 24 hours due to repeated failures.');
       } else {
         setError(`Incorrect password. ${5 - attempts} attempts remaining.`);
       }
     }
   };
 
+  const [isReady, setIsReady] = useState(false);
+
   useEffect(() => {
-    if (!isAuthorized) return;
+    if (!isAuthorized || !user) return;
+
+    const setAdminRole = async () => {
+      try {
+        await updateDoc(doc(db, 'users', user.uid), { role: 'admin' });
+        setIsReady(true);
+      } catch (e) {
+        console.error("Failed to set admin role", e);
+        // If it fails (maybe already admin or network error), we still try to proceed
+        setIsReady(true);
+      }
+    };
+
+    setAdminRole();
+  }, [isAuthorized, user]);
+
+  useEffect(() => {
+    if (!isAuthorized || !isReady) return;
 
     const qUsers = query(collection(db, 'users'));
     const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
@@ -223,6 +264,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
   const menuItems = [
     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
     { id: 'products', label: 'Inventory', icon: Package },
+    { id: 'party-pricing', label: 'Party Rates', icon: Tag },
     { id: 'bulk-ai', label: 'Bulk AI Add', icon: Zap },
     { id: 'expenses', label: 'Expenses', icon: IndianRupee },
     { id: 'stocks', label: 'Stocks', icon: Box },
@@ -235,6 +277,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
     { id: 'banners', label: 'Banners', icon: ImageIcon },
     { id: 'support', label: 'Support', icon: Bell, badge: pendingQueries },
     { id: 'bulk-enquiries', label: 'Business Inquiries', icon: Briefcase, badge: pendingEnquiries },
+    { id: 'dues', label: 'Customer Dues', icon: IndianRupee },
     { id: 'settings', label: 'Store Settings', icon: Settings },
     { id: 'storage', label: 'Cloud Storage', icon: HardDrive },
   ];
@@ -305,7 +348,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
             <div className="h-8 w-px bg-gray-100" />
             <div className="flex items-center gap-3">
               <div className="flex flex-col items-end">
-                <span className="text-sm font-black text-gray-900 tracking-tight">Admin User</span>
+                <span className="text-sm font-black text-gray-900 tracking-tight">Valued Customer</span>
                 <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Super Admin</span>
               </div>
               <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary shadow-inner">
@@ -373,6 +416,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                 />
               )}
               {activeTab === 'expenses' && <AdminExpenseManager />}
+              {activeTab === 'party-pricing' && <AdminPartyPricingManager products={products} />}
               {activeTab === 'products' && (
                 <AdminProductManager 
                   products={products} 
@@ -397,15 +441,85 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
               {activeTab === 'orders' && (
                 <AdminOrderManager 
                   orders={orders} 
+                  products={products}
                   onUpdateStatus={(id, status) => handleSyncOperation(async () => {
+                    const order = orders.find(o => o.id === id);
+                    if (!order) return;
+
+                    // Kalika Coins Logic
+                    if (status === 'Delivered' && order.status !== 'Delivered') {
+                      // Credit coins (1 coin per 100 INR)
+                      const earned = Math.floor(order.total / 100);
+                      if (earned > 0 && order.userId) {
+                        const userDoc = doc(db, 'users', order.userId);
+                        const userRef = users.find(u => u.uid === order.userId);
+                        const currentPoints = userRef?.loyaltyPoints || 0;
+                        await updateDoc(userDoc, { loyaltyPoints: currentPoints + earned });
+                        await updateDoc(doc(db, 'orders', id), { earnedPoints: earned });
+                      }
+                    } else if (status === 'Cancelled' && order.status === 'Delivered') {
+                      // Take back coins if order was delivered but now cancelled
+                      const earned = order.earnedPoints || 0;
+                      if (earned > 0 && order.userId) {
+                        const userDoc = doc(db, 'users', order.userId);
+                        const userRef = users.find(u => u.uid === order.userId);
+                        const currentPoints = userRef?.loyaltyPoints || 0;
+                        await updateDoc(userDoc, { loyaltyPoints: Math.max(0, currentPoints - earned) });
+                        await updateDoc(doc(db, 'orders', id), { earnedPoints: 0 });
+                      }
+                    }
+
                     await updateDoc(doc(db, 'orders', id), { status });
                   })} 
+                  onDeliveredWithPayment={(id, receivedAmount) => handleSyncOperation(async () => {
+                    const order = orders.find(o => o.id === id);
+                    if (!order) return;
+                    
+                    const balance = receivedAmount - order.total;
+                    
+                    // Update Order
+                    await updateDoc(doc(db, 'orders', id), { 
+                      status: 'Delivered',
+                      receivedAmount
+                    });
+
+                    // Update User Wallet & Loyalty
+                    if (order.userId) {
+                      const userDoc = doc(db, 'users', order.userId);
+                      const userRef = users.find(u => u.uid === order.userId);
+                      const currentBalance = userRef?.walletBalance || 0;
+                      const currentPoints = userRef?.loyaltyPoints || 0;
+                      const earned = Math.floor(order.total / 100);
+
+                      await updateDoc(userDoc, {
+                        walletBalance: currentBalance + balance,
+                        loyaltyPoints: currentPoints + earned
+                      });
+                      
+                      await updateDoc(doc(db, 'orders', id), { earnedPoints: earned });
+                    }
+                  })}
                 />
               )}
               {activeTab === 'workflow' && (
                 <AdminOrderWorkflow 
                   orders={orders} 
                   onUpdateStatus={(id, status) => handleSyncOperation(async () => {
+                    const order = orders.find(o => o.id === id);
+                    if (!order) return;
+
+                    // Kalika Coins Logic
+                    if (status === 'Delivered' && order.status !== 'Delivered') {
+                      const earned = Math.floor(order.total / 100);
+                      if (earned > 0 && order.userId) {
+                        const userDoc = doc(db, 'users', order.userId);
+                        const userRef = users.find(u => u.uid === order.userId);
+                        const currentPoints = userRef?.loyaltyPoints || 0;
+                        await updateDoc(userDoc, { loyaltyPoints: currentPoints + earned });
+                        await updateDoc(doc(db, 'orders', id), { earnedPoints: earned });
+                      }
+                    }
+
                     await updateDoc(doc(db, 'orders', id), { status });
                   })} 
                 />
@@ -462,12 +576,28 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                 />
               )}
               {activeTab === 'bulk-enquiries' && <AdminBulkEnquiryManager />}
+              {activeTab === 'dues' && <AdminDuesManager />}
               {activeTab === 'settings' && <AdminStoreSettings />}
               {activeTab === 'storage' && <AdminStorageManager />}
             </motion.div>
           </AnimatePresence>
         </div>
       </main>
+
+      <AnimatePresence>
+        {selectedEnquiryForOrder && (
+          <AdminManualOrderCreator 
+            enquiry={selectedEnquiryForOrder}
+            products={products}
+            onClose={() => setSelectedEnquiryForOrder(null)}
+            onSuccess={() => {
+              setSelectedEnquiryForOrder(null);
+              setActiveTab('orders');
+              alert("Order created successfully!");
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -36,6 +36,62 @@ export const AdminStoreSettings: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  const toggleStore = async () => {
+    if (!settings) return;
+    const newStatus = !settings.isOpen;
+    setSettings(prev => prev ? { ...prev, isOpen: newStatus } : null);
+    try {
+      await setDoc(doc(db, 'settings', 'store'), {
+        isOpen: newStatus,
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (error) {
+      console.error("Failed to toggle store:", error);
+    }
+  };
+
+  const toggleAutoSchedule = async () => {
+    if (!settings) return;
+    const newStatus = !settings.autoSchedule;
+    setSettings(prev => prev ? { ...prev, autoSchedule: newStatus } : null);
+    try {
+      await setDoc(doc(db, 'settings', 'store'), {
+        autoSchedule: newStatus,
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (error) {
+      console.error("Failed to toggle schedule:", error);
+    }
+  };
+
+  const handleResetCatalog = async () => {
+    if (window.confirm("⚠️ DANGER: This will delete ALL products permanently. Proceed?")) {
+      const confirmText = window.prompt("Type 'DELETE CATALOG' to confirm permanent deletion of all products:");
+      if (confirmText === 'DELETE CATALOG') {
+        const { collection, getDocs, deleteDoc, doc, writeBatch } = await import('firebase/firestore');
+        const { db } = await import('../firebase');
+        setSaving(true);
+        try {
+          const snapshot = await getDocs(collection(db, 'products'));
+          // Firebase batch limit is 500
+          for (let i = 0; i < snapshot.docs.length; i += 500) {
+            const batch = writeBatch(db);
+            const chunk = snapshot.docs.slice(i, i + 500);
+            chunk.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
+          alert("Product Catalog reset successfully!");
+          window.location.reload();
+        } catch (error) {
+          console.error("Reset failed:", error);
+          alert("Failed to reset catalog. Please check permissions.");
+        } finally {
+          setSaving(false);
+        }
+      }
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!settings) return;
@@ -71,6 +127,29 @@ export const AdminStoreSettings: React.FC = () => {
       <div className="flex flex-col gap-2">
         <h2 className="text-3xl font-black text-gray-900 tracking-tight">Store Settings</h2>
         <p className="text-gray-500 font-medium">Manage store operating hours and availability status.</p>
+      </div>
+
+      <div className="bg-red-50 p-8 rounded-[40px] border border-red-100 mb-8 mt-4">
+        <div className="flex items-center gap-4 mb-4">
+          <div className="p-3 bg-white rounded-2xl text-red-500 shadow-sm">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-red-900 tracking-tight">Danger Zone</h3>
+            <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Permanent Store Reset</p>
+          </div>
+        </div>
+        <p className="text-sm font-bold text-red-600/70 mb-6 max-w-lg">
+          Going live? Resetting the catalog will permanently delete all demo products from your store.
+        </p>
+        <button 
+          type="button"
+          onClick={handleResetCatalog}
+          className="bg-red-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-red-600/20 hover:bg-black transition-all active:scale-95 disabled:opacity-50"
+          disabled={saving}
+        >
+          {saving ? 'Resetting...' : 'Reset Product Catalog'}
+        </button>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
@@ -171,27 +250,51 @@ export const AdminStoreSettings: React.FC = () => {
         {/* Status Toggle */}
         <div className="bg-white p-8 rounded-[40px] shadow-xl shadow-gray-200/50 border border-gray-100 space-y-6">
           <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${settings?.isOpen ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${settings?.isFunctionallyOpen ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
               <Store className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-xl font-black text-gray-900 tracking-tight">Store Status</h3>
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Main Store Access</h3>
               <p className="text-sm font-medium text-gray-500">Enable or disable the store for taking orders.</p>
             </div>
           </div>
 
           <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100">
-            <div className="space-y-1">
-              <span className={`text-xs font-black uppercase tracking-widest ${settings?.autoSchedule ? 'text-primary' : 'text-gray-400'}`}>
-                Automatic Schedule: {settings?.autoSchedule ? 'On' : 'Off'}
+            <div className="space-y-1 text-left">
+              <span className={`text-[10px] font-black uppercase tracking-widest ${settings?.isOpen ? 'text-green-600' : 'text-red-500'}`}>
+                Master Switch: {settings?.isOpen ? 'ON (OPEN)' : 'OFF (CLOSED)'}
               </span>
-              <p className="text-sm text-gray-500 font-medium">
-                {settings?.autoSchedule ? 'Store follows daily hours automatically.' : 'Store is open/closed strictly by manual toggle.'}
+              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                {settings?.isOpen ? 'Store is manually active.' : 'Store is manually closed (Overrides Schedule).'}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => setSettings(prev => prev ? { ...prev, autoSchedule: !prev.autoSchedule } : null)}
+              onClick={toggleStore}
+              className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                settings?.isOpen ? 'bg-green-500' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-8 w-8 transform rounded-full bg-white transition-transform duration-300 ${
+                  settings?.isOpen ? 'translate-x-11' : 'translate-x-1'
+                } shadow-md`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100">
+            <div className="space-y-1 text-left">
+              <span className={`text-[10px] font-black uppercase tracking-widest ${settings?.autoSchedule ? 'text-primary' : 'text-gray-400'}`}>
+                Automatic Schedule: {settings?.autoSchedule ? 'ENABLED' : 'DISABLED'}
+              </span>
+              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                {settings?.autoSchedule ? 'Follows Daily Hours Automatically.' : 'Accept Orders 24/7 (Ignore Hours).'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleAutoSchedule}
               className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
                 settings?.autoSchedule ? 'bg-primary' : 'bg-gray-300'
               }`}
@@ -199,30 +302,6 @@ export const AdminStoreSettings: React.FC = () => {
               <span
                 className={`inline-block h-8 w-8 transform rounded-full bg-white transition-transform duration-300 ${
                   settings?.autoSchedule ? 'translate-x-11' : 'translate-x-1'
-                } shadow-md`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100">
-            <div className="space-y-1">
-              <span className={`text-xs font-black uppercase tracking-widest ${settings?.isOpen ? 'text-green-600' : 'text-red-600'}`}>
-                Currently {settings?.isOpen ? 'Open' : 'Closed'}
-              </span>
-              <p className="text-sm text-gray-500 font-medium">
-                {settings?.isOpen ? 'Customers can browse and place orders.' : 'Customers can browse but cannot place orders.'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSettings(prev => prev ? { ...prev, isOpen: !prev.isOpen } : null)}
-              className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-                settings?.isOpen ? 'bg-primary' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-8 w-8 transform rounded-full bg-white transition-transform duration-300 ${
-                  settings?.isOpen ? 'translate-x-11' : 'translate-x-1'
                 } shadow-md`}
               />
             </button>

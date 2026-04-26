@@ -3,18 +3,24 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Mic, MicOff, Volume2, VolumeX, Loader2, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { Product } from '../types';
+import { Product, UserProfile } from '../types';
+import { answerAdminQuery } from '../services/geminiService';
+import { db, doc, setDoc, updateDoc, arrayUnion } from '../firebase';
 
 interface VoiceAssistantProps {
   onAddToCart: (productName: string) => boolean;
   onPlaceOrder: () => void;
+  onSearch: (query: string) => void;
+  user?: UserProfile;
+  cart: any[];
 }
 
-export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onPlaceOrder }) => {
+export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onPlaceOrder, onSearch, user, cart }) => {
   const { language, t, isVoiceEnabled, setIsVoiceEnabled } = useLanguage();
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
 
   const speak = useCallback((text: string) => {
     if (!isVoiceEnabled) return;
@@ -23,64 +29,151 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
     window.speechSynthesis.speak(utterance);
   }, [isVoiceEnabled, language]);
 
-  const processCommand = useCallback((text: string) => {
+  const processCommand = useCallback(async (text: string) => {
     const lowerText = text.toLowerCase().trim();
     console.log("Processing command:", lowerText);
     
-    // English Commands
-    if (language === 'en') {
-      if (lowerText.includes('fresh milk')) {
-        onAddToCart('Fresh Milk');
-        speak("Fresh milk added to cart");
-        setFeedback("Milk Added");
+    if (!lowerText) return;
+
+    const isHindi = language === 'hi';
+
+    // Command: Search
+    if (
+      lowerText.includes('search') || lowerText.includes('find') || lowerText.includes('खोजें') || lowerText.includes('ढूँढें') || lowerText.includes('दिखाओ')
+    ) {
+      const query = lowerText
+        .replace(/search for|search|find|please|show me|खोजें|ढूँढें|दिखाओ|कृपया|मुझे|दिखाएं|सर्च/g, '')
+        .trim();
+      
+      onSearch(query);
+      const msg = isHindi ? `${query} खोज रहा हूँ` : `Searching for ${query}`;
+      speak(msg);
+      setFeedback(msg);
+      return;
+    }
+    
+    // Command: Add to Cart
+    if (
+      (lowerText.includes('add') || lowerText.includes('put') || lowerText.includes('डालें') || lowerText.includes('जोड़ें') || lowerText.includes('लेना है')) &&
+      (lowerText.includes('cart') || lowerText.includes('basket') || lowerText.includes('कार्ट') || lowerText.includes('टोकरी'))
+    ) {
+      const productName = lowerText
+        .replace(/add|put|to my cart|to cart|in my cart|in cart|this|please|जोड़ें|डालें|कार्ट में|कार्ट|में|इसे|कृपया|टोकरी|आड|एक|दें/g, '')
+        .trim();
+      
+      const success = onAddToCart(productName);
+      if (success) {
+        setTimeout(() => {
+          const msg = isHindi ? "कार्ट में जोड़ दिया गया है" : t('addedToCart');
+          speak(msg);
+          setFeedback(msg);
+        }, 500);
+      } else {
+        const msg = isHindi ? "मुझे वह उत्पाद नहीं मिला।" : "I couldn't find that product.";
+        speak(msg);
+        setFeedback(msg);
+      }
+      return;
+    }
+
+    // Command: Wishlist
+    if (lowerText.includes('wishlist') || lowerText.includes('पसंद') || lowerText.includes('लिस्ट')) {
+      window.location.href = '/wishlist';
+      speak(isHindi ? "विशलिस्ट खोल रहा हूँ" : "Opening wishlist");
+      return;
+    }
+
+    // Command: Checkout / Place Order
+    if (lowerText.includes('order') || lowerText.includes('checkout') || lowerText.includes('खरीदें') || lowerText.includes('आर्डर')) {
+      if (cart.length === 0) {
+        const msg = isHindi ? "आपका कार्ट खाली है।" : "Your cart is empty. Please add items first.";
+        speak(msg);
+        setFeedback(msg);
         return;
       }
-      if ((lowerText.includes('add') || lowerText.includes('put')) && (lowerText.includes('cart') || lowerText.includes('basket'))) {
-        const productName = lowerText
-          .replace(/add|put|to my cart|to cart|in my cart|in cart|this|please/g, '')
-          .trim();
-        
-        const success = onAddToCart(productName);
-        if (success) {
-          setTimeout(() => {
-            speak(t('addedToCart'));
-            setFeedback(t('addedToCart'));
-          }, 500);
-        } else {
-          speak("I couldn't find that product. Please try again.");
-          setFeedback("Product not found");
-        }
-      } else if (lowerText.includes('place order') || lowerText.includes('order my cart') || lowerText.includes('checkout')) {
-        onPlaceOrder();
-        speak(t('voiceAskAddress'));
-        setFeedback(t('voiceAskAddress'));
-      }
-    } 
-    // Hindi Commands
-    else if (language === 'hi') {
-      // "कार्ट में जोड़ें", "इसे कार्ट में डालें", "दूध कार्ट में जोड़ें"
-      if ((lowerText.includes('जोड़ें') || lowerText.includes('डालें') || lowerText.includes('add')) && (lowerText.includes('कार्ट') || lowerText.includes('cart'))) {
-        const productName = lowerText
-          .replace(/जोड़ें|डालें|कार्ट में|कार्ट|में|इसे|कृपया|add|cart/g, '')
-          .trim();
-
-        const success = onAddToCart(productName);
-        if (success) {
-          setTimeout(() => {
-            speak("कार्ट में जोड़ दिया गया है");
-            setFeedback("कार्ट में जोड़ा गया");
-          }, 500);
-        } else {
-          speak("मुझे वह उत्पाद नहीं मिला। कृपया फिर से प्रयास करें।");
-          setFeedback("उत्पाद नहीं मिला");
-        }
-      } else if (lowerText.includes('ऑर्डर दें') || lowerText.includes('आर्डर') || lowerText.includes('चेकआउट') || lowerText.includes('order')) {
-        onPlaceOrder();
-        speak("कृपया अपना पता बताएं");
-        setFeedback("पता बताएं");
-      }
+      onPlaceOrder();
+      const msg = isHindi ? "कृपया चेकआउट पूरा करें" : "Opening checkout";
+      speak(msg);
+      setFeedback(msg);
+      return;
     }
-  }, [language, onAddToCart, onPlaceOrder, speak, t]);
+
+    // Command: Mapping/Help Navigation
+    if (lowerText.includes('support') || lowerText.includes('help') || lowerText.includes('मदद')) {
+      window.location.href = '/support';
+      speak(isHindi ? "सपोर्ट पेज पर जा रहे हैं" : "Opening support page");
+      return;
+    }
+
+    // Command: Address
+    if (lowerText.includes('address') || lowerText.includes('पता')) {
+      window.location.href = '/addresses';
+      speak(isHindi ? "आपका पता दिखा रहा हूँ" : "Showing your addresses");
+      return;
+    }
+
+    // Command: Navigation
+    if (lowerText.includes('home') || lowerText.includes('घर') || lowerText.includes('शुरुआत')) {
+      window.location.href = '/';
+      speak(isHindi ? "होम पेज" : "Going home");
+      return;
+    }
+
+    if (lowerText.includes('profile') || lowerText.includes('प्रोफाइल') || lowerText.includes('खाता')) {
+      window.location.href = '/profile';
+      speak(isHindi ? "आपकी प्रोफाइल" : "Opening profile");
+      return;
+    }
+
+    if (lowerText.includes('orders') || lowerText.includes('इतिहास') || lowerText.includes('history')) {
+      window.location.href = '/profile?tab=orders';
+      speak(isHindi ? "आर्डर इतिहास" : "Showing your orders history");
+      return;
+    }
+
+    if (lowerText.includes('categories') || lowerText.includes('कैटेगरी')) {
+      window.location.href = '/items';
+      speak(isHindi ? "सभी कैटेगरी" : "Showing all categories");
+      return;
+    }
+
+    // Default: AI Knowledge Support
+    setIsAiProcessing(true);
+    setFeedback("Processing with Kalika AI...");
+    try {
+      const resp = await answerAdminQuery(text, { user, language });
+      setFeedback(null);
+      // Speak the AI response
+      speak(resp);
+      setFeedback(resp);
+
+      // Sync to admin support if logged in
+      if (user?.uid) {
+        const timestamp = Date.now();
+        await setDoc(doc(db, 'support_queries', user.uid), {
+          userId: user.uid,
+          userName: user.name,
+          userEmail: user.email,
+          userPhone: user.phone || 'Not provided',
+          status: 'pending',
+          updatedAt: timestamp,
+          createdAt: timestamp
+        }, { merge: true });
+
+        await updateDoc(doc(db, 'support_queries', user.uid), {
+          chatHistory: arrayUnion(
+            { role: 'user', content: `[Voice] ${text}` },
+            { role: 'ai', content: resp }
+          )
+        });
+      }
+    } catch (e) {
+      console.error("AI Assistant error:", e);
+      setFeedback(t('voiceError'));
+    } finally {
+      setIsAiProcessing(false);
+    }
+  }, [cart, language, onAddToCart, onPlaceOrder, speak, t, user]);
 
   useEffect(() => {
     if (!isListening) return;

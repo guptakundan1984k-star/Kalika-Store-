@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { UserProfile, Order, Address, BulkEnquiry } from '../types';
+import { UserProfile, Order, Address, BulkEnquiry, FeatureRequest } from '../types';
 import { SUPPORT_EMAIL } from '../constants';
 import { 
   User, Mail, Phone, MapPin, Package, LogOut, 
   ChevronRight, ShoppingBag, Heart, Plus, Trash2, 
   Home, Briefcase, Map as MapIcon, Clock, CheckCircle, Truck, Package as PackageIcon, ArrowRight, LayoutDashboard,
   HelpCircle, MessageSquare, Shield, Lock, Sparkles, FileText, Eye, EyeOff,
-  Image as ImageIcon, X, Languages, Volume2, VolumeX, Smartphone
+  Image as ImageIcon, X, Languages, Volume2, VolumeX, Smartphone, Loader2, Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth, signOut, db, doc, updateDoc, collection, addDoc, setDoc, onSnapshot } from '../firebase';
+import { auth, signOut, db, doc, updateDoc, collection, addDoc, setDoc, onSnapshot, query, where } from '../firebase';
 import { useNavigate, Link } from 'react-router-dom';
 import { answerAdminQuery } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
@@ -379,7 +379,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <User className="w-12 h-12" />
               </div>
               <h2 className="text-2xl font-black text-gray-900 mb-1">{user.name}</h2>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">{user.role === 'admin' ? 'Store Administrator' : 'Valued Customer'}</p>
+              <p className="text-xs font-bold text-gray-600 uppercase tracking-widest mb-6">Valued Customer</p>
               
               <div className="space-y-4 text-left">
                 <div className="flex items-center justify-between">
@@ -474,12 +474,12 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                       <p className="text-[10px] font-bold text-amber-600/60 mb-1 uppercase tracking-widest">Available Coins</p>
                     </div>
                     <p className="text-[10px] font-medium text-amber-600/80 mt-2">
-                      Value: ₹{((user.loyaltyPoints || 0) * 0.10).toFixed(2)}
+                      Value: ₹{((user.loyaltyPoints || 0) * 1.00).toFixed(2)}
                     </p>
                     <div className="mt-4 pt-4 border-t border-amber-200/30">
                       <p className="text-[9px] font-bold text-amber-600/60 uppercase tracking-widest leading-tight">
-                        Shop for ₹100 to earn 1 coin.<br/>
-                        1 coin = ₹0.10 discount.
+                        Shop for ₹100 to earn 1 Kalika Coin.<br/>
+                        1 Kalika Coin = ₹1.00 instant discount.
                       </p>
                     </div>
                   </div>
@@ -537,10 +537,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <ChevronRight className="w-4 h-4" />
               </button>
               <button 
-                onClick={() => setActiveTab('addresses')}
-                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 ${
-                  activeTab === 'addresses' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'
-                }`}
+                onClick={() => navigate('/addresses')}
+                className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
               >
                 <div className="flex items-center gap-3">
                   <MapPin className="w-5 h-5" />
@@ -549,10 +547,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <ChevronRight className="w-4 h-4" />
               </button>
               <button 
-                onClick={() => setActiveTab('help')}
-                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 ${
-                  activeTab === 'help' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'
-                }`}
+                onClick={() => navigate('/help')}
+                className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
               >
                 <div className="flex items-center gap-3">
                   <HelpCircle className="w-5 h-5" />
@@ -561,10 +557,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <ChevronRight className="w-4 h-4" />
               </button>
               <button 
-                onClick={() => setActiveTab('wishlist')}
-                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 ${
-                  activeTab === 'wishlist' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'
-                }`}
+                onClick={() => navigate('/wishlist')}
+                className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
               >
                 <div className="flex items-center gap-3">
                   <Heart className="w-5 h-5" />
@@ -573,14 +567,22 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <ChevronRight className="w-4 h-4" />
               </button>
               <button 
-                onClick={() => setActiveTab('bulk')}
-                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 ${
-                  activeTab === 'bulk' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-500 hover:bg-gray-50'
-                }`}
+                onClick={() => navigate('/bulk-enquiry')}
+                className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
               >
                 <div className="flex items-center gap-3">
                   <Briefcase className="w-5 h-5" />
                   Bulk Enquiry
+                </div>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => navigate('/photo-bill')}
+                className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-primary bg-primary/5 hover:bg-primary/10 transition-all border border-primary/10 active:scale-95"
+              >
+                <div className="flex items-center gap-3">
+                  <ImageIcon className="w-5 h-5" />
+                  Photo Bill System
                 </div>
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -619,7 +621,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
             {/* Quick Actions Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <button 
-                onClick={() => setActiveTab('help')}
+                onClick={() => navigate('/help')}
                 className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95"
               >
                 <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
@@ -629,7 +631,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
               </button>
 
               <button 
-                onClick={() => setActiveTab('wishlist')}
+                onClick={() => navigate('/wishlist')}
                 className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95"
               >
                 <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
@@ -675,13 +677,33 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
               </button>
 
               <button 
-                onClick={() => setActiveTab('bulk')}
+                onClick={() => navigate('/bulk-enquiry')}
                 className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95"
               >
                 <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
                   <Briefcase className="w-6 h-6" />
                 </div>
                 <span className="text-xs font-black uppercase tracking-widest text-gray-900">Bulk Enquiry</span>
+              </button>
+
+              <button 
+                onClick={() => navigate('/photo-bill')}
+                className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95"
+              >
+                <div className="w-12 h-12 bg-cyan-50 rounded-2xl flex items-center justify-center text-cyan-600 group-hover:scale-110 transition-transform">
+                  <ImageIcon className="w-6 h-6" />
+                </div>
+                <span className="text-xs font-black uppercase tracking-widest text-gray-900">Photo Bill</span>
+              </button>
+
+              <button 
+                onClick={() => navigate('/addresses')}
+                className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95"
+              >
+                <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600 group-hover:scale-110 transition-transform">
+                  <MapPin className="w-6 h-6" />
+                </div>
+                <span className="text-xs font-black uppercase tracking-widest text-gray-900">Addresses</span>
               </button>
             </div>
 

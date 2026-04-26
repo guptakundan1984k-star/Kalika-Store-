@@ -6,15 +6,17 @@ import {
 import { 
   TrendingUp, Users, ShoppingBag, DollarSign, 
   ArrowUpRight, ArrowDownRight, ArrowRight, Package, Clock,
-  Shield, BarChart3, Calendar, RefreshCw, Download, Ticket, Layout, AlertCircle
+  Shield, BarChart3, Calendar, RefreshCw, Download, Ticket, Layout, AlertCircle,
+  Camera, Image as ImageIcon, Sparkles, Loader2, Upload, Link as LinkIcon, Save, Trash2, Plus, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, collection, onSnapshot, query, orderBy, handleFirestoreError, OperationType } from '../firebase';
+import { db, collection, onSnapshot, query, orderBy, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL } from '../firebase';
 import { Order, Product, UserProfile } from '../types';
 import { AdminOrderManager } from './AdminOrderManager';
 import { AdminProductManager } from './AdminProductManager';
 import { AdminUserManager } from './AdminUserManager';
 import { updateDoc, doc, deleteDoc, addDoc } from 'firebase/firestore';
+import { aiService } from '../services/aiService';
 
 const COLORS = ['#f97316', '#facc15', '#fb923c', '#fde047'];
 
@@ -34,7 +36,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
   const [refreshKey, setRefreshKey] = useState(0);
   const [requests, setRequests] = useState<any[]>([]);
   const [selectedNavigationTab, setSelectedNavigationTab] = useState('orders');
+  const [showPhotoAlertFix, setShowPhotoAlertFix] = useState(false);
+  const [showPriceAlertList, setShowPriceAlertList] = useState(false);
+  const [showContinuousPhotoAdder, setShowContinuousPhotoAdder] = useState(false);
+  const [continuousPhotos, setContinuousPhotos] = useState<{file: File, preview: string, productName?: string, matchedId?: string}[]>([]);
+  const [isProcessingBatch, setIsProcessingBatch] = useState(false);
+  const [fixingProduct, setFixingProduct] = useState<Product | null>(null);
+  const [newImageUrl, setNewImageUrl] = useState('');
+  const [isFixing, setIsFixing] = useState(false);
   const widgetsRef = React.useRef<HTMLDivElement>(null);
+
+  const productsMissingPhotos = products.filter(p => !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder'));
 
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
@@ -346,7 +358,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
                 </div>
               </div>
               <button 
-                onClick={() => onTabChange?.('products')}
+                onClick={() => setShowPriceAlertList(true)}
                 className="bg-red-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-600/20 hover:bg-red-700"
               >
                 Fix ({products.filter(p => !p.price || p.price <= 0).length})
@@ -354,7 +366,507 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
             </div>
           )}
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-[32px] flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600">
+                <Camera className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-lg font-black text-indigo-900">Continuous Adder</h4>
+                <p className="text-sm font-bold text-indigo-600/70 uppercase tracking-widest">Bulk Photo Upload</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowContinuousPhotoAdder(true)}
+              className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-600/20 hover:bg-black transition-all"
+            >
+              Add Photos
+            </button>
+          </div>
+
+          <div className="bg-gray-900 border border-black p-6 rounded-[32px] flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-white">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-lg font-black text-white">Clean Store</h4>
+                <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Reset Catalog</p>
+              </div>
+            </div>
+            <button 
+              onClick={async () => {
+              if (window.confirm("⚠️ DANGER: This will delete ALL products permanently. Proceed?")) {
+                const confirmInput = window.prompt("Type 'DELETE' to confirm:");
+                if (confirmInput === 'DELETE') {
+                  const { writeBatch } = await import('firebase/firestore');
+                  setIsFixing(true);
+                  try {
+                    const batch = writeBatch(db);
+                    products.forEach(p => {
+                      batch.delete(doc(db, 'products', p.id));
+                    });
+                    await batch.commit();
+                    alert("Catalog cleared successfully!");
+                  } catch (e) {
+                    console.error("Failed to clear catalog", e);
+                    alert("Some items could not be deleted. Please check permissions.");
+                  } finally {
+                    setIsFixing(false);
+                  }
+                }
+              }
+            }}
+              className="bg-red-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-600/20 hover:bg-black transition-all"
+            >
+              Clear All
+            </button>
+          </div>
+        </div>
+
+        {productsMissingPhotos.length > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="bg-orange-50 border border-orange-100 p-6 rounded-[32px] flex items-center justify-between gap-6 shadow-sm"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600">
+                <Camera className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-lg font-black text-orange-900">Photo Alert</h4>
+                <p className="text-sm font-bold text-orange-600/70 uppercase tracking-widest">
+                  {productsMissingPhotos.length} Items need professional photos
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button 
+                onClick={async () => {
+                  if (!window.confirm(`Auto-fix ${productsMissingPhotos.length} photos using AI Search?`)) return;
+                  setIsFixing(true);
+                  for (const p of productsMissingPhotos) {
+                    try {
+                      const urls = await aiService.findProductImages(p.name, p.category);
+                      if (urls.length > 0) {
+                        await updateDoc(doc(db, 'products', p.id), {
+                          image: urls[0],
+                          primaryImage: urls[0],
+                          images: urls
+                        });
+                      }
+                    } catch (e) {
+                      console.error(`Fix failed for ${p.name}`, e);
+                    }
+                    await new Promise(r => setTimeout(r, 600));
+                  }
+                  setIsFixing(false);
+                  alert("Auto-fix complete!");
+                }}
+                disabled={isFixing}
+                className="bg-[#00AEEF] text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:bg-black transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isFixing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                AI Auto-Fix
+              </button>
+              <button 
+                onClick={() => setShowPhotoAlertFix(true)}
+                className="bg-white text-gray-900 border border-gray-200 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all flex items-center gap-2"
+              >
+                <Camera className="w-4 h-4 text-primary" />
+                Add Photos Manually
+              </button>
+            </div>
+          </motion.div>
+        )}
       </div>
+
+      <AnimatePresence>
+        {showPriceAlertList && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <div className="bg-white w-full max-w-2xl max-h-[80vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden">
+               <div className="p-8 border-b border-gray-100 flex items-center justify-between">
+                 <div>
+                   <h3 className="text-2xl font-black text-gray-900 tracking-tight">Price Incompleteness</h3>
+                   <p className="text-xs font-black text-red-500 uppercase tracking-widest">Items currently missing a sale price</p>
+                 </div>
+                 <button onClick={() => setShowPriceAlertList(false)} className="p-3 bg-gray-50 rounded-xl text-gray-400 hover:text-red-500 transition-all">
+                   <Clock className="w-6 h-6 rotate-45" />
+                 </button>
+               </div>
+               <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                 {products.filter(p => !p.price || p.price <= 0).map(p => (
+                   <div key={p.id} className="bg-gray-50 p-4 rounded-3xl border border-gray-100 flex items-center justify-between group">
+                     <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 bg-white rounded-xl overflow-hidden border border-gray-100">
+                         <img src={p.image} className="w-full h-full object-cover" alt="" />
+                       </div>
+                       <div>
+                         <p className="text-sm font-black text-gray-900">{p.name}</p>
+                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{p.category}</p>
+                       </div>
+                     </div>
+                     <div className="flex items-center gap-2">
+                       <input 
+                        type="number"
+                        placeholder="Set Price"
+                        onBlur={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (val > 0) {
+                            updateDoc(doc(db, 'products', p.id), { price: val });
+                          }
+                        }}
+                        className="w-24 bg-white border border-gray-200 rounded-xl px-4 py-2 text-xs font-black focus:ring-2 focus:ring-primary/20 outline-none"
+                       />
+                       <button 
+                        onClick={() => {
+                          setSelectedNavigationTab('products');
+                          onTabChange?.('products');
+                          setShowPriceAlertList(false);
+                        }}
+                        className="p-2 bg-white border border-gray-200 text-gray-400 rounded-xl hover:text-primary transition-all"
+                       >
+                         <ArrowUpRight className="w-5 h-5" />
+                       </button>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {showContinuousPhotoAdder && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <div className="bg-white w-full max-w-5xl h-[85vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden">
+               <div className="p-8 border-b border-gray-100 flex items-center justify-between bg-white z-10">
+                 <div>
+                   <h3 className="text-2xl font-black text-gray-900 tracking-tight">Continuous Photo Adder</h3>
+                   <p className="text-xs font-black text-indigo-500 uppercase tracking-widest">Select multiple photos, preview, and match to inventory</p>
+                 </div>
+                 <div className="flex items-center gap-4">
+                   <label className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-600/20 hover:scale-105 transition-all cursor-pointer">
+                     <Plus className="w-4 h-4" />
+                     Select Photos
+                     <input 
+                      type="file" 
+                      multiple 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        const newEntries = files.map(file => ({
+                          file,
+                          preview: URL.createObjectURL(file)
+                        }));
+                        setContinuousPhotos(prev => [...prev, ...newEntries]);
+                      }}
+                     />
+                   </label>
+                   <button 
+                    onClick={async () => {
+                      if (continuousPhotos.length === 0) return;
+                      const matchedOnes = continuousPhotos.filter(p => !!p.matchedId);
+                      if (matchedOnes.length === 0) {
+                        alert("Please match at least one photo to a product first.");
+                        return;
+                      }
+
+                      setIsProcessingBatch(true);
+                      try {
+                        for (const item of matchedOnes) {
+                          const product = products.find(p => p.id === item.matchedId);
+                          const hasRealPhoto = product?.image && !product.image.includes('picsum.photos') && !product.image.includes('placeholder');
+                          
+                          if (hasRealPhoto) {
+                            if (!window.confirm(`Product "${product?.name}" already has a professional photo. Do you want to replace it?`)) {
+                              continue;
+                            }
+                          }
+
+                          const storageRef = ref(storage, `products/${item.matchedId}/${Date.now()}_${item.file.name}`);
+                          const snapshot = await uploadBytes(storageRef, item.file);
+                          const url = await getDownloadURL(snapshot.ref);
+                          
+                          await updateDoc(doc(db, 'products', item.matchedId!), {
+                            image: url,
+                            updatedAt: Date.now()
+                          });
+                        }
+                        alert(`Successfully processed ${matchedOnes.length} photos!`);
+                        setContinuousPhotos([]);
+                        setShowContinuousPhotoAdder(false);
+                      } catch (e) {
+                        console.error("Batch upload failed", e);
+                        alert("Batch upload failed. Please try again.");
+                      } finally {
+                        setIsProcessingBatch(false);
+                      }
+                    }}
+                    disabled={continuousPhotos.length === 0 || isProcessingBatch}
+                    className="bg-black text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-black/20 hover:bg-primary transition-all disabled:opacity-50"
+                   >
+                     {isProcessingBatch ? (
+                       <span className="flex items-center gap-2">
+                         <Loader2 className="w-4 h-4 animate-spin" />
+                         PROCESSING...
+                       </span>
+                     ) : (
+                       <span className="flex items-center gap-2">
+                         <Save className="w-4 h-4" />
+                         Process & Save ({continuousPhotos.length})
+                       </span>
+                     )}
+                   </button>
+                   <button onClick={() => {
+                     setShowContinuousPhotoAdder(false);
+                     setContinuousPhotos([]);
+                   }} className="p-3 bg-gray-50 rounded-xl hover:text-red-500 transition-all">
+                     <X className="w-6 h-6" />
+                   </button>
+                 </div>
+               </div>
+               
+                <div className="flex-1 overflow-y-auto p-4 md:p-12 bg-gray-50/50">
+                  {continuousPhotos.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center opacity-20 text-center">
+                      <ImageIcon className="w-24 h-24 mb-6" />
+                      <h4 className="text-2xl font-black uppercase tracking-widest">No photos selected</h4>
+                      <p className="text-sm font-bold uppercase tracking-widest">Batch select product photos to begin</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                      {continuousPhotos.map((item, idx) => {
+                        const matchedProduct = products.find(p => p.id === item.matchedId);
+                        const hasExistingPhoto = matchedProduct?.image && !matchedProduct.image.includes('picsum.photos') && !matchedProduct.image.includes('placeholder');
+                        
+                        return (
+                          <motion.div 
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            key={idx}
+                            className={`group relative bg-white rounded-3xl border-2 shadow-lg overflow-hidden flex flex-col transition-all ${item.matchedId ? (hasExistingPhoto ? 'border-orange-400' : 'border-green-400') : 'border-white'}`}
+                          >
+                            <div className="aspect-square relative overflow-hidden bg-gray-100">
+                              <img src={item.preview} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="" />
+                              <button 
+                                onClick={() => setContinuousPhotos(prev => prev.filter((_, i) => i !== idx))}
+                                className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-xl shadow-lg hover:scale-110 transition-all z-20"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                              {hasExistingPhoto && (
+                                <div className="absolute top-2 left-2 bg-orange-500 text-white p-1 rounded-lg shadow-lg z-20" title="Item already has photo">
+                                  <AlertCircle className="w-3 h-3 animate-pulse" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-2 space-y-1.5">
+                               <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest truncate">{item.file.name}</p>
+                               <select 
+                                 className="w-full bg-gray-100 border-none rounded-xl px-2 py-1.5 text-[10px] font-black focus:ring-2 focus:ring-indigo-500 outline-none"
+                                 onChange={(e) => {
+                                   const newPhotos = [...continuousPhotos];
+                                   newPhotos[idx].matchedId = e.target.value;
+                                   setContinuousPhotos(newPhotos);
+                                 }}
+                                 value={item.matchedId || ""}
+                               >
+                                 <option value="">Match Product...</option>
+                                 {products.map(p => (
+                                   <option key={p.id} value={p.id}>{p.name}</option>
+                                 ))}
+                               </select>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+            </div>
+          </motion.div>
+        )}
+
+        {showPhotoAlertFix && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <div className="bg-white w-full max-w-4xl max-h-[80vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden">
+              <div className="p-8 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">Professional Photo Fixer</h3>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Identify & replace placeholder images</p>
+                </div>
+                <button onClick={() => setShowPhotoAlertFix(false)} className="p-3 bg-gray-50 rounded-2xl hover:text-red-500 transition-all">
+                  <Clock className="w-6 h-6 rotate-45" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 scrollbar-hide">
+                {productsMissingPhotos.map(product => (
+                  <motion.div 
+                    layout
+                    key={product.id}
+                    className="group bg-gray-50 rounded-[32px] p-4 border border-gray-100 hover:border-[#00AEEF]/50 transition-all shadow-sm hover:shadow-lg"
+                  >
+                    <div className="aspect-square rounded-2xl overflow-hidden mb-4 bg-white relative border border-gray-100">
+                      <img src={product.image} className="w-full h-full object-cover grayscale opacity-50" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Camera className="w-10 h-10 text-gray-200" />
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <h5 className="font-black text-gray-900 leading-tight line-clamp-1">{product.name}</h5>
+                        <p className="text-[10px] font-black text-[#00AEEF] uppercase tracking-widest">{product.category}</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <button 
+                          onClick={() => {
+                            setFixingProduct(product);
+                            setNewImageUrl('');
+                          }}
+                          className="w-full bg-white border border-gray-200 p-3 rounded-xl flex flex-col items-center gap-1 hover:border-[#00AEEF] transition-all group/btn"
+                        >
+                          <Upload className="w-4 h-4 text-gray-400 group-hover/btn:text-[#00AEEF]" />
+                          <span className="text-[8px] font-black uppercase text-gray-400">Manual</span>
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            try {
+                              setFixingProduct(product);
+                              setIsFixing(true);
+                              const urls = await aiService.findProductImages(product.name, product.category);
+                              if (urls.length > 0) {
+                                await updateDoc(doc(db, 'products', product.id), {
+                                  image: urls[0],
+                                  primaryImage: urls[0],
+                                  images: urls
+                                });
+                                alert(`Updated photo for ${product.name}`);
+                              } else {
+                                alert("AI could not find an image for this item.");
+                              }
+                            } catch (e) {
+                              console.error(e);
+                            } finally {
+                              setFixingProduct(null);
+                              setIsFixing(false);
+                            }
+                          }}
+                          disabled={isFixing}
+                          className="w-full bg-[#00AEEF]/10 p-3 rounded-xl flex flex-col items-center gap-1 hover:bg-[#00AEEF] hover:text-white transition-all group/btn disabled:opacity-50"
+                        >
+                          {isFixing && fixingProduct?.id === product.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-[#00AEEF] group-hover/btn:text-white" />}
+                          <span className="text-[8px] font-black uppercase text-[#00AEEF] group-hover/btn:text-white">AI Search</span>
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {fixingProduct && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl p-10 space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">Update Photo</h3>
+                  <p className="text-sm font-bold text-gray-400">For {fixingProduct.name}</p>
+                </div>
+                <button onClick={() => setFixingProduct(null)} className="p-2 text-gray-400 hover:text-red-500">
+                  <Trash2 className="w-6 h-6 rotate-45" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Paste Image URL</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text"
+                      value={newImageUrl}
+                      onChange={(e) => setNewImageUrl(e.target.value)}
+                      placeholder="https://example.com/image.jpg"
+                      className="flex-1 bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all"
+                    />
+                    <button 
+                      onClick={async () => {
+                        if (newImageUrl) {
+                          await updateDoc(doc(db, 'products', fixingProduct.id), { image: newImageUrl, primaryImage: newImageUrl });
+                          setFixingProduct(null);
+                        }
+                      }}
+                      className="bg-primary text-white p-4 rounded-2xl hover:bg-primary-dark transition-all"
+                    >
+                      <Save className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-100"></div>
+                  </div>
+                  <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest">
+                    <span className="bg-white px-4 text-gray-400">or</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Upload File</label>
+                  <label className="w-full h-32 bg-gray-50 border-4 border-dashed border-gray-100 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition-all group">
+                    <Upload className="w-8 h-8 text-gray-300 group-hover:text-primary transition-colors" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-2">Tap to select photo</span>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setIsFixing(true);
+                          const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
+                          await uploadBytes(storageRef, file);
+                          const url = await getDownloadURL(storageRef);
+                          await updateDoc(doc(db, 'products', fixingProduct.id), { image: url, primaryImage: url });
+                          setIsFixing(false);
+                          setFixingProduct(null);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {stats.map((stat) => (
@@ -483,7 +995,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
 
         <div className="bg-gray-50 rounded-[40px] border border-gray-100 p-2">
           <div className="max-h-[400px] overflow-y-auto p-4 space-y-4 scrollbar-hide">
-            <div className="bg-gradient-to-br from-primary to-orange-600 p-8 rounded-[32px] text-white shadow-xl shadow-primary/20 flex items-center justify-between gap-6">
+            <div className="bg-gradient-to-br from-[#00AEEF] to-blue-600 p-8 rounded-[32px] text-white shadow-xl shadow-blue-600/20 flex items-center justify-between gap-6">
               <div className="flex items-center gap-6">
                 <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
                   <Ticket className="w-8 h-8" />
@@ -494,14 +1006,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
                 </div>
               </div>
               <button 
-                onClick={() => setActiveTab('coupons')}
-                className="bg-white text-primary px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all hover:bg-gray-100 active:scale-95 shrink-0"
+                onClick={() => onTabChange?.('coupons')}
+                className="bg-white text-blue-600 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all hover:bg-gray-100 active:scale-95 shrink-0"
               >
                 Manage
               </button>
             </div>
 
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-8 rounded-[32px] text-white shadow-xl shadow-blue-600/20 flex items-center justify-between gap-6">
+            <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-8 rounded-[32px] text-white shadow-xl shadow-indigo-600/20 flex items-center justify-between gap-6">
               <div className="flex items-center gap-6">
                 <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
                   <Users className="w-8 h-8" />
@@ -512,14 +1024,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
                 </div>
               </div>
               <button 
-                onClick={() => setActiveTab('users')}
-                className="bg-white text-blue-600 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all hover:bg-gray-100 active:scale-95 shrink-0"
+                onClick={() => onTabChange?.('users')}
+                className="bg-white text-indigo-600 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all hover:bg-gray-100 active:scale-95 shrink-0"
               >
                 Manage
               </button>
             </div>
 
-            <div className="bg-gradient-to-br from-purple-600 to-pink-600 p-8 rounded-[32px] text-white shadow-xl shadow-purple-600/20 flex items-center justify-between gap-6">
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-8 rounded-[32px] text-white shadow-xl shadow-emerald-600/20 flex items-center justify-between gap-6">
               <div className="flex items-center gap-6">
                 <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
                   <Package className="w-8 h-8" />
@@ -530,8 +1042,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
                 </div>
               </div>
               <button 
-                onClick={() => setActiveTab('products')}
-                className="bg-white text-purple-600 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all hover:bg-gray-100 active:scale-95 shrink-0"
+                onClick={() => onTabChange?.('products')}
+                className="bg-white text-emerald-600 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all hover:bg-gray-100 active:scale-95 shrink-0"
               >
                 Manage
               </button>

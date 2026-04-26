@@ -15,6 +15,7 @@ export interface Product {
   reviewCount?: number;
   weight?: string; // e.g., "500g", "1kg"
   tag?: 'Bestseller' | 'Top Rated' | 'New Arrival' | 'Trending';
+  barcode?: string;
   variations?: {
     sizes?: string[];
     colors?: string[];
@@ -46,8 +47,11 @@ export interface Category {
   icon: string;
 }
 
+export type ProductUnit = 'Piece' | 'Kg' | 'Gm' | 'Litre' | 'Ml' | 'Pack' | 'Box';
+
 export interface CartItem extends Product {
   quantity: number;
+  selectedUnit?: string;
   selectedVariations?: {
     size?: string;
     color?: string;
@@ -60,7 +64,7 @@ export interface Order {
   userId: string;
   items: CartItem[];
   total: number;
-  status: 'Pending' | 'Order Received' | 'Packed' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Order Received' | 'Packaging' | 'Packed' | 'Out for Delivery' | 'Ready to Pick Up' | 'Delivered' | 'Cancelled';
   deliveryType: 'Takeaway' | 'Delivery';
   userName?: string;
   userPhone?: string;
@@ -79,8 +83,10 @@ export interface Order {
   prescriptionImage?: string;
   earnedPoints?: number;
   redeemedPoints?: number;
+  receivedAmount?: number;
   estimatedDelivery?: number;
   isPreOrder?: boolean;
+  cancellationReason?: string;
   tracking?: {
     status: string;
     timestamp: number;
@@ -121,6 +127,19 @@ export interface UserProfile {
   wishlist?: string[]; // Array of product IDs
   lastActiveAt?: number;
   loyaltyPoints?: number;
+  walletBalance?: number; // can be negative for dues
+  customPrices?: Record<string, number>; // productId -> custom price
+  introSeen?: boolean;
+}
+
+export interface Due {
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+  amount: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface BulkEnquiry {
@@ -131,16 +150,18 @@ export interface BulkEnquiry {
   phone: string;
   email: string;
   message: string;
-  status: 'Pending' | 'Contacted' | 'Closed';
+  billUrl?: string;
+  status: 'Pending' | 'Contacted' | 'Closed' | 'Accepted';
   createdAt: number;
 }
 
 export interface Banner {
   id: string;
-  image: string;
+  image: string; // Also holds video URL
   title: string;
   link?: string;
   active: boolean;
+  type?: 'image' | 'video';
 }
 
 export interface Coupon {

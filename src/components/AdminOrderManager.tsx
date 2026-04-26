@@ -3,18 +3,20 @@ import {
   Search, Filter, Eye, CheckCircle, Truck, Package, Clock, 
   ShieldCheck, XCircle, MoreVertical, ArrowUpRight, ArrowDownRight, Calendar,
   Trash2, FileText, Download, CheckSquare, Square, Bluetooth, Printer, Sparkles, Edit2, Save,
-  MapPin, CheckCircle2, ShoppingBag, Navigation
+  MapPin, CheckCircle2, ShoppingBag, Navigation, Plus, Minus, AlertCircle, IndianRupee
 } from 'lucide-react';
-import { Order } from '../types';
+import { Order, Product } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, doc, deleteDoc, updateDoc } from '../firebase';
+import { db, doc, deleteDoc, updateDoc, collection, addDoc } from '../firebase';
 
 interface AdminOrderManagerProps {
   orders: Order[];
+  products: Product[];
   onUpdateStatus: (id: string, status: Order['status']) => void;
+  onDeliveredWithPayment?: (id: string, receivedAmount: number) => void;
 }
 
-export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, onUpdateStatus }) => {
+export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, products, onUpdateStatus, onDeliveredWithPayment }) => {
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [pinInput, setPinInput] = useState('');
@@ -23,6 +25,65 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [isCleaningUp, setIsCleaningUp] = useState(false);
+  const [isCollectingPayment, setIsCollectingPayment] = useState(false);
+  const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
+  const [receivedAmount, setReceivedAmount] = useState<number>(0);
+
+  // Manual Order State
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [manualOrder, setManualOrder] = useState<{
+    customerName: string;
+    phone: string;
+    address: string;
+    items: { id: string, name: string, price: number, quantity: number, image: string }[];
+  }>({
+    customerName: '',
+    phone: '',
+    address: '',
+    items: []
+  });
+  const [manualSearch, setManualSearch] = useState('');
+
+  const handleCreateManualOrder = async () => {
+    if (!manualOrder.customerName || !manualOrder.phone || !manualOrder.address || manualOrder.items.length === 0) {
+      alert("Please fill all customer details and add at least one item.");
+      return;
+    }
+
+    const total = manualOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const pin = Math.floor(1000 + Math.random() * 9000).toString();
+
+    const newOrder: Order = {
+      id: "MAN-" + Math.random().toString(36).substr(2, 6).toUpperCase(),
+      userId: "manual-" + manualOrder.phone,
+      userName: manualOrder.customerName,
+      userPhone: manualOrder.phone,
+      items: manualOrder.items.map(item => ({
+        ...item,
+        selectedUnit: 'Piece', // Default
+        total: item.price * item.quantity
+      })) as any,
+      total,
+      status: 'Pending',
+      deliveryType: 'Delivery',
+      address: {
+        manual: manualOrder.address
+      },
+      paymentMethod: 'COD',
+      pin,
+      createdAt: Date.now()
+    };
+
+    try {
+      await addDoc(collection(db, 'orders'), newOrder);
+      alert(`Order created successfully! PIN: ${pin}`);
+      setIsCreatingOrder(false);
+      setManualOrder({ customerName: '', phone: '', address: '', items: [] });
+    } catch (e) {
+      console.error("Manual order creation failed", e);
+      alert("Failed to create order.");
+    }
+  };
 
   const handleCleanupOldOrders = async () => {
     const sixMonthsAgo = Date.now() - (180 * 24 * 60 * 60 * 1000);
@@ -73,7 +134,13 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
 
   const handleVerifyPin = () => {
     if (selectedOrder && pinInput === selectedOrder.pin) {
-      onUpdateStatus(selectedOrder.id, 'Delivered');
+      if (onDeliveredWithPayment) {
+        setPaymentOrder(selectedOrder);
+        setReceivedAmount(selectedOrder.total);
+        setIsCollectingPayment(true);
+      } else {
+        onUpdateStatus(selectedOrder.id, 'Delivered');
+      }
       setSelectedOrder(null);
       setPinInput('');
       setPinError(false);
@@ -81,6 +148,13 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
       setPinError(true);
       setTimeout(() => setPinError(false), 2000);
     }
+  };
+
+  const handleConfirmDelivery = () => {
+    if (!paymentOrder || !onDeliveredWithPayment) return;
+    onDeliveredWithPayment(paymentOrder.id, receivedAmount);
+    setIsCollectingPayment(false);
+    setPaymentOrder(null);
   };
 
   const toggleSelectAll = () => {
@@ -274,10 +348,12 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
 
   const getStatusColor = (status: Order['status']) => {
     switch (status) {
-      case 'Pending': return 'bg-orange-100 text-orange-600 border-orange-200';
+      case 'Pending': return 'bg-gray-100 text-gray-600 border-gray-200';
       case 'Order Received': return 'bg-cyan-100 text-cyan-600 border-cyan-200';
-      case 'Packed': return 'bg-blue-100 text-blue-600 border-blue-200';
-      case 'Out for Delivery': return 'bg-purple-100 text-purple-600 border-purple-200';
+      case 'Packaging': return 'bg-orange-100 text-orange-600 border-orange-200';
+      case 'Packed': return 'bg-purple-100 text-purple-600 border-purple-200';
+      case 'Out for Delivery': return 'bg-blue-100 text-blue-600 border-blue-200';
+      case 'Ready to Pick Up': return 'bg-blue-100 text-blue-600 border-blue-200';
       case 'Delivered': return 'bg-green-100 text-green-600 border-green-200';
       case 'Cancelled': return 'bg-red-100 text-red-600 border-red-200';
       default: return 'bg-gray-100 text-gray-600 border-gray-200';
@@ -287,12 +363,14 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
   const getStatusIcon = (status: Order['status']) => {
     switch (status) {
       case 'Pending': return Clock;
-      case 'Order Received': return CheckCircle;
+      case 'Order Received': return ShoppingBag;
+      case 'Packaging': return Clock;
       case 'Packed': return Package;
       case 'Out for Delivery': return Truck;
+      case 'Ready to Pick Up': return MapPin;
       case 'Delivered': return CheckCircle;
       case 'Cancelled': return XCircle;
-      default: return Clock;
+      default: return AlertCircle;
     }
   };
 
@@ -383,6 +461,13 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
           >
             <Bluetooth className="w-4 h-4" />
             Connect Printer
+          </button>
+          <button 
+            onClick={() => setIsCreatingOrder(true)}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-green-700 transition-all active:scale-95 shadow-lg shadow-green-600/20"
+          >
+            <Plus className="w-4 h-4" />
+            Manual Order
           </button>
         </div>
 
@@ -499,26 +584,34 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
                               onClick={() => onUpdateStatus(order.id, 'Order Received')}
                               className="px-2 py-1 bg-cyan-50 text-cyan-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-cyan-600 hover:text-white transition-all active:scale-95 border border-cyan-100"
                             >
-                              Receive Order
+                              Receive
                             </button>
                           )}
                           {order.status === 'Order Received' && (
                             <button 
-                              onClick={() => onUpdateStatus(order.id, 'Packed')}
-                              className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all active:scale-95 border border-blue-100"
+                              onClick={() => onUpdateStatus(order.id, 'Packaging')}
+                              className="px-2 py-1 bg-orange-50 text-orange-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all active:scale-95 border border-orange-100"
                             >
-                              Pack Order
+                              Start Packaging
+                            </button>
+                          )}
+                          {order.status === 'Packaging' && (
+                            <button 
+                              onClick={() => onUpdateStatus(order.id, 'Packed')}
+                              className="px-2 py-1 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-all active:scale-95 border border-purple-100"
+                            >
+                              Mark Packed
                             </button>
                           )}
                           {order.status === 'Packed' && (
                             <button 
-                              onClick={() => onUpdateStatus(order.id, 'Out for Delivery')}
-                              className="px-2 py-1 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-all active:scale-95 border border-purple-100"
+                              onClick={() => onUpdateStatus(order.id, order.deliveryType === 'Takeaway' ? 'Ready to Pick Up' : 'Out for Delivery')}
+                              className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all active:scale-95 border border-blue-100"
                             >
-                              Dispatch
+                              {order.deliveryType === 'Takeaway' ? 'Ready for Pickup' : 'Dispatch'}
                             </button>
                           )}
-                          {order.status === 'Out for Delivery' && (
+                          {(order.status === 'Out for Delivery' || order.status === 'Ready to Pick Up') && (
                             <button 
                               onClick={() => setSelectedOrder(order)}
                               className="px-2 py-1 bg-green-50 text-green-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all active:scale-95 border border-green-100"
@@ -528,7 +621,13 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
                           )}
                           {order.status !== 'Delivered' && order.status !== 'Cancelled' && (
                             <button 
-                              onClick={() => onUpdateStatus(order.id, 'Cancelled')}
+                              onClick={() => {
+                                const reason = window.prompt("Reason for cancellation:");
+                                if (reason) {
+                                  onUpdateStatus(order.id, 'Cancelled');
+                                  // In a real app we'd save the reason too
+                                }
+                              }}
                               className="px-2 py-1 bg-red-50 text-red-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all active:scale-95 border border-red-100"
                             >
                               Cancel
@@ -636,6 +735,15 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
               </div>
 
               <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                {selectedOrder.status === 'Cancelled' && selectedOrder.cancellationReason && (
+                   <div className="p-6 bg-red-50 rounded-3xl border border-red-100 mb-4">
+                     <div className="flex items-center gap-3 mb-2">
+                       <AlertCircle className="w-5 h-5 text-red-500" />
+                       <h4 className="text-xs font-black text-red-600 uppercase tracking-widest">Cancellation Reason</h4>
+                     </div>
+                     <p className="text-sm font-medium text-red-700 italic">"{selectedOrder.cancellationReason}"</p>
+                   </div>
+                )}
                 {isEditing && editingOrder ? (
                   <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -775,11 +883,15 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
                               </span>
                             )}
                           </div>
-                          {selectedOrder.paymentMethod && (
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                              Payment: {selectedOrder.paymentMethod}
-                            </p>
+                          {selectedOrder.status === 'Cancelled' && selectedOrder.cancellationReason && (
+                            <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
+                              <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Cancellation Reason</p>
+                              <p className="text-xs text-red-700 font-bold">{selectedOrder.cancellationReason}</p>
+                            </div>
                           )}
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            Payment: {selectedOrder.paymentMethod}
+                          </p>
                           {selectedOrder.address && (
                             <div className="space-y-3">
                               <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
@@ -940,6 +1052,259 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, on
                       </button>
                     </>
                   )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isCreatingOrder && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden flex flex-col md:flex-row h-[90vh]"
+            >
+              {/* Left Column: Customer Details */}
+              <div className="md:w-1/3 bg-gray-50 p-8 border-r border-gray-100 flex flex-col gap-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-black text-gray-900 tracking-tight">Customer Info</h3>
+                  <button onClick={() => setIsCreatingOrder(false)} className="md:hidden p-2 bg-white rounded-xl text-gray-400">
+                    <XCircle className="w-6 h-6" />
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Customer Name</label>
+                    <input 
+                      type="text"
+                      value={manualOrder.customerName}
+                      onChange={(e) => setManualOrder(prev => ({ ...prev, customerName: e.target.value }))}
+                      placeholder="e.g. John Doe"
+                      className="w-full bg-white border-none rounded-2xl px-4 py-3 text-sm font-bold shadow-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Phone Number</label>
+                    <input 
+                      type="tel"
+                      value={manualOrder.phone}
+                      onChange={(e) => setManualOrder(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="e.g. 9608123427"
+                      className="w-full bg-white border-none rounded-2xl px-4 py-3 text-sm font-bold shadow-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Delivery Address</label>
+                    <textarea 
+                      value={manualOrder.address}
+                      onChange={(e) => setManualOrder(prev => ({ ...prev, address: e.target.value }))}
+                      placeholder="Full delivery address..."
+                      className="w-full bg-white border-none rounded-2xl px-4 py-3 text-sm font-medium shadow-sm min-h-[100px] resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-auto pt-6 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Amount</p>
+                    <p className="text-2xl font-black text-primary">₹{manualOrder.items.reduce((sum, i) => sum + i.price * i.quantity, 0)}</p>
+                  </div>
+                  <button 
+                    onClick={handleCreateManualOrder}
+                    className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 uppercase tracking-widest text-xs"
+                  >
+                    Place Order Now
+                  </button>
+                  <button 
+                    onClick={() => setIsCreatingOrder(false)}
+                    className="w-full mt-4 bg-white text-gray-400 font-bold py-3 rounded-2xl hover:text-red-500 transition-colors text-xs uppercase tracking-widest"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: Product Selection */}
+              <div className="flex-1 p-8 overflow-y-auto space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <h3 className="text-xl font-black text-gray-900 tracking-tight">Select Products</h3>
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input 
+                      type="text"
+                      value={manualSearch}
+                      onChange={(e) => setManualSearch(e.target.value)}
+                      placeholder="Search inventory..."
+                      className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-2 text-sm font-medium"
+                    />
+                  </div>
+                </div>
+
+                {/* Selected Items List */}
+                {manualOrder.items.length > 0 && (
+                  <div className="bg-primary/5 p-4 rounded-3xl border border-primary/10 space-y-3">
+                    <p className="text-[10px] font-black text-primary uppercase tracking-widest">Order Items ({manualOrder.items.length})</p>
+                    {manualOrder.items.map((item, idx) => (
+                      <div key={`manual-item-${idx}`} className="flex items-center justify-between gap-4 bg-white p-3 rounded-xl shadow-sm border border-primary/5">
+                        <div className="flex items-center gap-3">
+                          <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                          <div>
+                            <p className="text-sm font-black text-gray-900">{item.name}</p>
+                            <p className="text-[10px] font-bold text-gray-400">₹{item.price} x {item.quantity}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => {
+                              const newItems = [...manualOrder.items];
+                              newItems[idx].quantity = Math.max(1, newItems[idx].quantity - 1);
+                              setManualOrder(prev => ({ ...prev, items: newItems }));
+                            }}
+                            className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center hover:bg-gray-100"
+                          >
+                            -
+                          </button>
+                          <span className="text-xs font-black">{item.quantity}</span>
+                          <button 
+                            onClick={() => {
+                              const newItems = [...manualOrder.items];
+                              newItems[idx].quantity += 1;
+                              setManualOrder(prev => ({ ...prev, items: newItems }));
+                            }}
+                            className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center hover:bg-gray-100"
+                          >
+                            +
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const newItems = manualOrder.items.filter((_, i) => i !== idx);
+                              setManualOrder(prev => ({ ...prev, items: newItems }));
+                            }}
+                            className="p-1.5 text-gray-300 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Inventory Results */}
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                  {products
+                    .filter(p => p.name.toLowerCase().includes(manualSearch.toLowerCase()))
+                    .slice(0, 12)
+                    .map(product => (
+                      <button
+                        key={product.id}
+                        onClick={() => {
+                          const existing = manualOrder.items.find(i => i.id === product.id);
+                          if (existing) {
+                            const newItems = manualOrder.items.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+                            setManualOrder(prev => ({ ...prev, items: newItems }));
+                          } else {
+                            setManualOrder(prev => ({
+                              ...prev,
+                              items: [...prev.items, { 
+                                id: product.id, 
+                                name: product.name, 
+                                price: product.price, 
+                                quantity: 1, 
+                                image: product.image 
+                              }]
+                            }));
+                          }
+                        }}
+                        className="bg-white p-4 rounded-3xl border border-gray-100 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 transition-all text-left flex flex-col gap-3 group"
+                      >
+                        <div className="w-full aspect-square rounded-2xl overflow-hidden bg-gray-50 relative">
+                          <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                            <Plus className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-all scale-50 group-hover:scale-100" />
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-gray-900 group-hover:text-primary transition-colors line-clamp-1">{product.name}</p>
+                          <p className="text-xs font-black text-primary">₹{product.price}</p>
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Payment Collection Modal */}
+      <AnimatePresence>
+        {isCollectingPayment && paymentOrder && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 bg-primary text-white">
+                <h3 className="text-2xl font-black tracking-tight">Collect Payment</h3>
+                <p className="text-xs font-bold text-white/60 uppercase tracking-widest">Order Amount: ₹{paymentOrder.total}</p>
+              </div>
+              
+              <div className="p-8 space-y-6">
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Amount Received (INR)</label>
+                  <div className="relative">
+                    <input 
+                      type="number"
+                      value={receivedAmount}
+                      onChange={(e) => setReceivedAmount(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-5 text-2xl font-black text-gray-900 focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+                      autoFocus
+                    />
+                    <IndianRupee className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400" />
+                  </div>
+                  
+                  {receivedAmount < paymentOrder.total && (
+                    <div className="p-4 bg-orange-50 border border-orange-100 rounded-2xl flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-orange-500" />
+                      <div>
+                        <p className="text-xs font-black text-orange-900">Reduced Payment Detected</p>
+                        <p className="text-[10px] font-medium text-orange-700 uppercase tracking-widest">₹{paymentOrder.total - receivedAmount} will be added to Customer Dues.</p>
+                      </div>
+                    </div>
+                  )}
+                  {receivedAmount > paymentOrder.total && (
+                    <div className="p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                      <div>
+                        <p className="text-xs font-black text-green-900">Extra Payment Detected</p>
+                        <p className="text-[10px] font-medium text-green-700 uppercase tracking-widest">₹{receivedAmount - paymentOrder.total} will be added to Customer Wallet.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-3 pt-4">
+                  <button 
+                    onClick={handleConfirmDelivery}
+                    className="w-full bg-primary text-white font-black py-5 rounded-3xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 uppercase tracking-widest text-xs"
+                  >
+                    Confirm Delivery & Payment
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setIsCollectingPayment(false);
+                      setPaymentOrder(null);
+                    }}
+                    className="w-full bg-gray-50 text-gray-400 font-black py-4 rounded-3xl hover:bg-gray-100 transition-all active:scale-95 uppercase tracking-widest text-[10px]"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
             </motion.div>

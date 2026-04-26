@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, collection, onSnapshot, query, orderBy, updateDoc, doc, handleFirestoreError, OperationType } from '../firebase';
+import { FeatureRequest, Order } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { generateSupportReply } from '../services/geminiService';
 import { MessageSquare, User, Clock, CheckCircle, AlertCircle, ArrowRight, Image as ImageIcon, X, Sparkles, Loader2 } from 'lucide-react';
@@ -17,15 +18,26 @@ interface SupportQuery {
 }
 
 export const AdminSupportManager: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'support' | 'features'>('support');
+  const [activeTab, setActiveTab] = useState<'support' | 'features' | 'cancellations'>('support');
   const [queries, setQueries] = useState<SupportQuery[]>([]);
   const [featureRequests, setFeatureRequests] = useState<FeatureRequest[]>([]);
+  const [cancelledOrders, setCancelledOrders] = useState<Order[]>([]);
   const [selectedQuery, setSelectedQuery] = useState<SupportQuery | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<FeatureRequest | null>(null);
+  const [selectedCancellation, setSelectedCancellation] = useState<Order | null>(null);
   const [adminReply, setAdminReply] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+      setCancelledOrders(allOrders.filter(o => o.status === 'Cancelled'));
+    });
+    return () => unsubscribe();
+  }, []);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -129,6 +141,14 @@ export const AdminSupportManager: React.FC = () => {
         >
           Feature Requests
         </button>
+        <button 
+          onClick={() => setActiveTab('cancellations')}
+          className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            activeTab === 'cancellations' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-400 hover:bg-gray-50'
+          }`}
+        >
+          Cancellations
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -169,7 +189,7 @@ export const AdminSupportManager: React.FC = () => {
                   <p className="text-xs text-gray-500 truncate">{q.chatHistory[q.chatHistory.length - 1]?.content}</p>
                 </button>
               ))
-            ) : (
+            ) : activeTab === 'features' ? (
               featureRequests.map((f) => (
                 <button
                   key={f.id}
@@ -193,6 +213,29 @@ export const AdminSupportManager: React.FC = () => {
                   </div>
                   <h4 className="font-bold text-gray-900 truncate">{f.userName}</h4>
                   <p className="text-xs text-gray-500 truncate">{f.feature}</p>
+                </button>
+              ))
+            ) : (
+              cancelledOrders.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => setSelectedCancellation(o)}
+                  className={`w-full text-left p-4 rounded-2xl border transition-all active:scale-95 ${
+                    selectedCancellation?.id === o.id 
+                      ? 'bg-primary/5 border-primary shadow-sm' 
+                      : 'bg-white border-gray-100 hover:border-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-red-100 text-red-600`}>
+                      Cancelled
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-bold">
+                      {new Date(o.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-gray-900 truncate">Order #{o.id}</h4>
+                  <p className="text-xs text-gray-500 truncate">{o.userName}</p>
                 </button>
               ))
             )}
@@ -387,7 +430,62 @@ export const AdminSupportManager: React.FC = () => {
                   </div>
                 </div>
               </motion.div>
-            ) : !selectedQuery && !selectedFeature ? (
+            ) : activeTab === 'cancellations' && selectedCancellation ? (
+              <motion.div
+                key={selectedCancellation.id}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[600px]"
+              >
+                <div className="p-8 bg-red-50 border-b border-red-100">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center text-red-600 shadow-inner">
+                      <AlertCircle className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Cancelled Order</p>
+                      <h3 className="text-2xl font-black text-gray-900 tracking-tight">#{selectedCancellation.id}</h3>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-8 rounded-3xl border border-red-100 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <User className="w-4 h-4 text-gray-400" />
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                        Customer: {selectedCancellation.userName} ({selectedCancellation.userPhone})
+                      </p>
+                    </div>
+                    <p className="text-xs font-black text-red-600 uppercase tracking-widest mb-2">Cancellation Reason:</p>
+                    <p className="text-lg font-medium text-gray-700 leading-relaxed italic">
+                      "{selectedCancellation.cancellationReason || "No reason provided."}"
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-8 space-y-6 flex-1 overflow-y-auto">
+                  <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest">Order Details</h4>
+                  <div className="space-y-4">
+                    {selectedCancellation.items.map((item, i) => (
+                      <div key={i} className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden border border-gray-100">
+                          {item.image && <img src={item.image} className="w-full h-full object-cover" />}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-gray-900 line-clamp-1">{item.name}</p>
+                          <p className="text-[10px] text-gray-400 font-medium">{item.quantity} x ₹{item.price}</p>
+                        </div>
+                        <p className="text-sm font-black text-gray-900">₹{item.quantity * item.price}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="pt-6 border-t border-gray-100 flex justify-between items-center">
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Refund Status</span>
+                    <span className="text-xs font-black text-orange-600 uppercase tracking-widest bg-orange-100 px-3 py-1 rounded-full">COD - No Refund</span>
+                  </div>
+                </div>
+              </motion.div>
+            ) : !selectedQuery && !selectedFeature && !selectedCancellation ? (
               <div className="h-[600px] flex flex-col items-center justify-center bg-white rounded-[32px] border border-gray-100 shadow-sm p-12 text-center">
                 <div className="w-20 h-20 bg-gray-50 rounded-[32px] flex items-center justify-center text-gray-300 mb-6">
                   <AlertCircle className="w-10 h-10" />

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ProductCard } from '../components/ProductCard';
 import { Product, CartItem } from '../types';
 import { motion } from 'motion/react';
 import { Search, ArrowLeft, LayoutGrid, SlidersHorizontal, ChevronDown } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 interface CategoriesProps {
   products: Product[];
@@ -18,6 +18,15 @@ const Categories: React.FC<CategoriesProps> = ({ products, onAddToCart, cart, on
   const [selectedCategory, setSelectedCategory] = useState('');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'price-low' | 'price-high' | 'newest'>('newest');
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const cat = params.get('category');
+    if (cat) {
+      setSelectedCategory(cat);
+    }
+  }, [location.search]);
 
   const categories = [
     { id: 'Vegetables', name: 'Fruits & veggies', image: 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&q=80&w=200' },

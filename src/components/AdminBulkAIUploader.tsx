@@ -20,18 +20,28 @@ export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulk
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [detectedProducts, setDetectedProducts] = useState<Partial<Product>[]>([]);
+  const [showAlert, setShowAlert] = useState<{ show: boolean, message: string, type: 'success' | 'error' | 'info' }>({ show: false, message: '', type: 'info' });
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
-    setFiles(prev => [...prev, ...selectedFiles]);
-    
-    selectedFiles.forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviews(prev => [...prev, reader.result as string]);
-      };
-      reader.readAsDataURL(file);
-    });
+    if (selectedFiles.length > 0) {
+      setFiles(prev => [...prev, ...selectedFiles]);
+      
+      selectedFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPreviews(prev => [...prev, reader.result as string]);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      setShowAlert({ 
+        show: true, 
+        message: `${selectedFiles.length} photo(s) selected and ready for analysis.`, 
+        type: 'success' 
+      });
+      setTimeout(() => setShowAlert({ show: false, message: '', type: 'info' }), 4000);
+    }
   };
 
   const removeFile = (index: number) => {
@@ -55,21 +65,40 @@ export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulk
 
       const results = await aiService.detectProductsBulk(imagesData);
       
+      if (results.length === 0) {
+        setShowAlert({ show: true, message: "AI couldn't detect any clear products. Please try better photos.", type: 'error' });
+        setTimeout(() => setShowAlert({ show: false, message: '', type: 'info' }), 5000);
+        return;
+      }
+
       // Upload images to storage first and assign to results
       const resultsWithImages = await Promise.all(results.map(async (p, idx) => {
         if (files[idx]) {
           const storageRef = ref(storage, `products/bulk_${Date.now()}_${files[idx].name}`);
           await uploadBytes(storageRef, files[idx]);
           const url = await getDownloadURL(storageRef);
-          return { ...p, image: url, images: [url], price: 0, stock: 100 };
+          return { 
+            ...p, 
+            image: url, 
+            images: [url], 
+            stock: 100,
+            price: p.price || 0,
+            weight: p.weight || ''
+          };
         }
-        return { ...p, price: 0, stock: 100 };
+        return { 
+          ...p, 
+          price: p.price || 0, 
+          stock: 100,
+          weight: p.weight || ''
+        };
       }));
 
       setDetectedProducts(resultsWithImages);
     } catch (e) {
       console.error("AI Analysis failed", e);
-      alert("Failed to analyze images. Please try smaller batches.");
+      setShowAlert({ show: true, message: "AI recognition failed. Please check your network or try smaller batches.", type: 'error' });
+      setTimeout(() => setShowAlert({ show: false, message: '', type: 'info' }), 5000);
     } finally {
       setIsAnalyzing(false);
     }
@@ -82,9 +111,12 @@ export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulk
       setDetectedProducts([]);
       setFiles([]);
       setPreviews([]);
-      alert("Products created successfully! Please update their prices.");
+      setShowAlert({ show: true, message: "Products created successfully!", type: 'success' });
+      setTimeout(() => setShowAlert({ show: false, message: '', type: 'info' }), 5000);
     } catch (e) {
       console.error("Bulk create failed", e);
+      setShowAlert({ show: true, message: "Failed to save products.", type: 'error' });
+      setTimeout(() => setShowAlert({ show: false, message: '', type: 'info' }), 5000);
     } finally {
       setIsSaving(false);
     }
@@ -92,6 +124,24 @@ export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulk
 
   return (
     <div className="space-y-8 p-6">
+      {/* Photo Selection Alert */}
+      <AnimatePresence>
+        {showAlert.show && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, scale: 0.95, x: '-50%' }}
+            className={`fixed top-24 left-1/2 z-[100] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 min-w-[300px] border backdrop-blur-xl ${
+              showAlert.type === 'success' ? 'bg-green-600 border-green-500 text-white' : 
+              showAlert.type === 'error' ? 'bg-red-600 border-red-500 text-white' : 
+              'bg-[#00AEEF] border-blue-500 text-white'
+            }`}
+          >
+            {showAlert.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+            <p className="text-sm font-black uppercase tracking-widest">{showAlert.message}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">

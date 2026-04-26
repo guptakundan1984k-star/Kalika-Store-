@@ -36,18 +36,37 @@ import BillPage from './pages/BillPage';
 import Items from './pages/Items';
 import { MyOrders } from './pages/MyOrders';
 import { OrderTracking } from './pages/OrderTracking';
+import { BulkEnquiryPage } from './pages/BulkEnquiryPage';
+import { AddressesPage } from './pages/AddressesPage';
+import { HelpSupportPage } from './pages/HelpSupportPage';
+import { PhotoBillPage } from './pages/PhotoBillPage';
+import Scan from './pages/Scan';
 import { ProductRequestModal } from './components/ProductRequestModal';
 import { LoginPromptModal } from './components/LoginPromptModal';
 import { StoreStatusBanner } from './components/StoreStatusBanner';
 import { LanguagePromptModal } from './components/LanguagePromptModal';
+import { IntroVideoModal } from './components/IntroVideoModal';
+
+import { useStore } from './contexts/StoreContext';
 
 export default function App() {
+  const { setUser: setContextUser } = useStore();
   const [cart, setCart] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('cart');
     return saved ? JSON.parse(saved) : [];
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [showIntro, setShowIntro] = useState(false);
+
+  useEffect(() => {
+    // Show intro only once per customer
+    if (user && !user.introSeen) {
+      setShowIntro(true);
+      updateDoc(doc(db, 'users', user.uid), { introSeen: true }).catch(err => console.error("Intro state sync failed", err));
+    }
+  }, [user]);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -117,6 +136,7 @@ export default function App() {
               await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'admin' });
             }
             setUser(userData);
+            setContextUser(userData);
           } else {
             const newUser: UserProfile = {
               uid: firebaseUser.uid,
@@ -128,12 +148,14 @@ export default function App() {
               wishlist: []
             };
             await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+            setContextUser(newUser);
           }
         }, (error) => {
           handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`, false);
         });
       } else {
         setUser(null);
+        setContextUser(null);
       }
       setIsAuthReady(true);
     });
@@ -181,54 +203,68 @@ export default function App() {
 
   // Real-time Store Settings Listener
   useEffect(() => {
+    let checkInterval: any;
+
     const unsubscribeStore = onSnapshot(doc(db, 'settings', 'store'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as StoreSettings;
         
-        // Automated Open/Close Logic
-        const now = new Date();
-        const day = now.getDay(); 
-        const currentTimeInMins = now.getHours() * 60 + now.getMinutes();
+        const updateFunctionalStatus = () => {
+          // Automated Open/Close Logic
+          const now = new Date();
+          const day = now.getDay(); 
+          const currentTimeInMins = now.getHours() * 60 + now.getMinutes();
 
-        const parseTime = (timeStr: string) => {
-          const [h, m] = timeStr.split(':').map(Number);
-          return h * 60 + m;
+          const parseTime = (timeStr: string) => {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+          };
+
+          let isOpenBySchedule = true;
+          if (data.autoSchedule) {
+            if (day === 0) { // Sunday
+              const open = parseTime(data.sundayOpeningTime || '10:40');
+              const close = parseTime(data.sundayClosingTime || '15:00');
+              isOpenBySchedule = currentTimeInMins >= open && currentTimeInMins < close;
+            } else { // Mon-Sat
+              const open = parseTime(data.openingTime || '10:40');
+              const close = parseTime(data.closingTime || '20:00');
+              isOpenBySchedule = currentTimeInMins >= open && currentTimeInMins < close;
+            }
+          }
+
+          // Store is ALWAYS functional for browsing and pre-ordering
+          // but functionallyReady determines if it's "Ready for Delivery"
+          const functionallyReady = data.isOpen && (!data.autoSchedule || isOpenBySchedule);
+
+          let displayMessage = data.message;
+          if (data.isOpen && data.autoSchedule && !isOpenBySchedule) {
+            const dayName = day === 0 ? 'Sunday' : 'Mon-Sat';
+            const times = day === 0 ? `${data.sundayOpeningTime} to ${data.sundayClosingTime}` : `${data.openingTime} to ${data.closingTime}`;
+            displayMessage = `Currently accepting Pre-orders for ${dayName === 'Sunday' ? 'Monday' : 'Next Day'}. Standard hours: ${times}.`;
+          }
+
+          setStoreSettings(prev => ({
+            ...data,
+            isFunctionallyOpen: functionallyReady,
+            message: displayMessage || data.message
+          }));
         };
 
-        let isOpenBySchedule = true;
-        if (data.autoSchedule) {
-          if (day === 0) { // Sunday
-            const open = parseTime(data.sundayOpeningTime || '10:40');
-            const close = parseTime(data.sundayClosingTime || '15:00');
-            isOpenBySchedule = currentTimeInMins >= open && currentTimeInMins < close;
-          } else { // Mon-Sat
-            const open = parseTime(data.openingTime || '10:40');
-            const close = parseTime(data.closingTime || '20:00');
-            isOpenBySchedule = currentTimeInMins >= open && currentTimeInMins < close;
-          }
-        }
-
-        // Store is ALWAYS functional for browsing and pre-ordering
-        // but functionallyReady determines if it's "Ready for Delivery"
-        const functionallyReady = data.isOpen && (!data.autoSchedule || isOpenBySchedule);
-
-        let displayMessage = data.message;
-        if (data.isOpen && data.autoSchedule && !isOpenBySchedule) {
-          const dayName = day === 0 ? 'Sunday' : 'Mon-Sat';
-          const times = day === 0 ? `${data.sundayOpeningTime} to ${data.sundayClosingTime}` : `${data.openingTime} to ${data.closingTime}`;
-          displayMessage = `Currently accepting Pre-orders for ${dayName === 'Sunday' ? 'Monday' : 'Next Day'}. Standard hours: ${times}.`;
-        }
-
-        setStoreSettings({
-          ...data,
-          isFunctionallyOpen: functionallyReady,
-          message: displayMessage || data.message
-        });
+        updateFunctionalStatus();
+        
+        // Re-check every minute for auto-schedule
+        if (checkInterval) clearInterval(checkInterval);
+        checkInterval = setInterval(updateFunctionalStatus, 60000);
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'settings/store', false);
     });
-    return () => unsubscribeStore();
+
+    return () => {
+      unsubscribeStore();
+      if (checkInterval) clearInterval(checkInterval);
+    };
   }, []);
 
   // Order Cleanup Logic (Remove orders if inactive for 3 months)
@@ -370,17 +406,32 @@ export default function App() {
   }, [isAuthReady, user]);
 
   const addToCart = (product: Product, quantity: number = 1, redirectToCheckout: boolean = false) => {
+    // Determine the price to use (Regular Price vs Party Price)
+    let finalPrice = product.price;
+    if (user && user.customPrices && user.customPrices[product.id]) {
+      finalPrice = user.customPrices[product.id];
+    }
+
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
-        return prev.map(item => (item.id === product.id) ? { ...item, quantity: item.quantity + quantity } : item);
+        const newQuantity = existing.quantity + quantity;
+        if (newQuantity <= 0) {
+          return prev.filter(item => item.id !== product.id);
+        }
+        return prev.map(item => (item.id === product.id) 
+          ? { ...item, quantity: newQuantity, price: finalPrice } 
+          : item);
       }
-      return [...prev, { ...product, quantity }];
+      if (quantity <= 0) return prev;
+      return [...prev, { ...product, quantity, price: finalPrice }];
     });
     
-    // Show notification
-    setCartNotification({ show: true, productName: product.name });
-    setTimeout(() => setCartNotification(null), 3000);
+    // Show notification only if we're adding
+    if (quantity > 0) {
+      setCartNotification({ show: true, productName: product.name });
+      setTimeout(() => setCartNotification(null), 3000);
+    }
 
     if (redirectToCheckout) {
       // Small delay to allow state to settle
@@ -492,6 +543,11 @@ function AppContent({
     navigate('/checkout');
   };
 
+  const handleVoiceSearch = (query: string) => {
+    setSearchQuery(query);
+    navigate('/items');
+  };
+
   const queryParams = new URLSearchParams(location.search);
   const requestParam = queryParams.get('request');
 
@@ -520,7 +576,7 @@ function AppContent({
         onAddToCart={addToCart}
       />
       
-      <StoreStatusBanner settings={storeSettings} />
+      <StoreStatusBanner settings={storeSettings} user={user} />
       
       <main className="flex-1 relative z-10">
         <AnimatePresence mode="wait">
@@ -538,12 +594,16 @@ function AppContent({
               wishlist={user?.wishlist || []}
             />} />
             <Route path="/wishlist" element={user ? <Wishlist products={products} wishlist={user.wishlist || []} onAddToCart={addToCart} toggleWishlist={toggleWishlist} /> : <Navigate to="/login" />} />
+            <Route path="/bulk-enquiry" element={user ? <BulkEnquiryPage user={user} /> : <Navigate to="/login" />} />
+            <Route path="/addresses" element={user ? <AddressesPage user={user} /> : <Navigate to="/login" />} />
+            <Route path="/help" element={<HelpSupportPage user={user} orders={orders} />} />
+            <Route path="/photo-bill" element={<PhotoBillPage products={products} user={user} onAddToCart={addToCart} />} />
             <Route path="/bill" element={<BillPage products={products} onAddItems={(items) => {
               items.forEach(({ product, quantity }) => {
                 addToCart(product, quantity);
               });
             }} />} />
-            <Route path="/cart" element={<Cart cart={cart} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClearCart={handleClearCart} products={products} onAddToCart={addToCart} storeSettings={storeSettings} />} />
+            <Route path="/cart" element={<Cart cart={cart} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClearCart={handleClearCart} products={products} onAddToCart={addToCart} storeSettings={storeSettings} user={user} />} />
             <Route path="/checkout" element={<Checkout cart={cart} user={user} coupons={coupons} storeSettings={storeSettings} onOrderPlaced={async (order: any) => {
               try {
                 await setDoc(doc(db, 'orders', order.id), order);
@@ -554,9 +614,10 @@ function AppContent({
               }
             }} />} />
             <Route path="/profile" element={user ? <Profile user={user} orders={orders} /> : <Navigate to="/login" />} />
-            <Route path="/orders" element={user ? <MyOrders orders={orders} /> : <Navigate to="/login" />} />
-            <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
+            <Route path="/orders" element={user ? <MyOrders orders={orders} user={user} /> : <Navigate to="/login" />} />
+             <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
             <Route path="/admin" element={<Admin products={products} orders={orders} coupons={coupons} banners={banners} user={user} />} />
+            <Route path="/scan" element={<Scan />} />
             <Route path="/login" element={<Login onLogin={(u: any) => setUser(u)} />} />
             <Route path="/register" element={<Register onRegister={(u: any) => setUser(u)} />} />
           </Routes>
@@ -565,57 +626,12 @@ function AppContent({
 
       <Footer />
       
-      {/* Go to Cart Notification */}
-      <AnimatePresence>
-        {cartNotification?.show && (
-          <motion.div 
-            initial={{ opacity: 0, y: 50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 50, scale: 0.9 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[150] w-[90%] max-w-md"
-          >
-            <div className="bg-gray-900 text-white p-4 rounded-[24px] shadow-2xl flex items-center justify-between border border-white/10 backdrop-blur-xl">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                  <ShoppingBag className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-primary">Added to Cart</p>
-                  <p className="text-sm font-bold truncate max-w-[150px]">{cartNotification.productName}</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => navigate('/cart')}
-                className="bg-primary text-white px-6 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95"
-              >
-                Go to Cart
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Back to Top Button */}
-      <AnimatePresence>
-        {showBackToTop && (
-          <div className="floating-container !bottom-32">
-            <motion.button
-              initial={{ opacity: 0, scale: 0.5, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.5, y: 20 }}
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="floating-btn bg-white text-gray-900 border border-gray-100 px-6 hover:text-primary transition-all group"
-            >
-              <ArrowUp className="w-4 h-4 group-hover:-translate-y-1 transition-transform" />
-              <span className="text-[10px] font-black uppercase tracking-widest ml-2">Back to Top</span>
-            </motion.button>
-          </div>
-        )}
-      </AnimatePresence>
-      
       <VoiceAssistant 
         onAddToCart={handleVoiceAddToCart}
         onPlaceOrder={handleVoicePlaceOrder}
+        onSearch={handleVoiceSearch}
+        user={user || undefined}
+        cart={cart}
       />
 
       <LoginPromptModal 
@@ -624,58 +640,9 @@ function AppContent({
       />
       <LanguagePromptModal />
 
-      {/* Onboarding Overlay */}
       <AnimatePresence>
-        {showOnboarding && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-gray-900/80 backdrop-blur-md"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="relative bg-white w-full max-w-lg rounded-[40px] shadow-2xl p-12 space-y-8 text-center"
-            >
-              <div className="w-24 h-24 bg-primary/10 rounded-[32px] flex items-center justify-center text-primary mx-auto">
-                <Sparkles className="w-12 h-12" />
-              </div>
-              <div className="space-y-4">
-                <h2 className="text-4xl font-black text-gray-900 tracking-tight">Welcome to Kalika!</h2>
-                <p className="text-gray-500 font-medium leading-relaxed">
-                  Experience the future of grocery shopping. Here's how to get started:
-                </p>
-              </div>
-              
-              <div className="grid grid-cols-1 gap-4 text-left">
-                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                  <div className="w-8 h-8 bg-gray-900 text-white rounded-lg flex items-center justify-center text-xs font-black">1</div>
-                  <p className="text-sm font-bold text-gray-700">Browse products and add to cart</p>
-                </div>
-                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                  <div className="w-8 h-8 bg-gray-900 text-white rounded-lg flex items-center justify-center text-xs font-black">2</div>
-                  <p className="text-sm font-bold text-gray-700">Login to earn Kalika Coins</p>
-                </div>
-                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                  <div className="w-8 h-8 bg-gray-900 text-white rounded-lg flex items-center justify-center text-xs font-black">3</div>
-                  <p className="text-sm font-bold text-gray-700">Place order and get it delivered!</p>
-                </div>
-              </div>
-
-              <button 
-                onClick={() => {
-                  setShowOnboarding(false);
-                  localStorage.setItem('hasSeenOnboarding', 'true');
-                }}
-                className="w-full bg-primary text-white font-black py-5 rounded-3xl shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95 uppercase tracking-widest text-sm"
-              >
-                Got it, Let's Shop!
-              </button>
-            </motion.div>
-          </div>
+        {showIntro && (
+          <IntroVideoModal onClose={() => setShowIntro(false)} />
         )}
       </AnimatePresence>
       

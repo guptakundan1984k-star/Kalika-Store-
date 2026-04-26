@@ -32,6 +32,7 @@ import {
   Timestamp, 
   getDocFromServer, 
   addDoc, 
+  arrayUnion,
   enableMultiTabIndexedDbPersistence, 
   terminate 
 } from 'firebase/firestore';
@@ -198,6 +199,7 @@ export {
   limit,
   Timestamp,
   addDoc,
+  arrayUnion,
   ref,
   uploadBytes,
   getDownloadURL

@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
-import { Camera, FileText, Loader2, Check, X, ShoppingCart, Plus } from 'lucide-react';
+import { Camera, FileText, Loader2, Check, X, ShoppingCart, Plus, Printer, Bluetooth, Trash2, Edit2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { parsePaperBill } from '../services/geminiService';
 import { Product } from '../types';
+
+interface DetectedItem {
+  name: string;
+  quantity: number;
+  matchedProduct?: Product;
+  price?: number;
+}
 
 interface PaperBillUploaderProps {
   products: Product[];
@@ -11,9 +18,11 @@ interface PaperBillUploaderProps {
 
 export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, onAddItems }) => {
   const [loading, setLoading] = useState(false);
-  const [detectedItems, setDetectedItems] = useState<{ name: string, quantity: number, matchedProduct?: Product }[]>([]);
+  const [detectedItems, setDetectedItems] = useState<DetectedItem[]>([]);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [bluetoothStatus, setBluetoothStatus] = useState<'idle' | 'searching' | 'connected' | 'error'>('idle');
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -31,12 +40,11 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
       const result = await parsePaperBill(base64.split(',')[1]);
       
       const matched = result.items.map((item: any) => {
-        // Simple fuzzy match
         const product = products.find(p => 
           p.name.toLowerCase().includes(item.name.toLowerCase()) || 
           item.name.toLowerCase().includes(p.name.toLowerCase())
         );
-        return { ...item, matchedProduct: product };
+        return { ...item, matchedProduct: product, price: product?.price || 0 };
       });
 
       setDetectedItems(matched);
@@ -59,6 +67,29 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
     });
   };
 
+  const handleUpdateItem = (index: number, updates: Partial<DetectedItem>) => {
+    setDetectedItems(prev => {
+      const newItems = [...prev];
+      newItems[index] = { ...newItems[index], ...updates };
+      
+      // If name changed, try to rematch
+      if (updates.name) {
+        const product = products.find(p => 
+          p.name.toLowerCase().includes(updates.name!.toLowerCase()) || 
+          updates.name!.toLowerCase().includes(p.name.toLowerCase())
+        );
+        newItems[index].matchedProduct = product;
+        if (product) newItems[index].price = product.price;
+      }
+      
+      return newItems;
+    });
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setDetectedItems(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleConfirm = () => {
     const toAdd = detectedItems
       .filter(item => item.matchedProduct)
@@ -68,6 +99,69 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
     setShowConfirmation(false);
     setDetectedItems([]);
     setPreviewUrl(null);
+  };
+
+  const handleBluetoothPrint = async () => {
+    setBluetoothStatus('searching');
+    setIsPrinting(true);
+    
+    // Simulate Bluetooth Connection (Web Bluetooth API is restricted in most iframes/preview)
+    try {
+      await new Promise(r => setTimeout(r, 2000));
+      setBluetoothStatus('connected');
+      
+      // Mock Printing process
+      await new Promise(r => setTimeout(r, 1500));
+      
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const billHtml = `
+          <html>
+            <head>
+              <title>Print Receipt</title>
+              <style>
+                body { font-family: 'Courier New', Courier, monospace; width: 300px; margin: 0 auto; padding: 20px; }
+                .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+                .item { display: flex; justify-content: space-between; margin: 5px 0; font-size: 14px; }
+                .total { border-top: 1px solid #000; margin-top: 10px; padding-top: 10px; font-weight: bold; }
+                .footer { text-align: center; margin-top: 20px; font-size: 12px; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h2>KALIKA STORE</h2>
+                <p>Digitalized Bill Receipt</p>
+                <p>${new Date().toLocaleString()}</p>
+              </div>
+              ${detectedItems.map(item => `
+                <div class="item">
+                  <span>${item.name} x${item.quantity}</span>
+                  <span>₹${(item.price || 0) * item.quantity}</span>
+                </div>
+              `).join('')}
+              <div class="total item">
+                <span>TOTAL</span>
+                <span>₹${detectedItems.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0)}</span>
+              </div>
+              <div class="footer">
+                <p>Thank you for shopping!</p>
+                <p>Visit us again at KalikaStore.in</p>
+              </div>
+              <script>window.onload = () => { window.print(); window.close(); }</script>
+            </body>
+          </html>
+        `;
+        printWindow.document.write(billHtml);
+        printWindow.document.close();
+      }
+      
+      setBluetoothStatus('idle');
+    } catch (e) {
+      setBluetoothStatus('error');
+      setTimeout(() => setBluetoothStatus('idle'), 3000);
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   return (
@@ -141,39 +235,104 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
 
               <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto">
                 {detectedItems.map((item, i) => (
-                  <div key={`detected-${i}-${item.name}`} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.matchedProduct ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                        {item.matchedProduct ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
+                  <div key={`detected-${i}`} className="flex flex-col p-4 bg-gray-50 rounded-2xl border border-gray-100 gap-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${item.matchedProduct ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                          {item.matchedProduct ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <input 
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => handleUpdateItem(i, { name: e.target.value })}
+                            className="bg-transparent border-none p-0 text-sm font-black text-gray-900 focus:ring-0 w-full"
+                          />
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">
+                            {item.matchedProduct ? `Matched: ${item.matchedProduct.name}` : 'No exact match - Manual edit required'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-black text-gray-900">{item.name}</p>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                          {item.matchedProduct ? `Matched: ${item.matchedProduct.name}` : 'No match found in store'}
-                        </p>
-                      </div>
+                      <button 
+                        onClick={() => handleRemoveItem(i)}
+                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-black text-gray-900">Qty: {item.quantity}</p>
+
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-100/50">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Qty</span>
+                        <div className="flex items-center bg-white rounded-xl border border-gray-100 px-1 shadow-sm">
+                          <button onClick={() => handleUpdateItem(i, { quantity: Math.max(1, item.quantity - 1) })} className="p-1 px-2 text-gray-400">-</button>
+                          <span className="px-2 text-xs font-black">{item.quantity}</span>
+                          <button onClick={() => handleUpdateItem(i, { quantity: item.quantity + 1 })} className="p-1 px-2 text-gray-400">+</button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Price</span>
+                        <input 
+                          type="number"
+                          value={item.price}
+                          onChange={(e) => handleUpdateItem(i, { price: parseFloat(e.target.value) || 0 })}
+                          className="w-16 bg-white border border-gray-100 rounded-xl px-2 py-1 text-xs font-black text-right"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
+                {detectedItems.length === 0 && (
+                  <div className="text-center py-12 space-y-4">
+                    <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto text-gray-300">
+                      <FileText className="w-8 h-8" />
+                    </div>
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest">No items in the bill</p>
+                  </div>
+                )}
               </div>
 
-              <div className="p-8 bg-gray-50 border-t border-gray-100 flex gap-4">
-                <button 
-                  onClick={() => setShowConfirmation(false)}
-                  className="flex-1 px-6 py-4 rounded-2xl text-sm font-black text-gray-400 uppercase tracking-widest hover:bg-gray-100 transition-all"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={handleConfirm}
-                  className="flex-1 bg-primary text-white px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-5 h-5" />
-                  Add to Cart
-                </button>
+              <div className="p-8 bg-gray-50 border-t border-gray-100 flex flex-col gap-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Estimated Total</span>
+                    <span className="text-2xl font-black text-gray-900 tracking-tight">
+                      ₹{detectedItems.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0)}
+                    </span>
+                  </div>
+                  <button 
+                    onClick={handleBluetoothPrint}
+                    disabled={isPrinting || detectedItems.length === 0}
+                    className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
+                      bluetoothStatus === 'connected' ? 'bg-green-500 text-white shadow-green-200' : 'bg-gray-900 text-white shadow-gray-200'
+                    } shadow-xl active:scale-95 disabled:opacity-50`}
+                  >
+                    {isPrinting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      bluetoothStatus === 'connected' ? <Check className="w-4 h-4" /> : <Printer className="w-4 h-4" />
+                    )}
+                    {bluetoothStatus === 'searching' ? 'Searching...' : 
+                     bluetoothStatus === 'connected' ? 'Printing Bill...' : 'Print Bill (BT)'}
+                  </button>
+                </div>
+
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => setShowConfirmation(false)}
+                    className="flex-1 px-6 py-4 rounded-2xl text-sm font-black text-gray-400 uppercase tracking-widest hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200"
+                  >
+                    Discard
+                  </button>
+                  <button 
+                    onClick={handleConfirm}
+                    disabled={detectedItems.filter(i => i.matchedProduct).length === 0}
+                    className="flex-1 bg-primary text-white px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Add {detectedItems.filter(i => i.matchedProduct).length} to Cart
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

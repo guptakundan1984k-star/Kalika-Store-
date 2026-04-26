@@ -153,9 +153,25 @@
         "title": { "type": "string" },
         "link": { "type": "string" },
         "active": { "type": "boolean" },
-        "createdAt": { "type": "string" }
+        "createdAt": { "type": "number" }
       },
       "required": ["image", "title", "active"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Store operational expenses",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "itemName": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "number" },
+        "source": { "type": "string" },
+        "category": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "quantity": { "type": "string" }
+      },
+      "required": ["itemName", "amount", "date"]
     },
     "StoreSettings": {
       "title": "Store Settings",
@@ -236,6 +252,10 @@
     "/banners/{bannerId}": {
       "schema": "Banner",
       "description": "Promotional banners"
+    },
+    "/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Operational expenses tracking"
     }
   }
 }

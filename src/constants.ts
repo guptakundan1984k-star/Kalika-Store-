@@ -17,4 +17,4 @@ export const SUPPORT_PHONES = ["9608123427", "9905516803"];
 
 // Loyalty Program
 export const LOYALTY_EARN_RATE = 100; // 1 coin per 100 RS
-export const LOYALTY_COIN_VALUE = 0.10; // 1 coin = 0.10 RS
+export const LOYALTY_COIN_VALUE = 1.00; // 1 coin = 1.00 RS

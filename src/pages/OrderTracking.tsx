@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { 
   ChevronLeft, Package, Truck, CheckCircle2, 
   MapPin, Clock, Phone, AlertCircle, ShoppingBag,
-  Box, Info, ArrowRight, Home, IndianRupee
+  Box, Info, ArrowRight, Home, IndianRupee, XCircle
 } from 'lucide-react';
 import { Order } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -26,16 +26,41 @@ export const OrderTracking: React.FC = () => {
     return () => unsubscribe();
   }, [orderId]);
 
+  const isPickup = order?.address?.manual === "Store Pickup" || !order?.address?.manual;
+
   const stages = [
     { key: 'Pending', label: 'Order Placed', icon: ShoppingBag, color: 'blue' },
-    { key: 'Proceeded', label: 'Processing', icon: Clock, color: 'orange' },
+    { key: 'Packaging', label: 'Packaging', icon: Clock, color: 'orange' },
     { key: 'Packed', label: 'Packed & Ready', icon: Package, color: 'purple' },
-    { key: 'Out for Delivery', label: 'Out for Delivery', icon: Truck, color: 'primary' },
-    { key: 'Delivered', label: 'Delivered', icon: CheckCircle2, color: 'green' }
+    ...(isPickup 
+      ? [{ key: 'Ready to Pick Up', label: 'Ready to Pick Up', icon: MapPin, color: 'primary' }]
+      : [{ key: 'Out for Delivery', label: 'Out for Delivery', icon: Truck, color: 'primary' }]
+    ),
+    { key: 'Delivered', label: isPickup ? 'Picked Up' : 'Delivered', icon: CheckCircle2, color: 'green' }
   ];
 
   const currentStageIndex = stages.findIndex(s => s.key === order?.status);
   const isCancelled = order?.status === 'Cancelled';
+
+  const handleCancelOrder = async () => {
+    if (!order) return;
+    const reason = window.prompt("Why are you cancelling this order?");
+    if (reason) {
+      const { updateDoc, doc, db } = await import('../firebase');
+      try {
+        await updateDoc(doc(db, 'orders', order.id), {
+          status: 'Cancelled',
+          cancellationReason: reason,
+          cancelledBy: 'Customer',
+          updatedAt: Date.now()
+        });
+        alert("Order cancelled successfully.");
+      } catch (e) {
+        console.error(e);
+        alert("Failed to cancel order.");
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -80,6 +105,17 @@ export const OrderTracking: React.FC = () => {
       </header>
 
       <main className="max-w-2xl mx-auto p-4 md:p-6 space-y-6">
+        {/* Cancel Button for early stages */}
+        {(order.status === 'Pending' || order.status === 'Order Received') && (
+          <button 
+            onClick={handleCancelOrder}
+            className="w-full bg-red-50 text-red-600 p-4 rounded-2xl font-black uppercase tracking-widest text-[10px] border border-red-100 hover:bg-red-600 hover:text-white transition-all active:scale-95 flex items-center justify-center gap-2"
+          >
+            <XCircle className="w-4 h-4" />
+            Cancel Order
+          </button>
+        )}
+
         {/* Status Card */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -102,7 +138,7 @@ export const OrderTracking: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">Current Status</p>
-                  <h2 className="text-2xl font-black text-gray-900 tracking-tight">{order.status}</h2>
+                  <h2 className={`text-2xl font-black tracking-tight transition-all ${order.status !== 'Delivered' && order.status !== 'Cancelled' ? 'text-green-600 animate-pulse' : 'text-gray-900'}`}>{order.status}</h2>
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Expected Delivery</p>

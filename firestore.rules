@@ -67,7 +67,7 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'name', 'email', 'phone', 'role', 'password', 'address', 'addresses', 'wishlist', 'lastActiveAt', 'loyaltyPoints']) &&
+      return hasOnlyAllowedFields(['uid', 'name', 'email', 'phone', 'role', 'password', 'address', 'addresses', 'wishlist', 'lastActiveAt', 'loyaltyPoints', 'customPrices']) &&
              data.uid is string && data.uid.size() > 0 &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              (!('email' in data) || (data.email is string)) &&
@@ -75,11 +75,12 @@ service cloud.firestore {
              data.role in ['user', 'admin'] &&
              (!('password' in data) || (data.password is string)) &&
              (!('loyaltyPoints' in data) || (data.loyaltyPoints is number)) &&
-             (!('lastActiveAt' in data) || (data.lastActiveAt is number));
+             (!('lastActiveAt' in data) || (data.lastActiveAt is number)) &&
+             (!('customPrices' in data) || (data.customPrices is map));
     }
 
     function isValidProduct(data) {
-      return hasOnlyAllowedFields(['id', 'name', 'description', 'price', 'originalPrice', 'purchasePrice', 'category', 'image', 'stock', 'createdAt', 'rating', 'reviewCount', 'weight', 'unit', 'tag', 'variations']) &&
+      return hasOnlyAllowedFields(['id', 'name', 'description', 'price', 'originalPrice', 'purchasePrice', 'category', 'image', 'stock', 'createdAt', 'rating', 'reviewCount', 'weight', 'unit', 'tag', 'variations', 'barcode']) &&
              data.name is string && data.name.size() > 0 &&
              data.price is number && data.price >= 0 &&
              data.category is string &&
@@ -91,14 +92,15 @@ service cloud.firestore {
              (!('weight' in data) || (data.weight is string)) &&
              (!('unit' in data) || (data.unit is string)) &&
              (!('tag' in data) || (data.tag is string)) &&
-             (!('variations' in data) || (data.variations is map));
+             (!('variations' in data) || (data.variations is map)) &&
+             (!('barcode' in data) || (data.barcode is string));
     }
 
     function isValidOrder(data) {
-      return hasOnlyAllowedFields(['id', 'userId', 'userName', 'userPhone', 'items', 'total', 'status', 'deliveryType', 'address', 'pin', 'createdAt', 'tracking', 'deliverySlot', 'paymentMethod', 'prescriptionImage', 'earnedPoints', 'redeemedPoints', 'inBag']) &&
+      return hasOnlyAllowedFields(['id', 'userId', 'userName', 'userPhone', 'items', 'total', 'status', 'deliveryType', 'address', 'pin', 'createdAt', 'updatedAt', 'tracking', 'deliverySlot', 'paymentMethod', 'prescriptionImage', 'earnedPoints', 'redeemedPoints', 'inBag', 'cancellationReason']) &&
              data.userId is string && data.userId.size() > 0 &&
+             data.status in ['Pending', 'Order Received', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'] &&
              data.total is number && data.total >= 0 &&
-             data.status in ['Pending', 'Proceeded', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'] &&
              data.deliveryType in ['Takeaway', 'Delivery'] &&
              data.pin is string && data.pin.size() == 4 &&
              data.createdAt is number &&
@@ -109,7 +111,9 @@ service cloud.firestore {
              (!('paymentMethod' in data) || (data.paymentMethod is string)) &&
              (!('earnedPoints' in data) || (data.earnedPoints is number)) &&
              (!('redeemedPoints' in data) || (data.redeemedPoints is number)) &&
-             (!('inBag' in data) || (data.inBag is bool));
+             (!('inBag' in data) || (data.inBag is bool)) &&
+             (!('updatedAt' in data) || (data.updatedAt is number)) &&
+             (!('cancellationReason' in data) || (data.cancellationReason is string));
     }
 
     function isValidReview(data) {
@@ -139,6 +143,29 @@ service cloud.firestore {
              data.userId is string &&
              data.status in ['pending', 'resolved'] &&
              data.chatHistory is list;
+    }
+
+    function isValidBulkEnquiry(data) {
+      return hasOnlyAllowedFields(['userId', 'name', 'email', 'phone', 'storeName', 'message', 'status', 'createdAt']) &&
+             data.userId is string &&
+             data.storeName is string && data.storeName.size() > 0 &&
+             data.status in ['Pending', 'Contacted', 'Closed'] &&
+             data.createdAt is number;
+    }
+
+    function isValidFeatureRequest(data) {
+      return hasOnlyAllowedFields(['userId', 'userName', 'feature', 'status', 'createdAt']) &&
+             data.userId is string &&
+             data.feature is string && data.feature.size() > 0 &&
+             data.status in ['pending', 'reviewed', 'implemented'] &&
+             data.createdAt is number;
+    }
+
+    function isValidExpense(data) {
+      return hasOnlyAllowedFields(['itemName', 'amount', 'date', 'source', 'category', 'photoUrl', 'quantity']) &&
+             data.itemName is string && data.itemName.size() > 0 &&
+             data.amount is number && data.amount >= 0 &&
+             data.date is number;
     }
 
     function isValidStoreSettings(data) {
@@ -183,7 +210,11 @@ service cloud.firestore {
       allow read: if (isAuthenticated() && (existing().userId == request.auth.uid || isAdmin()));
       allow list: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isAuthenticated() && isValidOrder(incoming()) && (incoming().userId == request.auth.uid || isAdmin());
-      allow update: if isAdmin() && isValidOrder(incoming());
+      allow update: if (isAdmin() && isValidOrder(incoming())) || 
+                    (isOwner(existing().userId) && 
+                     incoming().status == 'Cancelled' && 
+                     existing().status in ['Pending', 'Order Received'] && 
+                     isValidOrder(incoming()));
       allow delete: if isAdmin();
     }
 
@@ -204,14 +235,30 @@ service cloud.firestore {
     }
 
     match /support_queries/{queryId} {
-      allow read: if isAdmin() || isOwner(queryId);
-      allow create: if isAuthenticated() && isOwner(queryId) && isValidSupportQuery(incoming());
-      allow update: if (isAdmin() || isOwner(queryId)) && isValidSupportQuery(incoming());
+      allow read: if isAdmin() || (isAuthenticated() && existing().userId == request.auth.uid);
+      allow create: if isAuthenticated() && incoming().userId == request.auth.uid && isValidSupportQuery(incoming());
+      allow update: if isAdmin() || (isAuthenticated() && existing().userId == request.auth.uid && isValidSupportQuery(incoming()));
     }
 
     match /product_requests/{requestId} {
       allow read: if isAdmin();
       allow create: if true;
+    }
+
+    match /bulk_enquiries/{enquiryId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidBulkEnquiry(incoming()) && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /feature_requests/{requestId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isValidFeatureRequest(incoming()) && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /expenses/{expenseId} {
+      allow read, write: if isAdmin();
     }
   }
 }

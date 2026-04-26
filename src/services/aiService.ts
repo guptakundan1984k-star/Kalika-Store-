@@ -73,36 +73,52 @@ export const aiService = {
   },
 
   /**
+   * Analyzes an image of a bill from a URL and extracts products.
+   */
+  async analyzeBillImage(url: string): Promise<{name: string, quantity: number}[]> {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Look at this bill image: ${url}. 
+      Extract all product names and their quantities. 
+      Return ONLY a raw JSON array of objects. 
+      Schema: [{"name": string, "quantity": number}]`,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    try {
+      const text = response.text || "[]";
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+    } catch (e) {
+      console.error("Failed to analyze bill image", e);
+      return [];
+    }
+  },
+
+  /**
    * Detects products from multiple photos for bulk creation.
    */
   async detectProductsBulk(images: { data: string; mimeType: string }[]): Promise<Partial<Product>[]> {
     const parts = [
       ...images.map(img => ({ inlineData: { data: img.data, mimeType: img.mimeType } })),
-      { text: "Identify the products in these images. For each unique product, provide: name, suggested category, and a clean marketing description. Return an array of JSON objects." }
+      { text: "Act as an expert retail catalog curator. For each photo provided, identify the primary product. Provide: 1. Full marketing name, 2. Best fitting category, 3. Engaging technical description, 4. Estimated weight/volume if visible (e.g. 500g, 1L), 5. Estimated market price in INR (if possible based on product type). Return ONLY a raw JSON array of objects. Schema: [{\"name\": string, \"category\": string, \"description\": string, \"weight\": string, \"price\": number}]. If multiple products are in one photo, detect only the most prominent one." }
     ];
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: { parts },
       config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              category: { type: Type.STRING },
-              description: { type: Type.STRING }
-            },
-            required: ["name", "category", "description"]
-          }
-        }
+        responseMimeType: "application/json"
       }
     });
 
     try {
-      return JSON.parse(response.text || "[]");
+      const text = response.text || "[]";
+      // Ensure we only get the JSON part if there's any fluff
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
     } catch (e) {
       console.error("Failed to parse bulk products", e);
       return [];
@@ -110,40 +126,101 @@ export const aiService = {
   },
 
   /**
-   * Finds high-quality product images using Google Search.
-   * This uses gemini-3.1-flash-image-preview with imageSearch tool.
+   * Semantic product search using AI.
    */
-  async findProductImages(productName: string, category?: string): Promise<string[]> {
-    const query = `${productName} ${category ? category : ''} product pack high resolution catalog style white background`;
+  async semanticProductSearch(query: string, products: Product[]): Promise<string[]> {
+    if (!query.trim()) return [];
+
+    const productList = products.map(p => `${p.id}: ${p.name} (${p.category})`).join('\n');
     
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-image-preview',
-      contents: `Find high-quality product images for: "${query}". Return a list of 3-5 real product image URLs.`,
+      model: "gemini-3-flash-preview",
+      contents: `You are a smart shopping assistant for Kalika Store. A customer is looking for: "${query}". 
+      Here is our product catalog:
+      ${productList}
+      
+      Identify the top 5 most relevant products that match the customer's intent (e.g. if they ask for "breakfast items", suggest eggs, milk, bread). 
+      Return ONLY a raw JSON array of product IDs. Schema: ["id1", "id2", ...]`,
       config: {
-        tools: [
-          {
-            googleSearch: {
-              searchTypes: {
-                imageSearch: {},
-              }
-            },
-          },
-        ],
-      },
+        responseMimeType: "application/json"
+      }
     });
 
-    // Extract URLs from response
-    // The model might return them in text or as inlineData if it "generates" based on search.
-    // In search grounding, it usually returns source citations.
-    const urls: string[] = [];
+    try {
+      const text = response.text || "[]";
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+    } catch (e) {
+      console.error("Semantic search failed", e);
+      return [];
+    }
+  },
+
+  /**
+   * Identifies a product from an image (base64) for visual search.
+   */
+  async findProductByImage(imageBase64: string, mimeType: string): Promise<string> {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: {
+        parts: [
+          { inlineData: { data: imageBase64, mimeType } },
+          { text: "Identify the product in this image. Give me a 2-3 word search query to find this product in a grocery catalog. Return ONLY the search query name." }
+        ]
+      }
+    });
+
+    return response.text?.trim() || "";
+  },
+
+  /**
+   * Finds high-quality product images using Google Search.
+   * This handles quota errors by falling back to the base model with search grounding.
+   */
+  async findProductImages(productName: string, category?: string): Promise<string[]> {
+    const query = `${productName} ${category ? category : ''} professional product shot pack high resolution generic stock photo ecommerce`;
     
-    // Simple heuristic to extract URLs from text
-    const urlRegex = /(https?:\/\/[^\s)]+?\.(?:jpg|jpeg|png|webp|gif))/gi;
-    const matches = response.text.match(urlRegex);
-    if (matches) {
-      urls.push(...matches.slice(0, 5));
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Find 5 high-quality, professional, and REAL product photo direct URLs for: "${productName}". 
+        Avoid generic cliparts or drawings. Focus on stock photos that look like they are from a grocery shelf or professional photoshoot.
+        Return ONLY a raw JSON array of image URLs ending in .jpg, .png, or .webp.`,
+        config: {
+          tools: [{ googleSearch: {} }],
+        },
+      });
+
+      const urls: string[] = [];
+      const urlRegex = /(https?:\/\/[^\s)]+?\.(?:jpg|jpeg|png|webp|gif))/gi;
+      const matches = response.text.match(urlRegex);
+      if (matches) {
+        urls.push(...matches.slice(0, 5));
+      }
+      if (urls.length > 0) return Array.from(new Set(urls));
+    } catch (error: any) {
+      console.warn("Primary image search failed, trying fallback...", error?.message);
+      
+      // Fallback to standard model with search grounding if 429 or other error
+      try {
+        const fallbackResponse = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: `I need direct public image URLs for a product: "${productName}". Use Google Search to find 3-5 direct .jpg or .png links. If you can't find direct links, provide descriptive search keywords for a high-quality stock photo.`,
+          config: {
+            tools: [{ googleSearch: {} }]
+          }
+        });
+        
+        const urlRegex = /(https?:\/\/[^\s)]+?\.(?:jpg|jpeg|png|webp|gif))/gi;
+        const matches = fallbackResponse.text.match(urlRegex);
+        if (matches) {
+          return Array.from(new Set(matches.slice(0, 5)));
+        }
+      } catch (fallbackError) {
+        console.error("Image search fallback also failed", fallbackError);
+      }
     }
 
-    return Array.from(new Set(urls));
+    return [];
   }
 };

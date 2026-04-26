@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search as SearchIcon, X, Mic, ArrowLeft, Heart, Plus, ChevronRight, Sparkles, ShoppingBag } from 'lucide-react';
+import { Search as SearchIcon, X, Mic, ArrowLeft, Heart, Plus, ChevronRight, Sparkles, ShoppingBag, Loader2, ScanBarcode } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Product } from '../types';
 import { CATEGORIES } from '../constants';
+
+import { aiService } from '../services/aiService';
 
 interface SearchOverlayProps {
   isOpen: boolean;
@@ -26,6 +28,8 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const [pastSearches, setPastSearches] = useState<string[]>([]);
   const [trendingProducts, setTrendingProducts] = useState<Product[]>([]);
+  const [isAiSearching, setIsAiSearching] = useState(false);
+  const [aiResultIds, setAiResultIds] = useState<string[]>([]);
 
   useEffect(() => {
     const saved = localStorage.getItem('pastSearches');
@@ -44,6 +48,7 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
+    setAiResultIds([]); // Reset AI results on new type
     if (query.trim()) {
       const updated = [query, ...pastSearches.filter(s => s !== query)].slice(0, 10);
       setPastSearches(updated);
@@ -51,9 +56,17 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
     }
   };
 
-  const clearPastSearches = () => {
-    setPastSearches([]);
-    localStorage.removeItem('pastSearches');
+  const handleAiSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setIsAiSearching(true);
+    try {
+      const ids = await aiService.semanticProductSearch(searchQuery, products);
+      setAiResultIds(ids);
+    } catch (e) {
+      console.error("AI Search failed", e);
+    } finally {
+      setIsAiSearching(false);
+    }
   };
 
   const filteredProducts = searchQuery.trim().length === 0 
@@ -66,11 +79,22 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
         return name.includes(query) || category.includes(query) || description.includes(query);
       }).slice(0, 15);
 
+  const aiFilteredProducts = aiResultIds.length > 0 
+    ? products.filter(p => aiResultIds.includes(p.id))
+    : [];
+
+  const displayProducts = aiFilteredProducts.length > 0 ? aiFilteredProducts : filteredProducts;
+
   const popularCategories = CATEGORIES.map(cat => {
     // Get a representative image from products in this category
     const product = products.find(p => p.category === cat.name);
     return { ...cat, image: product?.image || 'https://picsum.photos/seed/cat/200' };
   });
+
+  const clearPastSearches = () => {
+    setPastSearches([]);
+    localStorage.removeItem('pastSearches');
+  };
 
   return (
     <AnimatePresence>
@@ -100,25 +124,45 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
-            <div className="flex-1 relative">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                <SearchIcon className="w-5 h-5 text-gray-400" />
+              <div className="flex-1 relative flex items-center">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                  <SearchIcon className="w-5 h-5 text-gray-400" />
+                </div>
+                <input 
+                  ref={inputRef}
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  placeholder="Search for 'Fruits'"
+                  className="w-full bg-gray-100 border-none rounded-full pl-12 pr-28 py-3 text-sm font-medium focus:ring-2 focus:ring-[#00AEEF]/20 transition-all"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  <button 
+                    onClick={() => navigate('/scan')}
+                    className="p-2 bg-white/80 backdrop-blur-sm rounded-full text-gray-400 hover:text-primary transition-colors shadow-sm border border-gray-100"
+                    title="Scan Barcode"
+                  >
+                    <ScanBarcode className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={handleAiSearch}
+                    disabled={isAiSearching}
+                    className="p-2 bg-white/80 backdrop-blur-sm rounded-full text-gray-400 hover:text-[#00AEEF] transition-colors flex items-center gap-1 shadow-sm border border-gray-200"
+                  >
+                    {isAiSearching ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-[#00AEEF]" />
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span className="text-[8px] font-black uppercase tracking-tighter">AI</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-              <input 
-                ref={inputRef}
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                placeholder="Search for 'Fruits'"
-                className="w-full bg-gray-100 border-none rounded-full pl-12 pr-12 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all"
-              />
-              <button className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-gray-900 hover:text-primary transition-colors">
-                <Mic className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-               <img src="https://kalikastore.in/logo.png" alt="Profile" className="w-6 h-6 rounded-full" />
-            </div>
+              <div className="w-10 h-10 flex items-center justify-center">
+                 <img src="https://kalikastore.in/logo.png" alt="Profile" className="w-8 h-8 rounded-full border border-gray-100" />
+              </div>
           </div>
 
           <div className="flex-1 overflow-y-auto pb-24">
@@ -197,7 +241,6 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
                                 <span className="text-xs font-bold text-gray-300 line-through">₹{product.originalPrice}</span>
                               )}
                             </div>
-                            <span className="text-[10px] font-black text-orange-500 uppercase tracking-tighter">⚡-Quick</span>
                           </div>
                         </div>
                       </div>
@@ -239,13 +282,22 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
               <div className="px-4 py-6 space-y-6">
                 <div className="flex items-center justify-between">
                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                    Found {filteredProducts.length} items for "{searchQuery}"
+                    {aiFilteredProducts.length > 0 ? 'AI Suggestions' : `Found ${filteredProducts.length} items`} for "{searchQuery}"
                   </p>
+                  {filteredProducts.length > 0 && aiFilteredProducts.length === 0 && (
+                    <button 
+                      onClick={handleAiSearch}
+                      className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-2 hover:bg-primary/10 px-3 py-1.5 rounded-xl transition-all"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      Get Smart Suggestions
+                    </button>
+                  )}
                 </div>
 
-                {filteredProducts.length > 0 ? (
+                {displayProducts.length > 0 ? (
                   <div className="grid grid-cols-1 gap-4">
-                    {filteredProducts.map(product => (
+                    {displayProducts.map(product => (
                       <Link 
                         key={product.id}
                         to={`/product/${product.id}`}

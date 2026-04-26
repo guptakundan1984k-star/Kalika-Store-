@@ -25,31 +25,31 @@ const ITEMS = [
   { label: 'BEVERAGE', icon: Coffee },
   { label: 'BISCUITS', icon: Cookie },
   { label: 'CLEANING SUPPLIES', icon: Package },
-  { label: 'MANY MORE', icon: Sparkles },
+  { label: 'AND MANY MORE..', icon: Sparkles },
 ];
 
 export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete }) => {
   const [index, setIndex] = useState(0);
-  const [showLogo, setShowLogo] = useState(false);
+  const [showComplete, setShowComplete] = useState(false);
 
   useEffect(() => {
     if (index < ITEMS.length - 1) {
       const timer = setTimeout(() => {
         setIndex(prev => prev + 1);
-      }, 1000); // 1 sec each
+      }, 1000);
       return () => clearTimeout(timer);
-    } else if (!showLogo) {
+    } else if (!showComplete) {
       const timer = setTimeout(() => {
-        setShowLogo(true);
-      }, 1000); // 1 sec for last item
+        setShowComplete(true);
+      }, 1000);
       return () => clearTimeout(timer);
     } else {
       const completeTimer = setTimeout(() => {
         onComplete?.();
-      }, 2000); // 2 secs for Kalika Store photo
+      }, 2000);
       return () => clearTimeout(completeTimer);
     }
-  }, [index, showLogo, onComplete]);
+  }, [index, showComplete, onComplete]);
 
   const currentItem = ITEMS[index] || ITEMS[0];
 
@@ -76,7 +76,7 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
 
       <div className="relative flex flex-col items-center justify-center w-full max-w-lg">
         <AnimatePresence mode="wait">
-          {!showLogo ? (
+          {!showComplete ? (
             <motion.div
               key={currentItem.label}
               initial={{ opacity: 0, y: 20 }}
@@ -102,7 +102,7 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
                       initial={{ opacity: 0, filter: 'blur(5px)' }}
                       animate={{ opacity: 1, filter: 'blur(0px)' }}
                       transition={{ delay: i * 0.03 }}
-                      className="text-4xl md:text-6xl font-black text-gray-900 tracking-tighter italic uppercase"
+                      className="text-4xl md:text-6xl font-black text-gray-900 tracking-tighter italic uppercase text-center"
                     >
                       {char === ' ' ? '\u00A0' : char}
                     </motion.span>
@@ -120,35 +120,17 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
             </motion.div>
           ) : (
             <motion.div
-              initial={{ scale: 0.8, opacity: 0, y: 30 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              transition={{ type: "spring", stiffness: 200, damping: 20 }}
-              className="flex flex-col items-center gap-10"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center gap-6"
             >
-              <div className="relative">
-                <motion.div 
-                  initial={{ rotate: -5, scale: 0.9 }}
-                  animate={{ rotate: 0, scale: 1 }}
-                  className="w-full max-w-2xl bg-white rounded-[40px] shadow-2xl shadow-primary/10 flex items-center justify-center relative overflow-hidden p-2"
-                >
-                  <img 
-                    src="/shop_front.png" 
-                    alt="Kalika Store Photo" 
-                    className="w-full h-auto rounded-[32px] object-cover"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1601599561213-832382fd07ba?auto=format&fit=crop&q=80&w=1920";
-                    }}
-                  />
-                </motion.div>
-              </div>
-
               <div className="flex flex-col items-center gap-4 text-center">
+                <Logo showImage className="mb-4" />
                 <motion.h1 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
-                  className="text-5xl md:text-7xl font-black text-gray-900 tracking-tighter uppercase italic"
+                  className="text-6xl md:text-8xl font-black text-gray-900 tracking-tighter uppercase italic font-bubbly"
                 >
                   Kalika Store
                 </motion.h1>
@@ -156,7 +138,7 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.6 }}
-                  className="text-[10px] md:text-xs font-black uppercase tracking-[0.5em] text-primary"
+                  className="text-xs md:text-sm font-black uppercase tracking-[0.5em] text-primary"
                 >
                   Premium Essentials Delivered
                 </motion.span>

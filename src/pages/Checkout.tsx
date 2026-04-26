@@ -5,7 +5,7 @@ import { LOYALTY_COIN_VALUE, LOYALTY_EARN_RATE } from '../constants';
 import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, ShieldCheck, Clock, XCircle, Navigation, Smartphone, Wallet, Banknote, Sparkles, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
-import { doc, updateDoc, db } from '../firebase';
+import { doc, updateDoc, db, addDoc, collection } from '../firebase';
 
 interface CheckoutProps {
   cart: CartItem[];
@@ -32,6 +32,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   const [useLoyaltyPoints, setUseLoyaltyPoints] = useState(false);
   const [inBag, setInBag] = useState(false);
   const [selectedDate, setSelectedDate] = useState(0); // 0: Today, 1: Tomorrow, etc.
+  const [checkoutStep, setCheckoutStep] = useState<0 | 1>(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const addressRef = useRef<HTMLDivElement>(null);
@@ -41,9 +42,13 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   const { deliveryFee: configDeliveryFee, freeDeliveryThreshold: configThreshold } = useStore();
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
+  const walletBalance = user?.walletBalance || 0;
+  const walletDue = walletBalance < 0 ? Math.abs(walletBalance) : 0;
+  const walletCredit = walletBalance > 0 ? Math.min(walletBalance, subtotal) : 0;
+
   const pointsValue = (user?.loyaltyPoints || 0) * LOYALTY_COIN_VALUE;
-  const pointsDiscount = useLoyaltyPoints ? Math.min(pointsValue, subtotal) : 0;
-  const redeemedPoints = useLoyaltyPoints ? Math.min(user?.loyaltyPoints || 0, subtotal / LOYALTY_COIN_VALUE) : 0;
+  const pointsDiscount = (useLoyaltyPoints && pointsValue >= 1) ? Math.min(pointsValue, subtotal) : 0;
+  const redeemedPoints = (useLoyaltyPoints && pointsValue >= 1) ? Math.min(user?.loyaltyPoints || 0, subtotal / LOYALTY_COIN_VALUE) : 0;
 
   const calculateDiscount = () => {
     if (!appliedCoupon) return 0;
@@ -61,7 +66,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
 
   const couponDiscount = calculateDiscount();
   const deliveryFee = deliveryType === 'Delivery' ? (subtotal >= configThreshold ? 0 : configDeliveryFee) : 0;
-  const total = Math.max(0, subtotal + deliveryFee - couponDiscount - pointsDiscount);
+  const total = Math.max(0, subtotal + deliveryFee + walletDue - couponDiscount - pointsDiscount - walletCredit);
 
   const earnedPoints = total >= 100 ? Math.floor(total / LOYALTY_EARN_RATE) : 0;
 
@@ -120,13 +125,13 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       const startTime = openH * 60 + openM;
       const endTime = closeH * 60 + closeM;
       
-      for (let m = startTime; m < endTime; m += 30) {
+      for (let m = startTime; m < endTime; m += 120) {
         const h = Math.floor(m / 60);
         const mins = m % 60;
-        const h_end = Math.floor((m + 60) / 60);
-        const mins_end = (m + 60) % 60;
+        const h_end = Math.floor((m + 120) / 60);
+        const mins_end = (m + 120) % 60;
         
-        if (m + 60 > endTime) break;
+        if (m + 120 > endTime) break;
 
         const formatTime = (hour: number, minute: number) => {
           const ampm = hour >= 12 ? 'PM' : 'AM';
@@ -226,8 +231,36 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
     }
   };
 
-  const handlePlaceOrder = async () => {
+  const handleNextStep = () => {
     setErrors({});
+    if (checkoutStep === 0) {
+      if (deliveryType === 'Delivery') {
+        if (!manualAddress || manualAddress.length < 10) {
+          setErrors(prev => ({ ...prev, address: "Please provide a valid address (min 10 chars)." }));
+          addressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+        if (!deliverySlot) {
+          setErrors(prev => ({ ...prev, slot: "Please select a 1-2 hour delivery slot." }));
+          slotRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+      }
+      if (!user?.phone) {
+        setErrors(prev => ({ ...prev, phone: "Phone number required for delivery." }));
+        const phoneInput = document.getElementById('checkout-phone-input');
+        if (phoneInput) {
+          phoneInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+      }
+      setCheckoutStep(1); // Go straight to Review
+    }
+  };
+
+  const handlePlaceOrder = async () => {
+    // Only ask once
+    if (!window.confirm("Confirm your order placement?")) return;
     
     // Check if it's a pre-order (Tomorrow or beyond)
     const isPreOrder = selectedDate > 0;
@@ -252,7 +285,10 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
     if (deliveryType === 'Delivery') {
       if (!manualAddress || manualAddress.length < 10) {
         setErrors(prev => ({ ...prev, address: "Give the correct address (minimum 10 characters required)." }));
-        addressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setCheckoutStep(0);
+        setTimeout(() => {
+          addressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
         return;
       }
 
@@ -261,25 +297,34 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       
       if (!hasJharkhand) {
         setErrors(prev => ({ ...prev, address: "Not detected Jharkhand address. We currently only deliver in Jharkhand." }));
-        addressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setCheckoutStep(0);
+        setTimeout(() => {
+          addressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
         return;
       }
     }
 
     if (!user?.phone) {
       setErrors(prev => ({ ...prev, phone: "Please add your phone number for verification calls." }));
-      const phoneInput = document.getElementById('checkout-phone-input');
-      if (phoneInput) {
-        phoneInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        phoneInput.focus();
-      } else {
-        navigate('/profile');
-      }
+      setCheckoutStep(0);
+      setTimeout(() => {
+        const phoneInput = document.getElementById('checkout-phone-input');
+        if (phoneInput) {
+          phoneInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          phoneInput.focus();
+        } else {
+          navigate('/profile');
+        }
+      }, 100);
       return;
     }
     if (deliveryType === 'Delivery' && !deliverySlot) {
       setErrors(prev => ({ ...prev, slot: "Please select a delivery slot." }));
-      slotRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setCheckoutStep(0);
+      setTimeout(() => {
+        slotRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
       return;
     }
     if (!paymentMethod) {
@@ -312,41 +357,60 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       createdAt: Date.now(),
     };
 
-    onOrderPlaced(newOrder);
-    
-    // Clear cart after order
-    if (typeof onOrderPlaced === 'function') {
-      // Assuming App.tsx handles state, but we can also trigger a local clear if needed
-      // However, the prop onOrderPlaced is usually where the parent clears the state.
+    // Pre-order check logic...
+    const preorderFlag = selectedDate > 0 || !storeSettings?.isFunctionallyOpen;
+
+    const finalOrder = {
+      ...newOrder,
+      isPreOrder: preorderFlag,
+      discount: couponDiscount + pointsDiscount,
+      redeemedPoints: redeemedPoints,
+      earnedPoints: earnedPoints,
+    };
+
+    try {
+      // 1. SAVE TO FIRESTORE
+      const docRef = await addDoc(collection(db, 'orders'), finalOrder);
+      setOrderId(docRef.id);
+
+      // 2. CLEAR CART
+      onOrderPlaced(newOrder); 
+      
+      // 3. UPDATE USER LOYALTY & WALLET
+      if (user) {
+        const updates: any = {};
+        if (redeemedPoints > 0) {
+          updates.loyaltyPoints = Math.max(0, (user.loyaltyPoints || 0) - Math.floor(redeemedPoints));
+        }
+
+        // Handle wallet balance reset (it's now part of this order)
+        if (walletBalance !== 0) {
+          updates.walletBalance = 0;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await updateDoc(doc(db, 'users', user.uid), updates);
+        }
+      }
+
+      setOrderPin(pin);
+      setIsPlaced(true);
+
+      // Speak & Sound
+      const speech = new SpeechSynthesisUtterance("Order Placed Successfully. Thank you for shopping with Kalika Store.");
+      window.speechSynthesis.speak(speech);
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.play().catch(e => console.log("Audio play failed:", e));
+
+      // Notification
+      const adminNumbers = ['916205284423', '919608123427', '919905516803'];
+      const message = `New Order! ID: ${docRef.id}%0ATotal: ₹${total}%0AAddress: ${manualAddress || 'Takeaway'}`;
+      window.open(`https://wa.me/${adminNumbers[0]}?text=${message}`, '_blank');
+
+    } catch (error) {
+      console.error("Error placing order:", error);
+      alert("Failed to place order. Please try again.");
     }
-
-    // Update user loyalty points
-    if (user) {
-      const newPoints = (user.loyaltyPoints || 0) - Math.floor(redeemedPoints) + earnedPoints;
-      updateDoc(doc(db, 'users', user.uid), {
-        loyaltyPoints: newPoints
-      }).catch(e => console.error("Error updating loyalty points:", e));
-    }
-
-    setOrderId(newOrder.id);
-    setOrderPin(pin);
-    setIsPlaced(true);
-
-    // Speak "Order Placed"
-    const speech = new SpeechSynthesisUtterance("Order Placed Successfully. Thank you for shopping with Kalika Store.");
-    window.speechSynthesis.speak(speech);
-
-    // Play Ring Sound
-    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-    audio.play().catch(e => console.log("Audio play failed:", e));
-
-    // Multi-number Notifications (WhatsApp)
-    const adminNumbers = ['916205284423', '919608123427', '919905516803'];
-    const customerInfo = `Customer: ${user?.name || 'Guest'}%0APhone: ${user?.phone || 'N/A'}%0AAddress: ${manualAddress || 'Takeaway'}`;
-    const message = `New Order Received!%0AOrder ID: ${newOrder.id}%0ATotal: ₹${total}%0AMethod: ${paymentMethod}%0ADelivery: ${deliveryType}%0A%0A${customerInfo}`;
-    
-    // Open WhatsApp for the first number automatically, and provide buttons for others in success UI
-    window.open(`https://wa.me/${adminNumbers[0]}?text=${message}`, '_blank');
   };
 
   if (isPlaced) {
@@ -492,46 +556,55 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
               <CreditCard className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-3xl font-black text-gray-900 tracking-tight">Checkout</h1>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Complete your order details</p>
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">Checkout Step {checkoutStep + 1}</h1>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{checkoutStep === 0 ? 'Delivery & Time' : 'Review & Confirm'}</p>
             </div>
           </div>
 
-          {/* Delivery Type Selection */}
-          <div className="grid grid-cols-2 gap-6">
-            <button 
-              onClick={() => setDeliveryType('Delivery')}
-              className={`p-6 rounded-[32px] border-2 transition-all flex flex-col items-center gap-4 ${
-                deliveryType === 'Delivery' ? 'bg-primary/5 border-primary text-primary shadow-xl shadow-primary/10' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
-              }`}
-            >
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
-                deliveryType === 'Delivery' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-gray-50'
-              }`}>
-                <Truck className="w-7 h-7" />
-              </div>
-              <div className="text-center">
-                <span className="text-lg font-black tracking-tight block">Home Delivery</span>
-                <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Jharkhand Only</span>
-              </div>
-            </button>
-            <button 
-              onClick={() => setDeliveryType('Takeaway')}
-              className={`p-6 rounded-[32px] border-2 transition-all flex flex-col items-center gap-4 ${
-                deliveryType === 'Takeaway' ? 'bg-primary/5 border-primary text-primary shadow-xl shadow-primary/10' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
-              }`}
-            >
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
-                deliveryType === 'Takeaway' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-gray-50'
-              }`}>
-                <ShoppingBag className="w-7 h-7" />
-              </div>
-              <div className="text-center">
-                <span className="text-lg font-black tracking-tight block">Self Pickup</span>
-                <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">FREE</span>
-              </div>
-            </button>
+          <div className="flex items-center gap-4 overflow-x-auto scrollbar-hide pb-2">
+            <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${checkoutStep === 0 ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>1. Details & Slots</div>
+            <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${checkoutStep === 1 ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>2. Review</div>
           </div>
+
+          <AnimatePresence mode="wait">
+            {checkoutStep === 0 && (
+              <motion.div key="step0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
+                <div className="grid grid-cols-2 gap-6">
+                  <button 
+                    onClick={() => setDeliveryType('Delivery')}
+                    className={`p-6 rounded-[32px] border-2 transition-all flex flex-col items-center gap-4 ${
+                      deliveryType === 'Delivery' ? 'bg-primary/5 border-primary text-primary' : 'bg-white border-gray-100 text-gray-400'
+                    }`}
+                  >
+                    <Truck className="w-10 h-10" />
+                    <span className="text-sm font-black uppercase tracking-widest text-center">Home Delivery</span>
+                    <span className="text-[10px] font-bold opacity-60">Within 10km Radius</span>
+                  </button>
+                  <button 
+                    onClick={() => setDeliveryType('Takeaway')}
+                    className={`p-6 rounded-[32px] border-2 transition-all flex flex-col items-center gap-4 ${
+                      deliveryType === 'Takeaway' ? 'bg-primary/5 border-primary text-primary' : 'bg-white border-gray-100 text-gray-400'
+                    }`}
+                  >
+                    <ShoppingBag className="w-10 h-10" />
+                    <span className="text-sm font-black uppercase tracking-widest text-center">Self Pickup</span>
+                    <span className="text-[10px] font-bold opacity-60">Any Distance</span>
+                  </button>
+                </div>
+
+                {deliveryType === 'Delivery' && (
+                  <div className="p-6 bg-orange-50 rounded-[32px] border border-orange-100 flex items-start gap-4">
+                    <div className="w-10 h-10 bg-orange-500 text-white rounded-2xl flex items-center justify-center shrink-0">
+                      <MapPin className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-orange-700">Delivery Restriction</p>
+                      <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest leading-relaxed mt-1">
+                        We currently deliver only within a 10km radius of our store location in Ranchi. Orders outside this range may be cancelled.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
           {/* Address Section */}
           <div className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 space-y-8">
@@ -724,23 +797,127 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                     <ShoppingBag className="w-6 h-6" />
                   </div>
                   <div className="text-left">
-                    <h4 className="text-sm font-black tracking-tight">Get your order in a bag?</h4>
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Eco-friendly reusable bag</p>
+                    <h4 className="text-sm font-black tracking-tight">Eco-friendly Bag</h4>
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Help us reduce plastic</p>
                   </div>
                 </div>
                 <div className={`w-12 h-6 rounded-full relative transition-all ${inBag ? 'bg-primary' : 'bg-gray-300'}`}>
-                  <motion.div 
-                    animate={{ x: inBag ? 24 : 4 }}
-                    className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm"
-                  />
+                  <motion.div animate={{ x: inBag ? 24 : 4 }} className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
                 </div>
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Order Summary Sidebar */}
-        <div className="space-y-8 h-fit sticky top-24">
+          <button 
+            onClick={handleNextStep}
+            className="w-full bg-primary text-white font-black py-6 rounded-[32px] shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-[0.98] uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-2"
+          >
+            Continue to Review
+            <ArrowRight className="w-5 h-5" />
+          </button>
+        </motion.div>
+        )}
+
+        {checkoutStep === 1 && (
+          <motion.div key="step1" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8">
+            {/* Kalika Coins Redemption (User requested: "load from the top") */}
+            {user && (user.loyaltyPoints || 0) > 0 && (
+              <motion.div 
+                initial={{ y: -50, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                className="bg-amber-50 border border-amber-200 p-6 rounded-[32px] overflow-hidden relative group"
+              >
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                  <Sparkles className="w-16 h-16 text-amber-600" />
+                </div>
+                <div className="flex items-center justify-between gap-6 relative z-10">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-amber-600" />
+                      <h4 className="text-lg font-black text-amber-900 tracking-tight">Redeem Kalika Coins</h4>
+                    </div>
+                    <p className="text-xs font-medium text-amber-700/80">
+                      You have <span className="font-black">{user.loyaltyPoints} coins</span> (₹{(user.loyaltyPoints * LOYALTY_COIN_VALUE).toFixed(2)})
+                    </p>
+                    {user.loyaltyPoints * LOYALTY_COIN_VALUE < 1 && (
+                      <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">
+                        Min. ₹1.00 required to redeem
+                      </p>
+                    )}
+                    {useLoyaltyPoints && (
+                      <p className="text-[10px] font-black text-green-600 uppercase tracking-widest animate-pulse">
+                        Applied: -₹{(redeemedPoints * LOYALTY_COIN_VALUE).toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                  <button 
+                    onClick={() => setUseLoyaltyPoints(!useLoyaltyPoints)}
+                    className={`px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-lg ${
+                      useLoyaltyPoints 
+                        ? 'bg-amber-600 text-white shadow-amber-600/20' 
+                        : 'bg-white text-amber-600 border border-amber-300 shadow-sm'
+                    }`}
+                  >
+                    {useLoyaltyPoints ? 'REMOVE COINS' : 'APPLY COINS'}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            <div className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 space-y-8">
+              <h2 className="text-3xl font-black text-gray-900 tracking-tight">Order Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-8 rounded-[32px]">
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Delivery To</p>
+                  <p className="text-sm font-bold text-gray-900 line-clamp-2">{manualAddress || 'Pickup at Store'}</p>
+                </div>
+                <div className="md:text-right">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Time Slot</p>
+                  <p className="text-sm font-bold text-gray-900">{deliverySlot}</p>
+                </div>
+              </div>
+
+              <div className="bg-primary/5 p-6 rounded-[32px] border border-primary/10 flex items-center gap-4">
+                <div className="w-12 h-12 bg-primary text-white rounded-2xl flex items-center justify-center">
+                  <Banknote className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-gray-900">Cash on Delivery</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pay when you receive</p>
+                </div>
+              </div>
+
+              {!user?.phone && (
+                <div className="p-6 bg-red-50 rounded-3xl border border-red-500">
+                  <p className="text-sm font-black text-red-600">Verification Call Number Needed</p>
+                  <input 
+                    type="tel"
+                    onChange={(e) => {
+                      if (e.target.value.length === 10 && user) {
+                        updateDoc(doc(db, 'users', user.uid), { phone: e.target.value });
+                      }
+                    }}
+                    className="w-full mt-4 p-4 rounded-xl border-none focus:ring-4 focus:ring-red-100"
+                    placeholder="Enter 10-digit phone number"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-4">
+                <button onClick={() => setCheckoutStep(0)} className="flex-1 py-5 bg-gray-100 rounded-[32px] font-black uppercase text-[10px]">Back</button>
+                <button 
+                  onClick={handlePlaceOrder}
+                  className="flex-[2] bg-primary text-white font-black py-5 rounded-[32px] shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all uppercase tracking-widest text-[10px]"
+                >
+                  Place Order (₹{total.toFixed(0)})
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+    <div className="lg:col-span-1 space-y-8">
           <div className="bg-white p-8 rounded-[40px] shadow-xl shadow-gray-200/50 border border-gray-100 space-y-8 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-hide">
             <h2 className="text-2xl font-black text-gray-900 tracking-tight">Order Summary</h2>
             
@@ -784,6 +961,23 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                 <div className="flex justify-between text-sm font-bold text-amber-600">
                   <span>Kalika Coins Discount</span>
                   <span>-₹{pointsDiscount.toFixed(2)}</span>
+                </div>
+              )}
+
+              {walletDue > 0 && (
+                <div className="flex justify-between text-sm font-bold text-red-600">
+                  <div className="flex flex-col">
+                    <span>Outstanding Balance (Dues)</span>
+                    <span className="text-[10px] uppercase opacity-60">Automatically added to total</span>
+                  </div>
+                  <span>+₹{walletDue}</span>
+                </div>
+              )}
+              
+              {walletCredit > 0 && (
+                <div className="flex justify-between text-sm font-bold text-blue-600">
+                  <span>Wallet Credit Applied</span>
+                  <span>-₹{walletCredit}</span>
                 </div>
               )}
               
@@ -896,21 +1090,9 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
               </div>
             </div>
 
-            <button 
-              onClick={handlePlaceOrder}
-              className={`w-full flex items-center justify-center gap-3 text-white font-bold px-10 py-5 rounded-3xl shadow-2xl transition-all active:scale-95 group ${
-                storeSettings?.isFunctionallyOpen 
-                  ? 'bg-primary shadow-primary/30 hover:bg-primary-dark' 
-                  : 'bg-orange-600 shadow-orange-600/30 hover:bg-orange-700'
-              }`}
-            >
-              {storeSettings?.isFunctionallyOpen ? 'Place Order' : 'Place Pre-Order'}
-              <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-            </button>
-            
             <p className="text-[10px] text-gray-400 font-medium text-center leading-relaxed">
-              By placing this order, you agree to our <br />
-              <span className="text-primary font-bold">Terms & Conditions</span> and <span className="text-primary font-bold">Privacy Policy</span>.
+              By placing this order you agree to our <span className="text-primary font-bold underline cursor-pointer">Terms & Conditions</span>. <br />
+              <span className="text-amber-600 font-black uppercase text-[8px]">Loyalty Policy:</span> Minimum redemption value is ₹1.00. Coins are credited after successful delivery and reversed if order is cancelled.
             </p>
           </div>
         </div>

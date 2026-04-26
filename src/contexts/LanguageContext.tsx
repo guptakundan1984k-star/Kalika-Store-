@@ -36,7 +36,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t, isVoiceEnabled, setIsVoiceEnabled }}>
+    <LanguageContext.Provider value={{ language, setLanguage, t, isVoiceEnabled: true, setIsVoiceEnabled }}>
       {children}
     </LanguageContext.Provider>
   );

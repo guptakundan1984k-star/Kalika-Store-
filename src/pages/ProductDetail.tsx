@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Product, Review, UserProfile } from '../types';
 import { 
   Star, ShoppingCart, Heart, ArrowLeft, ShieldCheck, 
-  Truck, Clock, MessageSquare, Send, User, Trash2, Plus, Minus
+  Truck, Clock, MessageSquare, Send, User, Trash2, Plus, Minus, Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, collection, query, where, onSnapshot, addDoc, Timestamp, deleteDoc, doc, getDocs } from '../firebase';
@@ -22,6 +22,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const product = products.find(p => p.id === id);
+  
+  const finalPrice = user?.customPrices?.[product?.id || ''] ?? product?.price ?? 0;
+  const hasCustomPrice = user?.customPrices?.[product?.id || ''] !== undefined;
   
   const [reviews, setReviews] = useState<Review[]>([]);
   const [hasOrdered, setHasOrdered] = useState(false);
@@ -221,16 +224,24 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
             </div>
 
             <div className="flex flex-col gap-2">
-              {product.originalPrice && product.originalPrice > product.price && (
+              {product.originalPrice && product.originalPrice > finalPrice && (
                 <div className="flex items-center gap-3">
                   <span className="text-xl font-bold text-gray-400 line-through tracking-tighter">₹{product.originalPrice}</span>
                   <span className="bg-green-100 text-green-700 text-xs font-black px-2 py-1 rounded-xl uppercase tracking-widest">
-                    {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
+                    {Math.round(((product.originalPrice - finalPrice) / product.originalPrice) * 100)}% OFF
                   </span>
                 </div>
               )}
               <div className="flex items-baseline gap-4">
-                <span className="text-5xl font-black text-primary tracking-tighter">₹{product.price}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-5xl font-black text-primary tracking-tighter">₹{finalPrice}</span>
+                  {hasCustomPrice && (
+                    <div className="bg-primary/10 text-primary px-3 py-1 rounded-xl flex items-center gap-2 border border-primary/20">
+                      <Tag className="w-4 h-4" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Party Rate</span>
+                    </div>
+                  )}
+                </div>
                 {product.weight && <span className="text-lg font-bold text-gray-400">/ {product.weight}</span>}
               </div>
             </div>
@@ -351,7 +362,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                 </div>
                 <div>
                   <h4 className="text-sm font-black text-gray-900">Fast Delivery</h4>
-                  <p className="text-xs font-bold text-gray-400">10-20 mins delivery</p>
+                  <p className="text-xs font-bold text-gray-400">Doorstep service</p>
                 </div>
               </div>
             </div>

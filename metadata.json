@@ -1,5 +1,5 @@
 {
   "name": "Kalika Store",
   "description": "A modern grocery store with AI-powered admin assistant, real-time order tracking, and Jharkhand-wide delivery.",
-  "requestFramePermissions": ["geolocation", "bluetooth", "microphone"]
+  "requestFramePermissions": ["geolocation", "bluetooth", "microphone", "camera"]
 }

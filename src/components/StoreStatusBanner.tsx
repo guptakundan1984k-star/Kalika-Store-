@@ -7,51 +7,40 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 interface StoreStatusBannerProps {
   settings?: StoreSettings | null;
+  user?: any;
 }
 
-export const StoreStatusBanner: React.FC<StoreStatusBannerProps> = ({ settings }) => {
+export const StoreStatusBanner: React.FC<StoreStatusBannerProps> = ({ settings, user }) => {
   const { t } = useLanguage();
   if (!settings) return null;
 
+  const isAdmin = user?.role === 'admin';
+
   // Manual closed is RED
   const isManuallyClosed = settings.isOpen === false;
-  // Schedule closed is ORANGE
-  const isScheduleClosed = settings.isOpen === true && settings.isFunctionallyOpen === false;
 
-  // USER REQUEST: remove pre order banner from store only when store is closed (Manually Closed)
-  if (isManuallyClosed) return null;
+  // USER REQUEST: remove the store open bar only display it when the store is closed
+  if (settings.isFunctionallyOpen) return null;
 
   return (
     <AnimatePresence>
-      {(isManuallyClosed || isScheduleClosed) && (
-        <motion.div
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          className={`w-full ${isManuallyClosed ? 'bg-red-600' : 'bg-orange-500'} text-white overflow-hidden`}
-        >
-          <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <p className="text-[10px] md:text-sm font-black uppercase tracking-widest leading-none">
-                {isManuallyClosed 
-                  ? t('storeClosedManual') || "Store is currently closed for maintenance. Only Pre-orders are allowed." 
-                  : t('preOrderOnly') || "Standard delivery hours ended. Currently accepting PRE-ORDERS only."
-                }
-              </p>
+      <motion.div
+        initial={{ height: 0, opacity: 0 }}
+        animate={{ height: 'auto', opacity: 1 }}
+        exit={{ height: 0, opacity: 0 }}
+        className="w-full bg-red-600 text-white overflow-hidden"
+      >
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-center">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
+              <ShoppingBag className="w-5 h-5 text-white" />
             </div>
-            <div className="flex items-center gap-2">
-              <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full">
-                <ShoppingBag className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-widest">{t('preOrderNow')}</span>
-              </div>
-              <ArrowRight className="w-4 h-4" />
-            </div>
+            <p className="text-xs md:text-sm font-black uppercase tracking-[0.2em] text-white">
+              Currently accepting PRE-ORDERS only
+            </p>
           </div>
-        </motion.div>
-      )}
+        </div>
+      </motion.div>
     </AnimatePresence>
   );
 };

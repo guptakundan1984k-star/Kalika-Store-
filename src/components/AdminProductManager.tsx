@@ -2,16 +2,17 @@ import React, { useState } from 'react';
 import { 
   Plus, Search, Edit2, Trash2, Package, Filter, Download, 
   Upload, Image as ImageIcon, Sparkles, Loader2, AlertCircle, Save, X,
-  CheckSquare, Square, Cloud
+  CheckSquare, Square, Cloud, ScanBarcode
 } from 'lucide-react';
 import { Product } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_PRODUCTS } from '../data/initialProducts';
-import { generateProductDescription, analyzeProductImage, searchProductDetails } from '../services/geminiService';
+import { generateProductDescription, analyzeProductImage, searchProductDetails, findProductByBarcode } from '../services/geminiService';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { db, doc, deleteDoc, updateDoc, storage, ref, uploadBytes, getDownloadURL, handleFirestoreError, OperationType } from '../firebase';
 import { aiService } from '../services/aiService';
+import { BarcodeScanner } from './BarcodeScanner';
 
 interface AdminProductManagerProps {
   products: Product[];
@@ -48,18 +49,74 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categories, setCategories] = useState(['Vegetables', 'Fruits', 'Dairy', 'Bakery', 'Meat', 'Snacks', 'Beverages', 'Staples', 'Oils', 'Household']);
 
+  const [isScanning, setIsScanning] = useState(false);
+  const [isProcessingBarcode, setIsProcessingBarcode] = useState(false);
+
+  const handleBarcodeScan = async (barcode: string) => {
+    setIsScanning(false);
+    setIsProcessingBarcode(true);
+    setLoadingAI(true);
+    
+    try {
+      // Check if product with this barcode already exists
+      const existingProduct = products.find(p => p.barcode === barcode);
+      if (existingProduct) {
+        if (window.confirm(`Product "${existingProduct.name}" already exists with this barcode. Do you want to edit it?`)) {
+          setEditingProduct(existingProduct);
+          setIsEditing(true);
+          setLoadingAI(false);
+          setIsProcessingBarcode(false);
+          return;
+        }
+      }
+
+      const details = await findProductByBarcode(barcode);
+      if (details.name) {
+        // Auto-fetch multiple images using AI search
+        const images = await aiService.findProductImages(details.name, details.category);
+        
+        setEditingProduct({
+          name: details.name,
+          category: details.category || 'Staples',
+          price: details.price || 0, 
+          stock: 50,
+          description: details.description || '',
+          weight: details.weight || '',
+          image: images[0] || `https://picsum.photos/seed/${details.name.replace(/\s+/g, '-')}/800/800`,
+          images: images.length > 0 ? images : [],
+          barcode: barcode
+        });
+        setIsEditing(true);
+      } else {
+        alert("Could not identify product from this barcode. Please add manually.");
+      }
+    } catch (e) {
+      console.error("Barcode lookup failed", e);
+      alert("Error identifying product. Please try again.");
+    } finally {
+      setIsProcessingBarcode(false);
+      setLoadingAI(false);
+    }
+  };
+
   const [bulkPriceValue, setBulkPriceValue] = useState<number>(0);
   const [priceAdjustType, setPriceAdjustType] = useState<'fixed' | 'percent'>('fixed');
+  const [priceAdjustAction, setPriceAdjustAction] = useState<'increase' | 'decrease'>('increase');
 
-  const handleBulkPriceUpdate = async (value: number, type: 'fixed' | 'percent') => {
-    if (!window.confirm(`Adjust price of ${selectedIds.length} items by ${value}${type === 'percent' ? '%' : ''}?`)) return;
+  const handleBulkPriceUpdate = async (value: number, type: 'fixed' | 'percent', action: 'increase' | 'decrease') => {
+    if (!window.confirm(`Adjust price of ${selectedIds.length} items by ${action === 'increase' ? '+' : '-'}${value}${type === 'percent' ? '%' : ''}?`)) return;
     try {
       await Promise.all(selectedIds.map(id => {
         const product = products.find(p => p.id === id);
         if (!product) return Promise.resolve();
         let newPrice = product.price;
-        if (type === 'fixed') newPrice += value;
-        else newPrice = Math.round(newPrice * (1 + value / 100));
+        const multiplier = action === 'increase' ? 1 : -1;
+        
+        if (type === 'fixed') {
+          newPrice += (value * multiplier);
+        } else {
+          newPrice = Math.round(newPrice * (1 + (value * multiplier) / 100));
+        }
         return updateDoc(doc(db, 'products', id), { price: Math.max(0, newPrice) });
       }));
       setSelectedIds([]);
@@ -427,6 +484,83 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
   return (
     <div className="space-y-8 p-6">
+      {/* Photo Alerts Section */}
+      {products.filter(p => !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder')).length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-blue-50 border-2 border-blue-200 p-6 rounded-[32px] space-y-4 shadow-lg shadow-blue-100"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-[#00AEEF] rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+                <ImageIcon className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-gray-900">Photo Alerts</h3>
+                <p className="text-xs font-bold text-blue-700 uppercase tracking-widest">
+                  {products.filter(p => !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder')).length} items need real photos
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={() => handleBulkSync('images')}
+              className="bg-[#00AEEF] text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+            >
+              Auto-fix All with AI
+            </button>
+          </div>
+          
+          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+            {products.filter(p => !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder')).slice(0, 8).map(p => (
+              <div key={`alert-${p.id}`} className="min-w-[200px] bg-white p-4 rounded-2xl border border-blue-100 flex flex-col gap-3 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gray-50 rounded-lg overflow-hidden border border-gray-100">
+                    <img src={p.image} alt="" className="w-full h-full object-cover grayscale opacity-50" />
+                  </div>
+                  <p className="text-xs font-black text-gray-900 line-clamp-1">{p.name}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={async () => {
+                      setEditingProduct(p);
+                      setIsEditing(true);
+                      // Slight delay to ensure modal is open
+                      setTimeout(() => handleGoogleSearch(), 100);
+                    }}
+                    className="p-2 bg-primary text-white rounded-xl hover:bg-primary-dark transition-all"
+                    title="Search Google"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                  <label className="p-2 bg-gray-900 text-white rounded-xl hover:bg-black transition-all cursor-pointer">
+                    <Upload className="w-4 h-4" />
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      onChange={async (e) => {
+                        setEditingProduct(p);
+                        setIsEditing(true);
+                        await handlePhotoUpload(e);
+                      }} 
+                    />
+                  </label>
+                  <button 
+                    onClick={() => {
+                      setEditingProduct(p);
+                      setIsEditing(true);
+                    }}
+                    className="p-2 bg-gray-50 text-gray-400 rounded-xl hover:text-primary transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
@@ -492,6 +626,14 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
             <input type="file" accept=".csv, .xlsx, .xls" onChange={handleFileUpload} className="hidden" disabled={isImporting} />
           </label>
           <button 
+            onClick={() => setIsScanning(true)}
+            disabled={isProcessingBarcode}
+            className="flex items-center gap-2 bg-black text-white px-4 py-3 rounded-2xl shadow-xl shadow-black/20 hover:scale-105 transition-all font-bold text-sm disabled:opacity-50"
+          >
+            {isProcessingBarcode ? <Loader2 className="w-5 h-5 animate-spin" /> : <ScanBarcode className="w-5 h-5 text-primary" />}
+            {isProcessingBarcode ? 'Processing...' : 'Scan Barcode'}
+          </button>
+          <button 
             onClick={handleBulkDelete}
             disabled={selectedIds.length === 0}
             className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-3 rounded-2xl shadow-sm hover:bg-red-600 hover:text-white transition-all font-bold text-sm disabled:opacity-50"
@@ -499,23 +641,78 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
             <Trash2 className="w-5 h-5" />
             Delete Selected
           </button>
+          {selectedIds.length > 0 && (
+            <label className="flex items-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-2xl shadow-xl shadow-blue-600/20 hover:bg-black transition-all font-black text-sm uppercase tracking-widest cursor-pointer group">
+              <Upload className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              Upload Photos to {selectedIds.length} items
+              <input 
+                type="file" 
+                multiple 
+                accept="image/*"
+                className="hidden" 
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  if (!files || files.length === 0) return;
+                  
+                  if (!window.confirm(`You are about to upload ${files.length} photos to the selected ${selectedIds.length} items. Continue?`)) return;
+
+                  setIsSyncing(true);
+                  let fileIdx = 0;
+                  try {
+                    for (const id of selectedIds) {
+                      const product = products.find(p => p.id === id);
+                      if (!product) continue;
+
+                      // Check if product already has real photos
+                      if (product.image && !product.image.includes('picsum.photos') && !product.image.includes('placeholder')) {
+                        if (!window.confirm(`Product "${product.name}" already has a photo. Replace it?`)) continue;
+                      }
+
+                      const file = files[fileIdx % files.length];
+                      const reader = new FileReader();
+                      const base64 = await new Promise<string>((resolve) => {
+                        reader.onload = () => resolve(reader.result as string);
+                        reader.readAsDataURL(file);
+                      });
+
+                      // For demo we use base64, in prod we'd use Storage
+                      await updateDoc(doc(db, 'products', id), {
+                        image: base64,
+                        images: Array.from(new Set([...(product.images || []), base64]))
+                      });
+                      fileIdx++;
+                    }
+                    alert('Bulk photo upload complete!');
+                  } catch (err) {
+                    console.error(err);
+                  } finally {
+                    setIsSyncing(false);
+                    setSelectedIds([]);
+                  }
+                }}
+              />
+            </label>
+          )}
           <button 
             onClick={async () => {
-              if (window.confirm('⚠️ WARNING: This will delete ALL products from your store. This action cannot be undone. Are you absolutely sure?')) {
-                if (window.confirm('FINAL CONFIRMATION: Type "DELETE ALL" (case sensitive) if you are sure.')) {
-                  const confirmText = window.prompt('Type "DELETE ALL" to confirm:');
-                  if (confirmText === 'DELETE ALL') {
-                    setIsSyncing(true);
-                    try {
-                      const batch = products.map(p => deleteDoc(doc(db, 'products', p.id)));
-                      await Promise.all(batch);
-                      alert('All products deleted successfully.');
-                    } catch (e) {
-                      console.error("Delete all failed", e);
-                    } finally {
-                      setIsSyncing(false);
-                    }
+              if (products.length === 0) return;
+              const confirmText = window.prompt(`DANGER: Type "DELETE ALL ${products.length}" to confirm permanent deletion:`);
+              if (confirmText === `DELETE ALL ${products.length}`) {
+                setIsSyncing(true);
+                try {
+                  const { writeBatch } = await import('firebase/firestore');
+                  for (let i = 0; i < products.length; i += 500) {
+                    const batch = writeBatch(db);
+                    const chunk = products.slice(i, i + 500);
+                    chunk.forEach(p => batch.delete(doc(db, 'products', p.id)));
+                    await batch.commit();
                   }
+                  alert('Inventory cleared.');
+                } catch (e) {
+                  console.error(e);
+                  alert("Clear failed.");
+                } finally {
+                  setIsSyncing(false);
                 }
               }
             }}
@@ -560,6 +757,13 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
             Enhance Photos Now
           </button>
         </motion.div>
+      )}
+
+      {isScanning && (
+        <BarcodeScanner 
+          onScan={handleBarcodeScan}
+          onClose={() => setIsScanning(false)}
+        />
       )}
 
       {/* Stats Overview */}
@@ -617,6 +821,14 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2 bg-white/10 p-1 rounded-xl border border-white/10">
                     <button 
+                      onClick={() => setPriceAdjustAction(a => a === 'increase' ? 'decrease' : 'increase')}
+                      className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase transition-all ${
+                        priceAdjustAction === 'increase' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                      }`}
+                    >
+                      {priceAdjustAction === 'increase' ? 'Up' : 'Down'}
+                    </button>
+                    <button 
                       onClick={() => setPriceAdjustType(t => t === 'fixed' ? 'percent' : 'fixed')}
                       className="px-2 py-1 bg-white/10 rounded-lg text-[8px] font-black"
                     >
@@ -630,7 +842,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                       placeholder="Add"
                     />
                     <button
-                      onClick={() => handleBulkPriceUpdate(bulkPriceValue, priceAdjustType)}
+                      onClick={() => handleBulkPriceUpdate(bulkPriceValue, priceAdjustType, priceAdjustAction)}
                       className="px-3 py-1 bg-green-500 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all hover:bg-green-600"
                     >
                       Adj. Price
@@ -778,6 +990,61 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <button 
+                        onClick={() => {
+                          const printWindow = window.open('', '_blank');
+                          if (printWindow) {
+                            printWindow.document.write(`
+                              <html>
+                                <head>
+                                  <title>Print Label - ${product.name}</title>
+                                  <style>
+                                    @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap');
+                                    body { font-family: sans-serif; display: flex; flex-direction: column; items-center; justify-center; min-height: 100vh; margin: 0; padding: 20px; }
+                                    .label { border: 2px solid #000; padding: 20px; text-align: center; width: 300px; border-radius: 10px; }
+                                    .name { font-size: 20px; font-weight: 900; margin-bottom: 5px; text-transform: uppercase; }
+                                    .price { font-size: 40px; font-weight: 900; color: #000; margin: 10px 0; }
+                                    .details { font-size: 12px; color: #666; font-weight: bold; margin-bottom: 15px; }
+                                    .barcode { font-family: 'Libre Barcode 39', cursive; font-size: 60px; margin-top: 10px; line-height: 1; }
+                                    .barcode-text { font-size: 10px; font-weight: bold; letter-spacing: 2px; }
+                                    @media print {
+                                      body { padding: 0; }
+                                      .label { border: none; }
+                                    }
+                                  </style>
+                                </head>
+                                <body>
+                                  <div class="label">
+                                    <div class="name">${product.name}</div>
+                                    <div class="details">${product.category} | ${product.weight || 'Std Unit'}</div>
+                                    <div class="price">₹${product.price}</div>
+                                    ${product.barcode ? `
+                                      <div class="barcode">*${product.barcode}*</div>
+                                      <div class="barcode-text">${product.barcode}</div>
+                                    ` : `
+                                      <div style="font-size: 10px; color: #999; margin-top: 20px;">NO BARCODE ASINGED</div>
+                                    `}
+                                    <div style="margin-top: 20px; font-size: 8px; font-weight: bold;">KALIKA STORE - QUALITY FIRST</div>
+                                  </div>
+                                  <script>
+                                    window.onload = () => {
+                                      setTimeout(() => {
+                                        window.print();
+                                        window.close();
+                                      }, 500);
+                                    }
+                                  </script>
+                                </body>
+                              </html>
+                            `);
+                            printWindow.document.close();
+                          }
+                        }}
+                        title="Print Barcode Label"
+                        className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
+                      >
+                        <ScanBarcode className="w-4 h-4" />
+                      </button>
                       <button 
                         onClick={() => { setEditingProduct(product); setIsEditing(true); }}
                         aria-label={`Edit ${product.name}`}
