@@ -49,22 +49,6 @@ import { LanguagePromptModal } from './components/LanguagePromptModal';
 
 import { useStore } from './contexts/StoreContext';
 
-function AdSenseRouteHandler() {
-  const location = useLocation();
-
-  useEffect(() => {
-    try {
-      // Re-trigger AdSense on navigation
-      // @ts-ignore
-      (window.adsbygoogle = window.adsbygoogle || []).push({});
-    } catch (e) {
-      // Ignore errors if no ads on the current screen
-    }
-  }, [location.pathname]);
-
-  return null;
-}
-
 export default function App() {
   const { setUser: setContextUser } = useStore();
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -476,7 +460,6 @@ export default function App() {
 
   return (
     <Router>
-      <AdSenseRouteHandler />
       <ScrollToTop />
       <AppContent 
         cart={cart} 

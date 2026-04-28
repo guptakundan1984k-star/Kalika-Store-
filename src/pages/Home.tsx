@@ -4,6 +4,7 @@ import { ProductCard } from '../components/ProductCard';
 import { Product, Banner, StoreSettings, CartItem } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, MapPin, Clock, AlertCircle, ShoppingBag, Package } from 'lucide-react';
+import { AdSlot } from '../components/AdSlot';
 import { Logo } from '../components/Logo';
 
 interface HomeProps {
@@ -161,6 +162,10 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
         >
           Shop by Category <ArrowRight className="w-4 h-4" />
         </button>
+      </div>
+      
+      <div className="px-6 mb-4">
+        <AdSlot />
       </div>
 
       {/* Horizontal Scroll Sections */}

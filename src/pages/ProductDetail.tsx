@@ -6,6 +6,7 @@ import {
   Truck, Clock, MessageSquare, Send, User, Trash2, Plus, Minus, Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { AdSlot } from '../components/AdSlot';
 import { db, collection, query, where, onSnapshot, addDoc, Timestamp, deleteDoc, doc, getDocs } from '../firebase';
 import { Logo } from '../components/Logo';
 
@@ -397,6 +398,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
             </div>
           </motion.div>
         </div>
+
+        <AdSlot className="my-12" />
 
         {/* Reviews Section */}
         <div className="mt-24 grid grid-cols-1 lg:grid-cols-3 gap-12">

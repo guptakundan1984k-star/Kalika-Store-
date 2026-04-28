@@ -239,8 +239,6 @@ export const EarnAndShop: React.FC<EarnAndShopProps> = ({ user }) => {
             {/* Ad Operating Section */}
             <div className="aspect-video bg-gray-50 border-4 border-dashed border-gray-100 rounded-[32px] flex items-center justify-center p-8 text-center group relative overflow-hidden">
                <div className="absolute inset-0 z-0 flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity">
-                  {/* Local script for the operating section as requested */}
-                  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5257999103693625" crossorigin="anonymous"></script>
                   <ins className="adsbygoogle"
                        style={{display:'block', width: '100%', height: '100%'}}
                        data-ad-client="ca-pub-5257999103693625"
