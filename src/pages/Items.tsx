@@ -5,6 +5,7 @@ import { Search } from '../components/Search';
 import { Filter, LayoutGrid, List, ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
+import { AdSlot } from '../components/AdSlot';
 
 interface ItemsProps {
   products: Product[];
@@ -86,6 +87,10 @@ const Items: React.FC<ItemsProps> = ({
           
           <Search value={search} onChange={setSearch} />
         </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-6 mt-12">
+        <AdSlot />
       </div>
 
       {/* Products Grid */}

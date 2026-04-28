@@ -3,6 +3,7 @@ import { Product } from '../types';
 import { Heart, ShoppingCart, Trash2, ArrowRight, ShoppingBag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, Link } from 'react-router-dom';
+import { AdSlot } from '../components/AdSlot';
 
 interface WishlistProps {
   products: Product[];
@@ -41,6 +42,8 @@ const Wishlist: React.FC<WishlistProps> = ({ products, wishlist, onAddToCart, to
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Link>
         </div>
+
+        <AdSlot className="mb-12" />
 
         {wishlistedProducts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">

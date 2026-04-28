@@ -5,7 +5,7 @@ import {
   CheckCircle2, Clock, Info, ShieldCheck, AlertCircle, Loader2
 } from 'lucide-react';
 import { UserProfile, AdEarning } from '../types';
-import { db, doc, updateDoc, collection, addDoc, query, where, onSnapshot, getDocs } from '../firebase';
+import { db, doc, updateDoc, collection, addDoc, query, where, onSnapshot, getDocs, handleFirestoreError, OperationType } from '../firebase';
 
 interface EarnAndShopProps {
   user: UserProfile | null;
@@ -236,9 +236,11 @@ export const EarnAndShop: React.FC<EarnAndShopProps> = ({ user }) => {
               </div>
             </div>
 
-            {/* Ad Placeholder (This is where AdSense would live) */}
+            {/* Ad Operating Section */}
             <div className="aspect-video bg-gray-50 border-4 border-dashed border-gray-100 rounded-[32px] flex items-center justify-center p-8 text-center group relative overflow-hidden">
                <div className="absolute inset-0 z-0 flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity">
+                  {/* Local script for the operating section as requested */}
+                  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5257999103693625" crossorigin="anonymous"></script>
                   <ins className="adsbygoogle"
                        style={{display:'block', width: '100%', height: '100%'}}
                        data-ad-client="ca-pub-5257999103693625"
@@ -345,24 +347,7 @@ export const EarnAndShop: React.FC<EarnAndShopProps> = ({ user }) => {
         </div>
 
         <div className="space-y-8">
-           <div className="bg-gray-900 rounded-[40px] p-8 space-y-6 text-white relative overflow-hidden group">
-              <div className="absolute -bottom-8 -right-8 w-32 h-32 bg-primary/20 rounded-full blur-3xl group-hover:bg-primary/40 transition-all" />
-              <Gift className="w-16 h-16 text-primary" />
-              <div>
-                <h3 className="text-2xl font-black tracking-tighter mb-2">Refer & Earn</h3>
-                <p className="text-xs text-white/50 font-bold leading-loose uppercase tracking-wider">Share your link and get ₹5.00 for every friend who joins Kalika Store.</p>
-              </div>
-              
-              <button 
-                onClick={handleCopyLink}
-                className="w-full py-5 bg-white text-gray-900 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.05] active:scale-95 transition-all flex items-center justify-center gap-3"
-              >
-                {isCopying ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <ArrowRight className="w-4 h-4" />}
-                {isCopying ? 'Link Copied!' : 'Get Invite Link'}
-              </button>
-           </div>
-           
-           <div className="bg-white rounded-[40px] p-8 border border-gray-100 shadow-sm">
+            <div className="bg-white rounded-[40px] p-8 border border-gray-100 shadow-sm">
               <div className="flex items-center gap-3 mb-6">
                 <Info className="w-5 h-5 text-primary" />
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Official Payout Policy</h4>

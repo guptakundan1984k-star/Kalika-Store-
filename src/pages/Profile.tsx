@@ -52,6 +52,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
     if (tab === 'help') setActiveTab('help');
     if (tab === 'bulk') setActiveTab('bulk');
     if (tab === 'addresses') setActiveTab('addresses');
+    if (tab === 'wishlist') setActiveTab('wishlist');
     if (edit === 'true') setIsEditingProfile(true);
   }, []);
 
@@ -574,11 +575,11 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <ChevronRight className="w-4 h-4" />
               </button>
               <button 
-                onClick={() => navigate('/wishlist')}
-                className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
+                onClick={() => setActiveTab('wishlist')}
+                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 ${activeTab === 'wishlist' ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50'}`}
               >
                 <div className="flex items-center gap-3">
-                  <Heart className="w-5 h-5" />
+                  <Heart className={`w-5 h-5 ${activeTab === 'wishlist' ? 'fill-current' : ''}`} />
                   Wishlist
                 </div>
                 <ChevronRight className="w-4 h-4" />
@@ -658,11 +659,11 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
               </button>
 
               <button 
-                onClick={() => navigate('/wishlist')}
+                onClick={() => setActiveTab('wishlist')}
                 className={`p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95 ${activeTab === 'wishlist' ? 'bg-primary/5 ring-2 ring-primary/20' : 'bg-white'}`}
               >
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${activeTab === 'wishlist' ? 'bg-primary text-white' : 'bg-red-50 text-red-500'}`}>
-                  <Heart className="w-6 h-6" />
+                  <Heart className={`w-6 h-6 ${activeTab === 'wishlist' ? 'fill-current' : ''}`} />
                 </div>
                 <span className="text-xs font-black uppercase tracking-widest text-gray-900">Wishlist</span>
               </button>
@@ -1172,13 +1173,19 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 >
                   <div className="flex items-center justify-between">
                     <h3 className="text-3xl font-black text-gray-900 tracking-tight">My Wishlist</h3>
-                    <Link to="/products" className="text-sm font-bold text-primary hover:underline">Add More</Link>
+                    <Link to="/products" className="text-sm font-black text-primary hover:underline">Add More</Link>
                   </div>
-                  <div className="bg-white p-12 rounded-[40px] border border-gray-100 shadow-xl shadow-gray-200/50 text-center space-y-4">
-                    <Heart className="w-16 h-16 text-red-100 mx-auto" />
-                    <p className="text-gray-500 font-medium">Your wishlist is currently being managed in the main store. Click below to view all items.</p>
-                    <Link to="/wishlist" className="inline-block bg-primary text-white font-black px-8 py-4 rounded-2xl shadow-lg shadow-primary/20">
-                      Open Wishlist Manager
+                  <div className="bg-white p-12 rounded-[40px] border border-gray-100 shadow-xl shadow-gray-200/50 text-center space-y-6">
+                    <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center text-red-500 mx-auto shadow-inner">
+                      <Heart className="w-10 h-10 fill-current" />
+                    </div>
+                    <div className="space-y-2">
+                      <h4 className="text-2xl font-black text-gray-900">{user.wishlist?.length || 0} Items Saved</h4>
+                      <p className="text-gray-500 font-medium max-w-sm mx-auto">Your personal collection of favorites is ready for you to explore and shop.</p>
+                    </div>
+                    <Link to="/wishlist" className="inline-flex items-center gap-3 bg-gray-900 text-white font-black px-10 py-5 rounded-[24px] shadow-2xl shadow-gray-200 hover:bg-black transition-all active:scale-95 group">
+                      View Wishlist Manager
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                     </Link>
                   </div>
                 </motion.div>

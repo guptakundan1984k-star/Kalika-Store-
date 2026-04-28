@@ -18,6 +18,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   product, 
   onAddToCart, 
   quantityInCart = 0,
+  toggleWishlist,
+  isWishlisted = false,
 }) => {
   const { settings, user } = useStore();
   const isPreOrder = settings && !settings.isFunctionallyOpen;
@@ -40,13 +42,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="aspect-square relative bg-[#F9FAFB] rounded-[32px] overflow-hidden group-hover:bg-gray-50 transition-colors">
         {/* Wishlist Heart Icon (Matched to screenshot) */}
         <button 
-          className="absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm p-1.5 rounded-full border border-gray-100 shadow-sm text-gray-400 hover:text-red-500 transition-colors"
+          className={`absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm p-1.5 rounded-full border border-gray-100 shadow-sm transition-colors ${
+            isWishlisted ? 'text-red-500' : 'text-gray-400 hover:text-red-500'
+          }`}
           onClick={(e) => {
             e.preventDefault();
-            // Wishlist logic
+            e.stopPropagation();
+            toggleWishlist?.(product.id);
           }}
         >
-          <Heart className="w-5 h-5 stroke-[2]" />
+          <Heart className={`w-5 h-5 stroke-[2] ${isWishlisted ? 'fill-current' : ''}`} />
         </button>
 
         <Link to={`/product/${product.id}`} className="block w-full h-full p-4 flex items-center justify-center">

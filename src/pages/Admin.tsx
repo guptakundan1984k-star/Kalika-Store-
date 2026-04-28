@@ -20,6 +20,7 @@ import { AdminPartyPricingManager } from '../components/AdminPartyPricingManager
 import { AdminDuesManager } from '../components/AdminDuesManager';
 import { AdminWalletRequests } from '../components/AdminWalletRequests';
 import { AdminAdEarningsManager } from '../components/AdminAdEarningsManager';
+import { AdSlot } from '../components/AdSlot';
 import { Product, Order, UserProfile, Coupon, Banner, Expense, BulkEnquiry } from '../types';
 import { 
   LayoutDashboard, Package, ShoppingBag, Users, 
@@ -415,6 +416,10 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="px-8 mt-4">
+          <AdSlot />
         </div>
 
         {/* Tab Content */}

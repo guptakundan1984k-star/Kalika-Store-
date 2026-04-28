@@ -5,6 +5,7 @@ import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, Shield
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { doc, updateDoc, db, addDoc, collection } from '../firebase';
+import { AdSlot } from '../components/AdSlot';
 
 interface CheckoutProps {
   cart: CartItem[];
@@ -565,6 +566,8 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
             <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${checkoutStep === 0 ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>1. Details & Slots</div>
             <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${checkoutStep === 1 ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>2. Review</div>
           </div>
+
+          <AdSlot />
 
           <AnimatePresence mode="wait">
             {checkoutStep === 0 && (

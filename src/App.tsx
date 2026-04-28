@@ -49,6 +49,22 @@ import { LanguagePromptModal } from './components/LanguagePromptModal';
 
 import { useStore } from './contexts/StoreContext';
 
+function AdSenseRouteHandler() {
+  const location = useLocation();
+
+  useEffect(() => {
+    try {
+      // Re-trigger AdSense on navigation
+      // @ts-ignore
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
+    } catch (e) {
+      // Ignore errors if no ads on the current screen
+    }
+  }, [location.pathname]);
+
+  return null;
+}
+
 export default function App() {
   const { setUser: setContextUser } = useStore();
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -460,6 +476,7 @@ export default function App() {
 
   return (
     <Router>
+      <AdSenseRouteHandler />
       <ScrollToTop />
       <AppContent 
         cart={cart} 
@@ -605,7 +622,7 @@ function AppContent({
       <main className="flex-1 relative z-10">
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<Home products={products} onAddToCart={addToCart} banners={banners} storeSettings={storeSettings} cart={cart} />} />
+            <Route path="/" element={<Home products={products} onAddToCart={addToCart} banners={banners} storeSettings={storeSettings} cart={cart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} />} />
             <Route path="/products" element={<Products products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
             <Route path="/items" element={<Items products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
             <Route path="/product/:id" element={<ProductDetail products={products} onAddToCart={addToCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} user={user} storeSettings={storeSettings} />} />

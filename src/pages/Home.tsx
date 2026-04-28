@@ -12,9 +12,11 @@ interface HomeProps {
   banners: Banner[];
   storeSettings?: StoreSettings | null;
   cart: CartItem[];
+  toggleWishlist: (productId: string) => void;
+  wishlist: string[];
 }
 
-const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettings, cart }) => {
+const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettings, cart, toggleWishlist, wishlist }) => {
   const activeBanners = banners.filter(b => b.active);
   const [currentBanner, setCurrentBanner] = React.useState(0);
   const navigate = useNavigate();
@@ -172,6 +174,8 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
                     product={product} 
                     quantityInCart={cart.find(c => c.id === product.id)?.quantity}
                     onAddToCart={(p, q) => onAddToCart(p, q)} 
+                    toggleWishlist={toggleWishlist}
+                    isWishlisted={wishlist.includes(product.id)}
                   />
                 </div>
               ))}

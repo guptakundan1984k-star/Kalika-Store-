@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../contexts/StoreContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { db, collection, addDoc, doc, updateDoc } from '../firebase';
+import { AdSlot } from '../components/AdSlot';
 
 interface CartProps {
   cart: CartItem[];
@@ -131,6 +132,8 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
               Clear Cart
             </button>
           </div>
+
+          <AdSlot />
 
           <div className="space-y-4">
             <AnimatePresence mode="popLayout">

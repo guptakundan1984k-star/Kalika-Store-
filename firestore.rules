@@ -78,6 +78,7 @@ service cloud.firestore {
              (!('customPrices' in data) || (data.customPrices is map)) &&
              (!('walletBalance' in data) || (data.walletBalance is number)) &&
              (!('introSeen' in data) || (data.introSeen is bool)) &&
+             (!('wishlist' in data) || (data.wishlist is list)) &&
              (!('upiId' in data) || (data.upiId is string)) &&
              (!('upiName' in data) || (data.upiName is string)) &&
              (!('adViewsCount' in data) || (data.adViewsCount is number)) &&
