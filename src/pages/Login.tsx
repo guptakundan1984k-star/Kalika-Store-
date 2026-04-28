@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { Logo } from '../components/Logo';
-import { Mail, Lock, ArrowRight, ShieldCheck, Sparkles, Phone, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, ShieldCheck, Sparkles, Phone, Eye, EyeOff, CheckCircle2, Wallet } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth, db, signInWithPopup, googleProvider, getDoc, doc, RecaptchaVerifier, signInWithPhoneNumber, setDoc, signInWithEmailAndPassword, sendPasswordResetEmail } from '../firebase';
@@ -90,7 +90,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           phone: '',
           role: 'user',
           address: 'Ranchi, Jharkhand', // Default address
-          loyaltyPoints: 0,
+          walletBalance: 0,
           wishlist: []
         };
         await setDoc(doc(db, 'users', result.user.uid), newUser);
@@ -133,9 +133,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <p className="text-xs text-white/60">Your data is encrypted and safe with us.</p>
             </div>
             <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-3xl space-y-2">
-              <Sparkles className="w-8 h-8 text-white" />
-              <h3 className="font-bold text-white">Smart Shopping</h3>
-              <p className="text-xs text-white/60">AI-powered suggestions for you.</p>
+              <Wallet className="w-8 h-8 text-white" />
+              <h3 className="font-bold text-white">Digital Wallet</h3>
+              <p className="text-xs text-white/60">Pay faster and manage dues easily.</p>
             </div>
           </div>
         </div>

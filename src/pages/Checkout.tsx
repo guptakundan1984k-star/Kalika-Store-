@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CartItem, UserProfile, Order, Coupon, StoreSettings } from '../types';
 import { useStore } from '../contexts/StoreContext';
-import { LOYALTY_COIN_VALUE, LOYALTY_EARN_RATE } from '../constants';
-import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, ShieldCheck, Clock, XCircle, Navigation, Smartphone, Wallet, Banknote, Sparkles, AlertCircle } from 'lucide-react';
+import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, ShieldCheck, Clock, XCircle, Navigation, Smartphone, Wallet, Banknote, Sparkles, AlertCircle, IndianRupee } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { doc, updateDoc, db, addDoc, collection } from '../firebase';
@@ -29,7 +28,6 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   const [isPlaced, setIsPlaced] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [orderPin, setOrderPin] = useState('');
-  const [useLoyaltyPoints, setUseLoyaltyPoints] = useState(false);
   const [inBag, setInBag] = useState(false);
   const [selectedDate, setSelectedDate] = useState(0); // 0: Today, 1: Tomorrow, etc.
   const [checkoutStep, setCheckoutStep] = useState<0 | 1>(0);
@@ -45,10 +43,6 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   const walletBalance = user?.walletBalance || 0;
   const walletDue = walletBalance < 0 ? Math.abs(walletBalance) : 0;
   const walletCredit = walletBalance > 0 ? Math.min(walletBalance, subtotal) : 0;
-
-  const pointsValue = (user?.loyaltyPoints || 0) * LOYALTY_COIN_VALUE;
-  const pointsDiscount = (useLoyaltyPoints && pointsValue >= 1) ? Math.min(pointsValue, subtotal) : 0;
-  const redeemedPoints = (useLoyaltyPoints && pointsValue >= 1) ? Math.min(user?.loyaltyPoints || 0, subtotal / LOYALTY_COIN_VALUE) : 0;
 
   const calculateDiscount = () => {
     if (!appliedCoupon) return 0;
@@ -66,9 +60,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
 
   const couponDiscount = calculateDiscount();
   const deliveryFee = deliveryType === 'Delivery' ? (subtotal >= configThreshold ? 0 : configDeliveryFee) : 0;
-  const total = Math.max(0, subtotal + deliveryFee + walletDue - couponDiscount - pointsDiscount - walletCredit);
-
-  const earnedPoints = total >= 100 ? Math.floor(total / LOYALTY_EARN_RATE) : 0;
+  const total = Math.max(0, subtotal + deliveryFee - couponDiscount - walletCredit);
 
   const handleApplyCoupon = () => {
     setCouponError('');
@@ -363,9 +355,9 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
     const finalOrder = {
       ...newOrder,
       isPreOrder: preorderFlag,
-      discount: couponDiscount + pointsDiscount,
-      redeemedPoints: redeemedPoints,
-      earnedPoints: earnedPoints,
+      discount: couponDiscount,
+      walletAdjusted: walletCredit > 0,
+      walletRedeemed: walletCredit
     };
 
     try {
@@ -376,16 +368,24 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       // 2. CLEAR CART
       onOrderPlaced(newOrder); 
       
-      // 3. UPDATE USER LOYALTY & WALLET
+      // 3. UPDATE USER WALLET
       if (user) {
         const updates: any = {};
-        if (redeemedPoints > 0) {
-          updates.loyaltyPoints = Math.max(0, (user.loyaltyPoints || 0) - Math.floor(redeemedPoints));
-        }
-
-        // Handle wallet balance reset (it's now part of this order)
-        if (walletBalance !== 0) {
-          updates.walletBalance = 0;
+        
+        // Use wallet balance if applied
+        if (walletCredit > 0) {
+          updates.walletBalance = walletBalance - walletCredit;
+          
+          // Log transaction
+          await addDoc(collection(db, 'walletTransactions'), {
+            userId: user.uid,
+            amount: -walletCredit,
+            balanceAfter: updates.walletBalance,
+            type: 'order_payment',
+            description: `Payment for Order #${newOrder.id.slice(-6).toUpperCase()}`,
+            orderId: newOrder.id,
+            createdAt: Date.now()
+          });
         }
 
         if (Object.keys(updates).length > 0) {
@@ -820,46 +820,42 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
 
         {checkoutStep === 1 && (
           <motion.div key="step1" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8">
-            {/* Kalika Coins Redemption (User requested: "load from the top") */}
-            {user && (user.loyaltyPoints || 0) > 0 && (
+            {/* Wallet Info (User requested: "load from the top") */}
+            {user && walletBalance !== 0 && (
               <motion.div 
                 initial={{ y: -50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                className="bg-amber-50 border border-amber-200 p-6 rounded-[32px] overflow-hidden relative group"
+                className={`p-6 rounded-[32px] overflow-hidden relative group border ${
+                  walletBalance > 0 
+                    ? 'bg-blue-50 border-blue-200' 
+                    : 'bg-red-50 border-red-200'
+                }`}
               >
                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <Sparkles className="w-16 h-16 text-amber-600" />
+                  <Wallet className={`w-16 h-16 ${walletBalance > 0 ? 'text-blue-600' : 'text-red-600'}`} />
                 </div>
                 <div className="flex items-center justify-between gap-6 relative z-10">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-amber-600" />
-                      <h4 className="text-lg font-black text-amber-900 tracking-tight">Redeem Kalika Coins</h4>
+                      <Wallet className={`w-5 h-5 ${walletBalance > 0 ? 'text-blue-600' : 'text-red-600'}`} />
+                      <h4 className={`text-lg font-black tracking-tight ${walletBalance > 0 ? 'text-blue-900' : 'text-red-900'}`}>
+                        Digital Wallet
+                      </h4>
                     </div>
-                    <p className="text-xs font-medium text-amber-700/80">
-                      You have <span className="font-black">{user.loyaltyPoints} coins</span> (₹{(user.loyaltyPoints * LOYALTY_COIN_VALUE).toFixed(2)})
+                    <p className={`text-xs font-medium ${walletBalance > 0 ? 'text-blue-700/80' : 'text-red-700/80'}`}>
+                      Current Balance: <span className="font-black">₹{walletBalance}</span>
                     </p>
-                    {user.loyaltyPoints * LOYALTY_COIN_VALUE < 1 && (
-                      <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">
-                        Min. ₹1.00 required to redeem
+                    {walletCredit > 0 && (
+                      <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest animate-pulse">
+                        Applied: -₹{walletCredit}
                       </p>
                     )}
-                    {useLoyaltyPoints && (
-                      <p className="text-[10px] font-black text-green-600 uppercase tracking-widest animate-pulse">
-                        Applied: -₹{(redeemedPoints * LOYALTY_COIN_VALUE).toFixed(2)}
+                    {walletDue > 0 && (
+                      <p className="text-[10px] font-black text-red-600 uppercase tracking-widest leading-tight">
+                        Note: Your outstanding dues of ₹{walletDue} will be adjusted by admin during order delivery or you can pay them now.
                       </p>
                     )}
                   </div>
-                  <button 
-                    onClick={() => setUseLoyaltyPoints(!useLoyaltyPoints)}
-                    className={`px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-lg ${
-                      useLoyaltyPoints 
-                        ? 'bg-amber-600 text-white shadow-amber-600/20' 
-                        : 'bg-white text-amber-600 border border-amber-300 shadow-sm'
-                    }`}
-                  >
-                    {useLoyaltyPoints ? 'REMOVE COINS' : 'APPLY COINS'}
-                  </button>
                 </div>
               </motion.div>
             )}
@@ -957,26 +953,9 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                 </div>
               )}
 
-              {pointsDiscount > 0 && (
-                <div className="flex justify-between text-sm font-bold text-amber-600">
-                  <span>Kalika Coins Discount</span>
-                  <span>-₹{pointsDiscount.toFixed(2)}</span>
-                </div>
-              )}
-
-              {walletDue > 0 && (
-                <div className="flex justify-between text-sm font-bold text-red-600">
-                  <div className="flex flex-col">
-                    <span>Outstanding Balance (Dues)</span>
-                    <span className="text-[10px] uppercase opacity-60">Automatically added to total</span>
-                  </div>
-                  <span>+₹{walletDue}</span>
-                </div>
-              )}
-              
               {walletCredit > 0 && (
                 <div className="flex justify-between text-sm font-bold text-blue-600">
-                  <span>Wallet Credit Applied</span>
+                  <span>Wallet Payment</span>
                   <span>-₹{walletCredit}</span>
                 </div>
               )}
@@ -1007,58 +986,6 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                     <button onClick={() => setAppliedCoupon(null)} className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline">Remove</button>
                   </div>
                 )}
-
-                {user && (user.loyaltyPoints || 0) > 0 && (
-                  <div className="space-y-3 p-6 bg-amber-50 rounded-[32px] border border-amber-100 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-200/20 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-amber-200/40 transition-all" />
-                    
-                    <div className="flex items-center gap-3 relative">
-                      <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
-                        <Sparkles className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-black text-amber-900 uppercase tracking-widest">Kalika Coins</p>
-                        <p className="text-[10px] font-bold text-amber-700/60 uppercase tracking-tighter">
-                          Available: {user.loyaltyPoints} coins ≈ ₹{(user.loyaltyPoints * LOYALTY_COIN_VALUE).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="text-[10px] font-medium text-amber-800 leading-relaxed relative">
-                      Use your Kalika Coins to get an instant discount on this order. 1 Coin = ₹{LOYALTY_COIN_VALUE}.
-                    </p>
-
-                    <button 
-                      onClick={() => {
-                        if (subtotal < 100) {
-                          alert("Minimum order of ₹100 required to redeem Kalika Coins");
-                          return;
-                        }
-                        setUseLoyaltyPoints(!useLoyaltyPoints);
-                      }}
-                      className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative border-2 ${
-                        useLoyaltyPoints 
-                          ? 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-200 active:scale-95' 
-                          : 'bg-white text-amber-600 border-amber-200 hover:border-amber-400'
-                      }`}
-                    >
-                      {useLoyaltyPoints ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <CheckCircle className="w-3 h-3" />
-                          Applied: -₹{pointsDiscount.toFixed(2)}
-                        </span>
-                      ) : (
-                        `Redeem for ₹${Math.min((user.loyaltyPoints || 0) * LOYALTY_COIN_VALUE, subtotal).toFixed(2)} Discount`
-                      )}
-                    </button>
-
-                    {subtotal < 100 && (
-                      <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest text-center">
-                        Min. order ₹100 required
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1079,20 +1006,16 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                 <div className="flex flex-col">
                   <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Total Amount</span>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-black text-gray-900 tracking-tighter">₹{total.toFixed(2)}</span>
-                    {(couponDiscount > 0 || pointsDiscount > 0) && <span className="text-sm font-bold text-gray-400 line-through">₹{subtotal + deliveryFee}</span>}
+                    <span className="text-4xl font-black text-gray-900 tracking-tighter">₹{total.toFixed(0)}</span>
+                    {couponDiscount > 0 && <span className="text-sm font-bold text-gray-400 line-through">₹{subtotal + deliveryFee}</span>}
                   </div>
-                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mt-2 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" />
-                    You will earn {earnedPoints} coins
-                  </p>
                 </div>
               </div>
             </div>
 
             <p className="text-[10px] text-gray-400 font-medium text-center leading-relaxed">
               By placing this order you agree to our <span className="text-primary font-bold underline cursor-pointer">Terms & Conditions</span>. <br />
-              <span className="text-amber-600 font-black uppercase text-[8px]">Loyalty Policy:</span> Minimum redemption value is ₹1.00. Coins are credited after successful delivery and reversed if order is cancelled.
+              <span className="text-blue-600 font-black uppercase text-[8px]">Wallet Policy:</span> Wallet balances are adjusted by admin during order delivery based on actual payment received.
             </p>
           </div>
         </div>

@@ -3,17 +3,19 @@ import { UserProfile, Order, Address, BulkEnquiry, FeatureRequest } from '../typ
 import { SUPPORT_EMAIL } from '../constants';
 import { 
   User, Mail, Phone, MapPin, Package, LogOut, 
-  ChevronRight, ShoppingBag, Heart, Plus, Trash2, 
-  Home, Briefcase, Map as MapIcon, Clock, CheckCircle, Truck, Package as PackageIcon, ArrowRight, LayoutDashboard,
+  ChevronRight, ShoppingBag, Heart, Plus, Minus, Trash2, 
+  Home, Briefcase, Map as MapIcon, Clock, CheckCircle, Truck, Package as PackageIcon, ArrowRight, LayoutDashboard, Play,
   HelpCircle, MessageSquare, Shield, Lock, Sparkles, FileText, Eye, EyeOff,
   Image as ImageIcon, X, Languages, Volume2, VolumeX, Smartphone, Loader2, Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth, signOut, db, doc, updateDoc, collection, addDoc, setDoc, onSnapshot, query, where } from '../firebase';
+import { auth, signOut, db, doc, updateDoc, collection, addDoc, setDoc, onSnapshot, query, where, handleFirestoreError, OperationType } from '../firebase';
 import { useNavigate, Link } from 'react-router-dom';
 import { answerAdminQuery } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import { useLanguage } from '../contexts/LanguageContext';
+
+import { WalletManager } from '../components/WalletManager';
 
 interface ProfileProps {
   user: UserProfile;
@@ -34,24 +36,35 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [adminError, setAdminError] = useState('');
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
-  const [isAddingAddress, setIsAddingAddress] = useState(false);
-  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
-  const [newAddress, setNewAddress] = useState({ label: 'Home', address: '' });
   const [isEditingPrimary, setIsEditingPrimary] = useState(false);
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [primaryAddress, setPrimaryAddress] = useState(user.address || '');
-  const [profileData, setProfileData] = useState({ name: user.name, phone: user.phone });
   const [adminPassword, setAdminPassword] = useState('');
   const [isRequestingFeature, setIsRequestingFeature] = useState(false);
   const [featureDescription, setFeatureDescription] = useState('');
   const [isSubmittingFeature, setIsSubmittingFeature] = useState(false);
 
-  const handleUpdateProfile = async () => {
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const edit = params.get('edit');
+    if (tab === 'earn') navigate('/earn');
+    if (tab === 'orders') setActiveTab('orders');
+    if (tab === 'help') setActiveTab('help');
+    if (tab === 'bulk') setActiveTab('bulk');
+    if (tab === 'addresses') setActiveTab('addresses');
+    if (edit === 'true') setIsEditingProfile(true);
+  }, []);
+
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [newAddress, setNewAddress] = useState({ label: 'Home', address: '' });
+
+  const handleUpdatePrimaryAddress = async () => {
     try {
-      await updateDoc(doc(db, 'users', user.uid), profileData);
-      setIsEditingProfile(false);
+      await updateDoc(doc(db, 'users', user.uid), { address: primaryAddress });
+      setIsEditingPrimary(false);
     } catch (error) {
-      console.error("Error updating profile:", error);
+      console.error("Error updating primary address:", error);
     }
   };
 
@@ -128,12 +141,21 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
     printWindow.document.close();
   };
 
-  const handleUpdatePrimaryAddress = async () => {
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    name: user.name || '',
+    phone: user.phone || ''
+  });
+
+  const handleUpdateProfile = async () => {
     try {
-      await updateDoc(doc(db, 'users', user.uid), { address: primaryAddress });
-      setIsEditingPrimary(false);
-    } catch (error) {
-      console.error("Error updating primary address:", error);
+      await updateDoc(doc(db, 'users', user.uid), {
+        ...profileForm,
+        updatedAt: Date.now()
+      });
+      setIsEditingProfile(false);
+    } catch (e) {
+      console.error("Profile update failed", e);
     }
   };
   // Listen for bulk enquiries
@@ -142,7 +164,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setBulkEnquiries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BulkEnquiry)));
     }, (error) => {
-      console.error("Error fetching bulk enquiries:", error);
+      handleFirestoreError(error, OperationType.LIST, 'bulk_enquiries', false);
     });
     return () => unsubscribe();
   }, [user.uid]);
@@ -228,7 +250,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
         }
       }
     }, (error) => {
-      console.error("Error listening to support query:", error);
+      handleFirestoreError(error, OperationType.GET, `support_queries/${user.uid}`, false);
     });
     return () => unsubscribe();
   }, [user.uid, helpMessages.length]);
@@ -275,6 +297,22 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
       setIsSubmittingFeature(false);
     }
   };
+
+  const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    const q = query(
+      collection(db, 'walletTransactions'), 
+      where('userId', '==', user.uid)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      setWalletTransactions(docs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'walletTransactions', false);
+    });
+    return () => unsubscribe();
+  }, [user.uid]);
 
   const handleSignOut = async () => {
     await signOut(auth);
@@ -398,8 +436,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Name</label>
                       <input 
                         type="text"
-                        value={profileData.name}
-                        onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                        value={profileForm.name}
+                        onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
                         className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20"
                       />
                     </div>
@@ -407,8 +445,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Phone</label>
                       <input 
                         type="tel"
-                        value={profileData.phone}
-                        onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                        value={profileForm.phone}
+                        onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
                         className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20"
                       />
                     </div>
@@ -461,29 +499,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 </div>
               </div>
 
-              <div className="mt-8 pt-8 border-t border-gray-100">
-                <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100 mb-4 text-left relative overflow-hidden group">
-                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-amber-200/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Sparkles className="w-4 h-4 text-amber-600" />
-                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Kalika Coins</p>
-                    </div>
-                    <div className="flex items-end gap-2">
-                      <h3 className="text-3xl font-black text-amber-700 leading-none">{user.loyaltyPoints || 0}</h3>
-                      <p className="text-[10px] font-bold text-amber-600/60 mb-1 uppercase tracking-widest">Available Coins</p>
-                    </div>
-                    <p className="text-[10px] font-medium text-amber-600/80 mt-2">
-                      Value: ₹{((user.loyaltyPoints || 0) * 1.00).toFixed(2)}
-                    </p>
-                    <div className="mt-4 pt-4 border-t border-amber-200/30">
-                      <p className="text-[9px] font-bold text-amber-600/60 uppercase tracking-widest leading-tight">
-                        Shop for ₹100 to earn 1 Kalika Coin.<br/>
-                        1 Kalika Coin = ₹1.00 instant discount.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+              <div className="mt-8 space-y-8">
+                <WalletManager user={user} />
 
                 <div className="bg-primary/5 p-6 rounded-2xl border border-primary/10 mb-4 text-left">
                   <div className="flex items-center justify-between mb-2">
@@ -577,6 +594,16 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <ChevronRight className="w-4 h-4" />
               </button>
               <button 
+                onClick={() => navigate('/earn')}
+                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 text-gray-500 hover:bg-gray-50`}
+              >
+                <div className="flex items-center gap-3">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                  Earn AND Shop
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              </button>
+              <button 
                 onClick={() => navigate('/photo-bill')}
                 className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-primary bg-primary/5 hover:bg-primary/10 transition-all border border-primary/10 active:scale-95"
               >
@@ -603,12 +630,12 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
           <div className="lg:col-span-3 space-y-8">
             {/* Content Header */}
             <div className="flex items-center justify-between">
-              <h3 className="text-3xl font-black text-gray-900 tracking-tight">
-                {activeTab === 'orders' ? 'Order History' : 
-                 activeTab === 'addresses' ? 'My Addresses' : 
-                 activeTab === 'help' ? 'Help & Support' : 
-                 activeTab === 'wishlist' ? 'My Wishlist' : 'Bulk Enquiry'}
-              </h3>
+      <h3 className="text-3xl font-black text-gray-900 tracking-tight">
+        {activeTab === 'orders' ? 'Order History' : 
+         activeTab === 'addresses' ? 'My Addresses' : 
+         activeTab === 'help' ? 'Help & Support' : 
+         activeTab === 'wishlist' ? 'My Wishlist' : 'Bulk Enquiry'}
+      </h3>
               <button 
                 onClick={() => setIsRequestingFeature(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-white transition-all active:scale-95 shadow-sm"
@@ -632,9 +659,9 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
 
               <button 
                 onClick={() => navigate('/wishlist')}
-                className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95"
+                className={`p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95 ${activeTab === 'wishlist' ? 'bg-primary/5 ring-2 ring-primary/20' : 'bg-white'}`}
               >
-                <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${activeTab === 'wishlist' ? 'bg-primary text-white' : 'bg-red-50 text-red-500'}`}>
                   <Heart className="w-6 h-6" />
                 </div>
                 <span className="text-xs font-black uppercase tracking-widest text-gray-900">Wishlist</span>
@@ -667,13 +694,23 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
               )}
 
               <button 
-                onClick={() => navigate('/orders')}
-                className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95"
+                onClick={() => setActiveTab('orders')}
+                className={`p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95 ${activeTab === 'orders' ? 'bg-primary/5 ring-2 ring-primary/20' : 'bg-white'}`}
               >
-                <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${activeTab === 'orders' ? 'bg-primary text-white' : 'bg-blue-50 text-blue-600'}`}>
                   <Package className="w-6 h-6" />
                 </div>
                 <span className="text-xs font-black uppercase tracking-widest text-gray-900">Orders</span>
+              </button>
+
+              <button 
+                onClick={() => navigate('/earn')}
+                className={`p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95 bg-white`}
+              >
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform bg-amber-50 text-amber-600`}>
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <span className="text-xs font-black uppercase tracking-widest text-gray-900">Earn AND Shop</span>
               </button>
 
               <button 
@@ -843,6 +880,61 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                       </Link>
                     </div>
                   )}
+
+                  {/* Wallet History Section */}
+                  <div className="pt-12 space-y-6">
+                    <div className="flex items-center justify-between px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-600">
+                          <ShoppingBag className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-black text-gray-900 tracking-tight">Wallet Transactions</h3>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">History of your wallet credits and usage</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none">Current Balance</span>
+                        <span className="text-2xl font-black text-primary">₹{user.walletBalance || 0}</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      {walletTransactions.length > 0 ? (
+                        walletTransactions.map((tx) => (
+                          <div key={tx.id} className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group flex items-center justify-between gap-6">
+                            <div className="flex items-center gap-4">
+                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${tx.amount > 0 ? 'bg-green-50 text-green-500' : 'bg-red-50 text-red-500'}`}>
+                                {tx.amount > 0 ? <Plus className="w-6 h-6" /> : <Minus className="w-6 h-6" />}
+                              </div>
+                              <div className="space-y-1">
+                                <h5 className="font-black text-gray-900 group-hover:text-primary transition-colors">{tx.description || (tx.amount > 0 ? 'Wallet Credit' : 'Wallet Debit')}</h5>
+                                <div className="flex items-center gap-3">
+                                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{new Date(tx.createdAt).toLocaleDateString()} {new Date(tx.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                  {tx.expiresAt && (
+                                    <span className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-1 bg-red-50 px-2 py-0.5 rounded-full">
+                                      <Clock className="w-3 h-3" />
+                                      Valid till {new Date(tx.expiresAt).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className={`text-xl font-black ${tx.amount > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {tx.amount > 0 ? '+' : ''}₹{Math.abs(tx.amount)}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-12 bg-white rounded-[40px] border border-dashed border-gray-100">
+                          <ShoppingBag className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                          <p className="text-sm font-bold text-gray-400">No transactions recorded yet.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </motion.div>
               ) : activeTab === 'bulk' ? (
                 <motion.div 

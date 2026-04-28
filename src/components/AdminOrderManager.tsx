@@ -6,6 +6,7 @@ import {
   MapPin, CheckCircle2, ShoppingBag, Navigation, Plus, Minus, AlertCircle, IndianRupee
 } from 'lucide-react';
 import { Order, Product } from '../types';
+import { InvoiceGenerator } from './InvoiceGenerator';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, doc, deleteDoc, updateDoc, collection, addDoc } from '../firebase';
 
@@ -677,7 +678,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
             { title: 'Inventory Management', desc: 'Auto-track stock levels and hide out-of-stock items.' },
-            { title: 'Loyalty Program', desc: 'Reward points for every purchase to increase retention.' },
+            { title: 'AI Insights', desc: 'Predicted order volumes based on past sales data.' },
             { title: 'Voice Search', desc: 'Allow customers to find items using voice commands.' },
             { title: 'Delivery Tracking', desc: 'Real-time map tracking for delivery partners.' },
             { title: 'Multi-Language', desc: 'Support for Hindi and other local languages.' },
@@ -1043,13 +1044,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
                       >
                         Close
                       </button>
-                      <button 
-                        onClick={() => handlePrintInvoice(selectedOrder)}
-                        className="bg-gray-900 text-white px-8 py-3 rounded-2xl shadow-xl shadow-gray-900/20 hover:bg-black transition-all active:scale-95 font-bold flex items-center gap-2"
-                      >
-                        <FileText className="w-5 h-5" />
-                        Print Invoice
-                      </button>
+                      <InvoiceGenerator order={selectedOrder} />
                     </>
                   )}
                 </div>
@@ -1269,21 +1264,18 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
                     <IndianRupee className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400" />
                   </div>
                   
-                  {receivedAmount < paymentOrder.total && (
-                    <div className="p-4 bg-orange-50 border border-orange-100 rounded-2xl flex items-center gap-3">
-                      <AlertCircle className="w-5 h-5 text-orange-500" />
+                  {receivedAmount !== paymentOrder.total && (
+                    <div className={`p-4 rounded-2xl flex items-center gap-3 border ${
+                      receivedAmount < paymentOrder.total ? 'bg-orange-50 border-orange-100' : 'bg-green-50 border-green-100'
+                    }`}>
+                      {receivedAmount < paymentOrder.total ? <AlertCircle className="w-5 h-5 text-orange-500" /> : <CheckCircle2 className="w-5 h-5 text-green-500" />}
                       <div>
-                        <p className="text-xs font-black text-orange-900">Reduced Payment Detected</p>
-                        <p className="text-[10px] font-medium text-orange-700 uppercase tracking-widest">₹{paymentOrder.total - receivedAmount} will be added to Customer Dues.</p>
-                      </div>
-                    </div>
-                  )}
-                  {receivedAmount > paymentOrder.total && (
-                    <div className="p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-green-500" />
-                      <div>
-                        <p className="text-xs font-black text-green-900">Extra Payment Detected</p>
-                        <p className="text-[10px] font-medium text-green-700 uppercase tracking-widest">₹{receivedAmount - paymentOrder.total} will be added to Customer Wallet.</p>
+                        <p className={`text-xs font-black ${receivedAmount < paymentOrder.total ? 'text-orange-900' : 'text-green-900'}`}>
+                          {receivedAmount < paymentOrder.total ? 'Reduced Payment (Dues)' : 'Extra Payment (Wallet Credit)'}
+                        </p>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${receivedAmount < paymentOrder.total ? 'text-orange-700' : 'text-green-700'}`}>
+                          Balance Adjustment: <span className="text-sm font-black">{receivedAmount - paymentOrder.total > 0 ? '+' : ''}{receivedAmount - paymentOrder.total}</span>
+                        </p>
                       </div>
                     </div>
                   )}

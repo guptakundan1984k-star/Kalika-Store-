@@ -11,7 +11,7 @@ import { CATEGORIES } from './constants';
 import { INITIAL_PRODUCTS } from './data/initialProducts';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, ShoppingBag, ArrowUp } from 'lucide-react';
+import { Sparkles, ShoppingBag, ArrowUp, X, Clock } from 'lucide-react';
 
 // Firebase
 import { 
@@ -40,12 +40,12 @@ import { BulkEnquiryPage } from './pages/BulkEnquiryPage';
 import { AddressesPage } from './pages/AddressesPage';
 import { HelpSupportPage } from './pages/HelpSupportPage';
 import { PhotoBillPage } from './pages/PhotoBillPage';
+import { EarnAndShopPage } from './pages/EarnAndShopPage';
 import Scan from './pages/Scan';
 import { ProductRequestModal } from './components/ProductRequestModal';
 import { LoginPromptModal } from './components/LoginPromptModal';
 import { StoreStatusBanner } from './components/StoreStatusBanner';
 import { LanguagePromptModal } from './components/LanguagePromptModal';
-import { IntroVideoModal } from './components/IntroVideoModal';
 
 import { useStore } from './contexts/StoreContext';
 
@@ -57,15 +57,6 @@ export default function App() {
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [showIntro, setShowIntro] = useState(false);
-
-  useEffect(() => {
-    // Show intro only once per customer
-    if (user && !user.introSeen) {
-      setShowIntro(true);
-      updateDoc(doc(db, 'users', user.uid), { introSeen: true }).catch(err => console.error("Intro state sync failed", err));
-    }
-  }, [user]);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -509,6 +500,39 @@ function AppContent({
 
   const handleClearCart = () => setCart([]);
 
+  const [lastTransactionCount, setLastTransactionCount] = useState<number | null>(null);
+  const [newTransaction, setNewTransaction] = useState<any>(null);
+
+  // Wallet Transaction Listener for Notifications
+  useEffect(() => {
+    if (!user) {
+      setLastTransactionCount(null);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'walletTransactions'),
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (lastTransactionCount !== null && snapshot.size > lastTransactionCount) {
+        const latest = snapshot.docs[0].data();
+        if (latest.amount > 0) {
+          setNewTransaction(latest);
+          // Auto hide after 10s
+          setTimeout(() => setNewTransaction(null), 10000);
+        }
+      }
+      setLastTransactionCount(snapshot.size);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'walletTransactions', false);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid, lastTransactionCount]);
+
   // Login Prompt Logic
   useEffect(() => {
     if (user === undefined) return; // Wait for auth to be determined
@@ -616,6 +640,7 @@ function AppContent({
             <Route path="/profile" element={user ? <Profile user={user} orders={orders} /> : <Navigate to="/login" />} />
             <Route path="/orders" element={user ? <MyOrders orders={orders} user={user} /> : <Navigate to="/login" />} />
              <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
+            <Route path="/earn" element={<EarnAndShopPage user={user} />} />
             <Route path="/admin" element={<Admin products={products} orders={orders} coupons={coupons} banners={banners} user={user} />} />
             <Route path="/scan" element={<Scan />} />
             <Route path="/login" element={<Login onLogin={(u: any) => setUser(u)} />} />
@@ -625,6 +650,62 @@ function AppContent({
       </main>
 
       <Footer />
+
+      {/* Cart Notification */}
+      <AnimatePresence>
+        {cartNotification?.show && (
+          <motion.div 
+            initial={{ opacity: 0, y: 100, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 100, scale: 0.9 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-xs"
+          >
+            <div className="bg-gray-900 text-white px-6 py-4 rounded-[24px] shadow-2xl flex items-center gap-3 border border-white/10">
+              <div className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center">
+                <ShoppingBag className="w-4 h-4 text-white" />
+              </div>
+              <p className="text-sm font-black tracking-tight">{cartNotification.productName} added to cart!</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {newTransaction && (
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-sm pointer-events-auto">
+            <motion.div 
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-[32px] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.2)] border-2 border-green-500 overflow-hidden relative group"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full blur-3xl -mr-16 -mt-16" />
+              <div className="flex items-center gap-6">
+                <div className="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-green-500/20 shrink-0 group-hover:rotate-12 transition-transform">
+                  <Sparkles className="w-8 h-8" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <p className="text-[10px] font-black text-green-600 uppercase tracking-[0.2em]">Wallet Credited!</p>
+                  <h4 className="text-xl font-black text-gray-900 tracking-tight">₹{newTransaction.amount} Added</h4>
+                  <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">{newTransaction.description || 'Successful Transfer'}</p>
+                  {newTransaction.expiresAt && (
+                    <div className="flex items-center gap-2 mt-2 px-3 py-1 bg-red-50 rounded-full inline-flex">
+                      <Clock className="w-3 h-3 text-red-500" />
+                      <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">Valid till {new Date(newTransaction.expiresAt).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                </div>
+                <button 
+                  onClick={() => setNewTransaction(null)}
+                  className="p-2 text-gray-300 hover:text-gray-900 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       
       <VoiceAssistant 
         onAddToCart={handleVoiceAddToCart}
@@ -640,12 +721,6 @@ function AppContent({
       />
       <LanguagePromptModal />
 
-      <AnimatePresence>
-        {showIntro && (
-          <IntroVideoModal onClose={() => setShowIntro(false)} />
-        )}
-      </AnimatePresence>
-      
       <CartDrawer 
         isOpen={isCartOpen} 
         onClose={() => setIsCartOpen(false)} 
@@ -653,6 +728,7 @@ function AppContent({
         products={products}
         onUpdateQuantity={updateCartQuantity} 
         onRemove={removeFromCart}
+        onClear={handleClearCart}
         onAddItems={(items) => {
           items.forEach(({ product, quantity }) => {
             addToCart(product, quantity);

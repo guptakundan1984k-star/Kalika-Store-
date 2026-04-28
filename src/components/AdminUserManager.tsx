@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, doc, deleteDoc, updateDoc, auth } from '../firebase';
+import { db, doc, deleteDoc, updateDoc, auth, collection, addDoc } from '../firebase';
 
 interface AdminUserManagerProps {
   users: UserProfile[];
@@ -26,7 +26,8 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
     name: '',
     phone: '',
     address: '',
-    email: ''
+    email: '',
+    walletBalance: 0
   });
 
   const [newPassword, setNewPassword] = useState('');
@@ -35,19 +36,54 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
   const [updateError, setUpdateError] = useState('');
   const [updateSuccess, setUpdateSuccess] = useState('');
 
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [walletAdjustment, setWalletAdjustment] = useState({
+    amount: 0,
+    type: 'manual_correction' as const,
+    description: 'Manual adjustment by admin',
+    disbursalDate: new Date().toISOString().split('T')[0],
+    expiresAt: ''
+  });
+
   const handleEditProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
     setIsUpdating(true);
     try {
+      const finalBalance = editForm.walletBalance;
+      const balanceChange = finalBalance - (selectedUser.walletBalance || 0);
+
       await updateDoc(doc(db, 'users', selectedUser.uid), {
         ...editForm,
         updatedAt: Date.now()
       });
+
+      // If balance was changed manually in the main field, or if we want a specific transaction
+      if (balanceChange !== 0) {
+        await addDoc(collection(db, 'walletTransactions'), {
+          userId: selectedUser.uid,
+          amount: balanceChange,
+          balanceAfter: finalBalance,
+          type: balanceChange > 0 ? 'manual_correction' : 'manual_debit',
+          description: walletAdjustment.description || (balanceChange > 0 ? 'Admin manual credit' : 'Admin manual debit'),
+          disbursalDate: walletAdjustment.disbursalDate ? new Date(walletAdjustment.disbursalDate).getTime() : Date.now(),
+          expiresAt: walletAdjustment.expiresAt ? new Date(walletAdjustment.expiresAt).getTime() : undefined,
+          createdAt: Date.now()
+        });
+      }
+
       setIsEditProfileModalOpen(false);
       setSelectedUser(null);
-      alert('User profile updated successfully!');
+      setWalletAdjustment({
+        amount: 0,
+        type: 'manual_correction',
+        description: 'Manual adjustment by admin',
+        disbursalDate: new Date().toISOString().split('T')[0],
+        expiresAt: ''
+      });
+      alert('User profile and wallet updated successfully!');
     } catch (err) {
+      console.error(err);
       alert('Failed to update profile');
     } finally {
       setIsUpdating(false);
@@ -243,6 +279,7 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                 <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Contact</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Password</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Address</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Wallet</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Role</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Actions</th>
               </tr>
@@ -292,6 +329,16 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                     </p>
                   </td>
                   <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className={`text-sm font-black ${user.walletBalance && user.walletBalance < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                        ₹{user.walletBalance || 0}
+                      </span>
+                      {user.walletBalance && user.walletBalance < 0 && (
+                        <span className="text-[10px] font-bold text-red-400 uppercase tracking-tight italic">Due Payment</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
                     <div className="relative group/role">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
                         user.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
@@ -326,7 +373,8 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                             name: user.name,
                             phone: user.phone,
                             address: user.address || '',
-                            email: user.email
+                            email: user.email,
+                            walletBalance: user.walletBalance || 0
                           });
                           setIsEditProfileModalOpen(true);
                         }}
@@ -426,6 +474,47 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                       className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all min-h-[100px] resize-none"
                     />
                   </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Wallet Balance (₹)</label>
+                    <input 
+                      type="number" 
+                      value={editForm.walletBalance}
+                      onChange={(e) => setEditForm({...editForm, walletBalance: parseFloat(e.target.value) || 0})}
+                      className={`w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-black focus:ring-4 focus:ring-primary/10 transition-all ${editForm.walletBalance < 0 ? 'text-red-500' : 'text-green-600'}`}
+                    />
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2 italic">Positive for balance, Negative for dues.</p>
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Reason for Adjustment</label>
+                    <input 
+                      type="text" 
+                      value={walletAdjustment.description}
+                      onChange={(e) => setWalletAdjustment({...walletAdjustment, description: e.target.value})}
+                      placeholder="e.g. Refund for order #123 or Promo credit"
+                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all"
+                    />
+                  </div>
+
+                  {/* Manual Adjustment Metadata as requested */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Date of Disbursal</label>
+                    <input 
+                      type="date" 
+                      value={walletAdjustment.disbursalDate}
+                      onChange={(e) => setWalletAdjustment({...walletAdjustment, disbursalDate: e.target.value})}
+                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Expires At</label>
+                    <input 
+                      type="date" 
+                      value={walletAdjustment.expiresAt}
+                      onChange={(e) => setWalletAdjustment({...walletAdjustment, expiresAt: e.target.value})}
+                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all text-red-500 font-black"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex gap-4 pt-4">
@@ -442,7 +531,7 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                     className="flex-1 bg-primary text-white font-bold py-4 rounded-2xl shadow-xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                    Save Profile
+                    Update Profile & Wallet
                   </button>
                 </div>
               </form>

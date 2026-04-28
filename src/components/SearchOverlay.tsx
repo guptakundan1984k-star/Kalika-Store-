@@ -59,9 +59,24 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
   const handleAiSearch = async () => {
     if (!searchQuery.trim()) return;
     setIsAiSearching(true);
+    setAiResultIds([]); // Clear previous results while searching
     try {
+      // 1. Semantic search with Gemini
       const ids = await aiService.semanticProductSearch(searchQuery, products);
-      setAiResultIds(ids);
+      
+      // 2. Local fuzzy fallback if AI results are thin
+      const queryTerm = searchQuery.toLowerCase().trim();
+      const localMatches = products
+        .filter(p => !ids.includes(p.id)) // Only those not already picked by AI
+        .filter(p => 
+          p.name.toLowerCase().includes(queryTerm) || 
+          p.category.toLowerCase().includes(queryTerm) ||
+          p.description?.toLowerCase().includes(queryTerm)
+        )
+        .slice(0, 5)
+        .map(p => p.id);
+
+      setAiResultIds([...ids, ...localMatches]);
     } catch (e) {
       console.error("AI Search failed", e);
     } finally {

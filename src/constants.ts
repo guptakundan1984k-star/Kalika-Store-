@@ -1,5 +1,5 @@
 export const DELIVERY_FEE = 20;
-export const FREE_DELIVERY_THRESHOLD = 200;
+export const FREE_DELIVERY_THRESHOLD = 499;
 
 export const ADMIN_PASSWORD_HASH = "62052844239608123427@kalika";
 

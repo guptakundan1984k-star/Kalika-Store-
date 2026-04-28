@@ -18,13 +18,15 @@ import { AdminBulkEnquiryManager } from '../components/AdminBulkEnquiryManager';
 import { AdminManualOrderCreator } from '../components/AdminManualOrderCreator';
 import { AdminPartyPricingManager } from '../components/AdminPartyPricingManager';
 import { AdminDuesManager } from '../components/AdminDuesManager';
+import { AdminWalletRequests } from '../components/AdminWalletRequests';
+import { AdminAdEarningsManager } from '../components/AdminAdEarningsManager';
 import { Product, Order, UserProfile, Coupon, Banner, Expense, BulkEnquiry } from '../types';
 import { 
   LayoutDashboard, Package, ShoppingBag, Users, 
   Tag, Settings, LogOut, ChevronRight, ChevronLeft, Menu, X, 
   Bell, Search, User, Sparkles, Shield, Image as ImageIcon,
   Printer, Eye, EyeOff, Box, Layers, Cloud, CloudOff, RefreshCw, Database, HardDrive, CheckSquare,
-  IndianRupee, Zap, AlertCircle, Briefcase
+  IndianRupee, Zap, AlertCircle, Briefcase, Wallet
 } from 'lucide-react';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { motion, AnimatePresence } from 'motion/react';
@@ -40,11 +42,13 @@ interface AdminProps {
 }
 
 const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'bulk-ai' | 'party-pricing' | 'expenses' | 'orders' | 'workflow' | 'users' | 'coupons' | 'banners' | 'support' | 'billing' | 'variations' | 'stocks' | 'settings' | 'storage' | 'bulk-enquiries' | 'dues'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'bulk-ai' | 'party-pricing' | 'expenses' | 'orders' | 'workflow' | 'users' | 'wallet' | 'coupons' | 'banners' | 'support' | 'billing' | 'variations' | 'stocks' | 'settings' | 'storage' | 'bulk-enquiries' | 'dues' | 'earnings'>('dashboard');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isDbConnected, setIsDbConnected] = useState<boolean | null>(null);
   const [pendingQueries, setPendingQueries] = useState(0);
   const [pendingEnquiries, setPendingEnquiries] = useState(0);
+  const [pendingWalletRequests, setPendingWalletRequests] = useState(0);
+  const [pendingAdPayouts, setPendingAdPayouts] = useState(0);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -196,6 +200,20 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
       handleFirestoreError(error, OperationType.LIST, 'bulk_enquiries', false);
     });
 
+    const qWallet = query(collection(db, 'walletRequests'), where('status', '==', 'pending'));
+    const unsubscribeWallet = onSnapshot(qWallet, (snapshot) => {
+      setPendingWalletRequests(snapshot.size);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'walletRequests', false);
+    });
+
+    const qEarnings = query(collection(db, 'adEarnings'), where('paymentStatus', '==', 'pending'));
+    const unsubscribeEarnings = onSnapshot(qEarnings, (snapshot) => {
+      setPendingAdPayouts(snapshot.size);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'adEarnings', false);
+    });
+
     // Connectivity Check
     const checkConnection = () => {
       const isOnline = navigator.onLine;
@@ -210,6 +228,8 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
       unsubscribeUsers();
       unsubscribeQueries();
       unsubscribeEnquiries();
+      unsubscribeWallet();
+      unsubscribeEarnings();
       window.removeEventListener('online', checkConnection);
       window.removeEventListener('offline', checkConnection);
     };
@@ -272,6 +292,8 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
     { id: 'orders', label: 'Orders', icon: ShoppingBag, badge: orders.filter(o => o.status === 'Pending').length },
     { id: 'workflow', label: 'Workflow', icon: CheckSquare, badge: orders.filter(o => ['Proceeded', 'Packed'].includes(o.status)).length },
     { id: 'users', label: 'Customers', icon: Users },
+    { id: 'wallet', label: 'Wallet Req', icon: Wallet, badge: pendingWalletRequests },
+    { id: 'earnings', label: 'Ads Revenue', icon: IndianRupee, badge: pendingAdPayouts },
     { id: 'coupons', label: 'Coupons', icon: Tag },
     { id: 'billing', label: 'Billing', icon: Printer },
     { id: 'banners', label: 'Banners', icon: ImageIcon },
@@ -446,57 +468,52 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                     const order = orders.find(o => o.id === id);
                     if (!order) return;
 
-                    // Kalika Coins Logic
-                    if (status === 'Delivered' && order.status !== 'Delivered') {
-                      // Credit coins (1 coin per 100 INR)
-                      const earned = Math.floor(order.total / 100);
-                      if (earned > 0 && order.userId) {
-                        const userDoc = doc(db, 'users', order.userId);
-                        const userRef = users.find(u => u.uid === order.userId);
-                        const currentPoints = userRef?.loyaltyPoints || 0;
-                        await updateDoc(userDoc, { loyaltyPoints: currentPoints + earned });
-                        await updateDoc(doc(db, 'orders', id), { earnedPoints: earned });
-                      }
-                    } else if (status === 'Cancelled' && order.status === 'Delivered') {
-                      // Take back coins if order was delivered but now cancelled
-                      const earned = order.earnedPoints || 0;
-                      if (earned > 0 && order.userId) {
-                        const userDoc = doc(db, 'users', order.userId);
-                        const userRef = users.find(u => u.uid === order.userId);
-                        const currentPoints = userRef?.loyaltyPoints || 0;
-                        await updateDoc(userDoc, { loyaltyPoints: Math.max(0, currentPoints - earned) });
-                        await updateDoc(doc(db, 'orders', id), { earnedPoints: 0 });
-                      }
-                    }
-
                     await updateDoc(doc(db, 'orders', id), { status });
                   })} 
                   onDeliveredWithPayment={(id, receivedAmount) => handleSyncOperation(async () => {
                     const order = orders.find(o => o.id === id);
                     if (!order) return;
                     
-                    const balance = receivedAmount - order.total;
+                    const balanceAdjustment = receivedAmount - order.total;
                     
                     // Update Order
                     await updateDoc(doc(db, 'orders', id), { 
                       status: 'Delivered',
-                      receivedAmount
+                      receivedAmount,
+                      walletAdjusted: true
                     });
 
-                    // Update User Wallet & Loyalty
+                    // Update User Wallet & Transaction History
                     if (order.userId) {
                       const userDoc = doc(db, 'users', order.userId);
                       const userRef = users.find(u => u.uid === order.userId);
                       const currentBalance = userRef?.walletBalance || 0;
-                      const currentPoints = userRef?.loyaltyPoints || 0;
-                      const earned = Math.floor(order.total / 100);
+                      const newBalance = currentBalance + balanceAdjustment;
 
+                      // Update User Balance
                       await updateDoc(userDoc, {
-                        walletBalance: currentBalance + balance,
-                        loyaltyPoints: currentPoints + earned
+                        walletBalance: newBalance
                       });
+
+                      // Create Transaction Record
+                      if (balanceAdjustment !== 0) {
+                        await addDoc(collection(db, 'walletTransactions'), {
+                          userId: order.userId,
+                          amount: balanceAdjustment,
+                          balanceAfter: newBalance,
+                          type: 'delivery_adjustment',
+                          description: balanceAdjustment > 0 
+                            ? `Extra payment for Order #${order.id.slice(-6).toUpperCase()}` 
+                            : `Due for Order #${order.id.slice(-6).toUpperCase()}`,
+                          orderId: order.id,
+                          createdAt: Date.now()
+                        });
+                      }
                       
-                      await updateDoc(doc(db, 'orders', id), { earnedPoints: earned });
+                      // Log full payment if any
+                      if (receivedAmount > 0 && receivedAmount !== balanceAdjustment) {
+                        // Optional: Log the payment itself if you want full double-entry
+                      }
                     }
                   })}
                 />
@@ -507,18 +524,6 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                   onUpdateStatus={(id, status) => handleSyncOperation(async () => {
                     const order = orders.find(o => o.id === id);
                     if (!order) return;
-
-                    // Kalika Coins Logic
-                    if (status === 'Delivered' && order.status !== 'Delivered') {
-                      const earned = Math.floor(order.total / 100);
-                      if (earned > 0 && order.userId) {
-                        const userDoc = doc(db, 'users', order.userId);
-                        const userRef = users.find(u => u.uid === order.userId);
-                        const currentPoints = userRef?.loyaltyPoints || 0;
-                        await updateDoc(userDoc, { loyaltyPoints: currentPoints + earned });
-                        await updateDoc(doc(db, 'orders', id), { earnedPoints: earned });
-                      }
-                    }
 
                     await updateDoc(doc(db, 'orders', id), { status });
                   })} 
@@ -576,6 +581,8 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                 />
               )}
               {activeTab === 'bulk-enquiries' && <AdminBulkEnquiryManager />}
+              {activeTab === 'wallet' && <AdminWalletRequests />}
+              {activeTab === 'earnings' && <AdminAdEarningsManager />}
               {activeTab === 'dues' && <AdminDuesManager />}
               {activeTab === 'settings' && <AdminStoreSettings />}
               {activeTab === 'storage' && <AdminStorageManager />}

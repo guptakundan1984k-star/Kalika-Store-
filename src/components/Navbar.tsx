@@ -27,8 +27,8 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
   const mobileNavItems = [
     { path: '/', icon: Home, label: t('home') },
     { path: '/categories', icon: Package, label: t('categories') },
+    { path: '/earn', icon: Sparkles, label: 'Earn' },
     { path: '/items', icon: LayoutDashboard, label: 'Items' },
-    { path: '/wishlist', icon: Heart, label: 'Wishlist' },
     { path: '/profile', icon: User, label: t('profile') },
   ];
 

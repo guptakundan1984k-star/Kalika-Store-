@@ -212,6 +212,9 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
         setFeedback("Microphone access denied. Please allow it in settings.");
       } else if (event.error === 'no-speech') {
         setFeedback("No speech detected. Try again.");
+      } else if (event.error === 'aborted') {
+        console.log("Speech recognition aborted.");
+        // Usually happens when stopped requested or browser interrupts. No need for error feedback.
       } else {
         setFeedback(t('voiceError'));
       }
@@ -223,15 +226,23 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
     };
 
     try {
-      recognition.start();
+      // Small timeout to ensure previous instances are fully cleaned up
+      const startTimer = setTimeout(() => {
+        try {
+          recognition.start();
+        } catch (e) {
+          console.error("Failed to start recognition:", e);
+          setIsListening(false);
+        }
+      }, 50);
+      return () => {
+        clearTimeout(startTimer);
+        recognition.stop();
+      };
     } catch (e) {
-      console.error("Failed to start recognition:", e);
+      console.error("Failed to setup recognition start:", e);
       setIsListening(false);
     }
-
-    return () => {
-      recognition.stop();
-    };
   }, [isListening, language, processCommand, t]);
 
   useEffect(() => {

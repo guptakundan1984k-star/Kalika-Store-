@@ -67,16 +67,21 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'name', 'email', 'phone', 'role', 'password', 'address', 'addresses', 'wishlist', 'lastActiveAt', 'loyaltyPoints', 'customPrices']) &&
+      return hasOnlyAllowedFields(['uid', 'name', 'email', 'phone', 'role', 'password', 'address', 'addresses', 'wishlist', 'lastActiveAt', 'customPrices', 'walletBalance', 'introSeen', 'upiId', 'upiName', 'adViewsCount', 'totalAdEarnings']) &&
              data.uid is string && data.uid.size() > 0 &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              (!('email' in data) || (data.email is string)) &&
              (!('phone' in data) || (data.phone is string)) &&
              data.role in ['user', 'admin'] &&
              (!('password' in data) || (data.password is string)) &&
-             (!('loyaltyPoints' in data) || (data.loyaltyPoints is number)) &&
              (!('lastActiveAt' in data) || (data.lastActiveAt is number)) &&
-             (!('customPrices' in data) || (data.customPrices is map));
+             (!('customPrices' in data) || (data.customPrices is map)) &&
+             (!('walletBalance' in data) || (data.walletBalance is number)) &&
+             (!('introSeen' in data) || (data.introSeen is bool)) &&
+             (!('upiId' in data) || (data.upiId is string)) &&
+             (!('upiName' in data) || (data.upiName is string)) &&
+             (!('adViewsCount' in data) || (data.adViewsCount is number)) &&
+             (!('totalAdEarnings' in data) || (data.totalAdEarnings is number));
     }
 
     function isValidProduct(data) {
@@ -161,6 +166,36 @@ service cloud.firestore {
              data.createdAt is number;
     }
 
+    function isValidDue(data) {
+      return hasOnlyAllowedFields(['id', 'name', 'phone', 'address', 'amount', 'createdAt', 'updatedAt']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.phone is string && data.phone.size() > 0 &&
+             data.address is string && data.address.size() > 0 &&
+             data.amount is number &&
+             data.createdAt is number &&
+             data.updatedAt is number;
+    }
+
+    function isValidWalletTransaction(data) {
+      return hasOnlyAllowedFields(['id', 'userId', 'amount', 'balanceAfter', 'type', 'description', 'orderId', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.amount is number &&
+             data.balanceAfter is number &&
+             data.type in ['order_payment', 'add_money', 'delivery_adjustment', 'manual_correction', 'wallet_topup', 'manual_debit'] &&
+             data.description is string &&
+             data.createdAt is number;
+    }
+
+    function isValidWalletRequest(data) {
+      return hasOnlyAllowedFields(['id', 'userId', 'userName', 'userPhone', 'amount', 'status', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.userName is string && data.userName.size() > 0 &&
+             data.userPhone is string && data.userPhone.size() > 0 &&
+             data.amount is number &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.createdAt is number;
+    }
+
     function isValidExpense(data) {
       return hasOnlyAllowedFields(['itemName', 'amount', 'date', 'source', 'category', 'photoUrl', 'quantity']) &&
              data.itemName is string && data.itemName.size() > 0 &&
@@ -180,6 +215,13 @@ service cloud.firestore {
     // ===============================================================
     // Resource Rules
     // ===============================================================
+
+    function isValidAdEarning(data) {
+      return hasOnlyAllowedFields(['id', 'userId', 'userName', 'count', 'lastWatchedAt', 'paymentStatus', 'upiId', 'upiName', 'paidAt', 'transactionId', 'createdAt']) &&
+             data.userId is string &&
+             data.count is number &&
+             data.paymentStatus in ['pending', 'paid'];
+    }
 
     match /settings/store {
       allow read: if true;
@@ -259,6 +301,32 @@ service cloud.firestore {
 
     match /expenses/{expenseId} {
       allow read, write: if isAdmin();
+    }
+
+    match /dues/{dueId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin() && isValidDue(incoming());
+    }
+
+    match /walletTransactions/{txId} {
+      allow read: if isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create: if isAdmin() && isValidWalletTransaction(incoming());
+      allow update, delete: if false;
+    }
+
+    match /walletRequests/{requestId} {
+      allow read: if isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidWalletRequest(incoming());
+      allow update: if (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) || 
+                    (isAuthenticated() && resource.data.userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['amount', 'userName', 'userPhone']));
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid && existing().status == 'pending');
+    }
+
+    match /adEarnings/{earningId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidAdEarning(incoming()) && incoming().userId == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid && isValidAdEarning(incoming()));
+      allow delete: if isAdmin();
     }
   }
 }

@@ -81,9 +81,8 @@ export interface Order {
   inBag?: boolean;
   createdAt: number;
   prescriptionImage?: string;
-  earnedPoints?: number;
-  redeemedPoints?: number;
   receivedAmount?: number;
+  walletAdjusted?: boolean;
   estimatedDelivery?: number;
   isPreOrder?: boolean;
   cancellationReason?: string;
@@ -126,10 +125,49 @@ export interface UserProfile {
   addresses?: Address[];
   wishlist?: string[]; // Array of product IDs
   lastActiveAt?: number;
-  loyaltyPoints?: number;
   walletBalance?: number; // can be negative for dues
+  upiId?: string;
+  upiName?: string;
+  adViewsCount?: number;
+  totalAdEarnings?: number;
   customPrices?: Record<string, number>; // productId -> custom price
   introSeen?: boolean;
+}
+
+export interface AdEarning {
+  id: string;
+  userId: string;
+  userName: string;
+  count: number;
+  lastWatchedAt: number;
+  paymentStatus: 'pending' | 'paid';
+  upiId?: string;
+  upiName?: string;
+  paidAt?: number;
+  transactionId?: string;
+}
+
+export interface WalletTransaction {
+  id: string;
+  userId: string;
+  amount: number;
+  balanceAfter: number;
+  type: 'order_payment' | 'add_money' | 'delivery_adjustment' | 'manual_correction' | 'wallet_topup' | 'manual_debit';
+  description: string;
+  orderId?: string;
+  createdAt: number;
+  expiresAt?: number;
+  disbursalDate?: number;
+}
+
+export interface WalletRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userPhone: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: number;
 }
 
 export interface Due {

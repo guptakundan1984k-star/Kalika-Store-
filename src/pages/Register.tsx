@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { Logo } from '../components/Logo';
-import { User, Mail, Lock, Phone, ArrowRight, ShieldCheck, Sparkles, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Lock, Phone, ArrowRight, ShieldCheck, Sparkles, Eye, EyeOff, Wallet } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth, db, setDoc, doc, RecaptchaVerifier, signInWithPhoneNumber, createUserWithEmailAndPassword, updateProfile } from '../firebase';
@@ -43,7 +43,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister }) => {
         password, // Store password in Firestore as requested
         role: 'user',
         address: 'Ranchi, Jharkhand',
-        loyaltyPoints: 0,
+        walletBalance: 0,
         wishlist: []
       };
       
@@ -86,9 +86,9 @@ const Register: React.FC<RegisterProps> = ({ onRegister }) => {
               <p className="text-xs text-white/60">Only the freshest products for you.</p>
             </div>
             <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-3xl space-y-2">
-              <Sparkles className="w-8 h-8 text-white" />
-              <h3 className="font-bold text-white">Daily Rewards</h3>
-              <p className="text-xs text-white/60">Earn points on every purchase.</p>
+              <Wallet className="w-8 h-8 text-white" />
+              <h3 className="font-bold text-white">Digital Wallet</h3>
+              <p className="text-xs text-white/60">Pay faster and manage dues easily.</p>
             </div>
           </div>
         </div>

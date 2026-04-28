@@ -156,12 +156,6 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
                   {getStatusDisplay(order)}
                 </h3>
                 {/* Quick Badge */}
-                {order.status === 'Delivered' && order.earnedPoints && (
-                  <div className="bg-amber-50 border border-amber-100 px-3 py-1 rounded-xl flex items-center gap-1 shadow-sm">
-                    <Sparkles className="w-3 h-3 text-amber-500" />
-                    <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">{order.earnedPoints} Coins Earned</span>
-                  </div>
-                )}
                 <div className="bg-orange-50 border border-orange-100 px-3 py-1 rounded-xl flex items-center gap-1 shadow-sm">
                   <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">⚡ -Quick</span>
                 </div>

@@ -12,12 +12,13 @@ interface CartDrawerProps {
   products: Product[];
   onUpdateQuantity: (id: string, delta: number) => void;
   onRemove: (id: string) => void;
+  onClear: () => void;
   onCheckout: () => void;
   onAddItems: (items: { product: Product, quantity: number }[]) => void;
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({ 
-  isOpen, onClose, items, products, onUpdateQuantity, onRemove, onCheckout, onAddItems 
+  isOpen, onClose, items, products, onUpdateQuantity, onRemove, onClear, onCheckout, onAddItems 
 }) => {
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const deliveryFee = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : (items.length > 0 ? DELIVERY_FEE : 0);
@@ -54,7 +55,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <button 
                         onClick={() => {
                           if (window.confirm('Clear your entire cart?')) {
-                            items.forEach(item => onRemove(item.id));
+                            onClear();
                           }
                         }}
                         className="text-[8px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 px-2 py-1 rounded-lg transition-all"

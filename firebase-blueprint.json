@@ -29,9 +29,78 @@
         "addresses": { "type": "array", "items": { "type": "object" } },
         "wishlist": { "type": "array", "items": { "type": "string" } },
         "lastActiveAt": { "type": "number" },
-        "loyaltyPoints": { "type": "number", "description": "Kalika Coins earned by user" }
+        "walletBalance": { "type": "number", "description": "User wallet balance (can be negative for dues)" },
+        "upiId": { "type": "string" },
+        "upiName": { "type": "string" },
+        "adViewsCount": { "type": "number" },
+        "totalAdEarnings": { "type": "number" },
+        "introSeen": { "type": "boolean", "description": "Whether the user has seen the intro tour" }
       },
       "required": ["uid", "name", "email", "role"]
+    },
+    "AdEarnings": {
+      "title": "Ad Earnings",
+      "description": "Tracking ad views and payouts for users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "count": { "type": "number" },
+        "lastWatchedAt": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["pending", "paid"] },
+        "upiId": { "type": "string" },
+        "upiName": { "type": "string" },
+        "paidAt": { "type": "number" },
+        "transactionId": { "type": "string" }
+      },
+      "required": ["userId", "count", "paymentStatus"]
+    },
+    "Due": {
+      "title": "Due",
+      "description": "Manual due entries for customers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "amount": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "phone", "address", "amount", "createdAt", "updatedAt"]
+    },
+    "WalletTransaction": {
+      "title": "Wallet Transaction",
+      "description": "History of user wallet changes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "balanceAfter": { "type": "number" },
+        "type": { "type": "string", "enum": ["order_payment", "add_money", "delivery_adjustment", "manual_correction", "wallet_topup"] },
+        "description": { "type": "string" },
+        "orderId": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["userId", "amount", "balanceAfter", "type", "description", "createdAt"]
+    },
+    "WalletRequest": {
+      "title": "Wallet Request",
+      "description": "User requests to add money to wallet",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhone": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["userId", "userName", "userPhone", "amount", "status", "createdAt"]
     },
     "Product": {
       "title": "Product",
@@ -77,8 +146,6 @@
         "inBag": { "type": "boolean" },
         "createdAt": { "type": "number" },
         "prescriptionImage": { "type": "string" },
-        "earnedPoints": { "type": "number" },
-        "redeemedPoints": { "type": "number" },
         "tracking": { "type": "array", "items": { "type": "object" } }
       },
       "required": ["userId", "total", "status", "deliveryType", "pin", "createdAt", "items"]
@@ -256,6 +323,22 @@
     "/expenses/{expenseId}": {
       "schema": "Expense",
       "description": "Operational expenses tracking"
+    },
+    "/dues/{dueId}": {
+      "schema": "Due",
+      "description": "Customer manual dues"
+    },
+    "/walletTransactions/{txId}": {
+      "schema": "WalletTransaction",
+      "description": "User wallet history"
+    },
+    "/walletRequests/{requestId}": {
+      "schema": "WalletRequest",
+      "description": "User requests for wallet topup"
+    },
+    "/adEarnings/{earningId}": {
+      "schema": "AdEarnings",
+      "description": "Tracking user ad views and payouts"
     }
   }
 }
