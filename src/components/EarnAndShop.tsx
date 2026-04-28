@@ -5,6 +5,7 @@ import {
   CheckCircle2, Clock, Info, ShieldCheck, AlertCircle, Loader2
 } from 'lucide-react';
 import { UserProfile, AdEarning } from '../types';
+import { AdSlot } from './AdSlot';
 import { db, doc, updateDoc, collection, addDoc, query, where, onSnapshot, getDocs, handleFirestoreError, OperationType } from '../firebase';
 
 interface EarnAndShopProps {
@@ -239,12 +240,7 @@ export const EarnAndShop: React.FC<EarnAndShopProps> = ({ user }) => {
             {/* Ad Operating Section */}
             <div className="aspect-video bg-gray-50 border-4 border-dashed border-gray-100 rounded-[32px] flex items-center justify-center p-8 text-center group relative overflow-hidden">
                <div className="absolute inset-0 z-0 flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity">
-                  <ins className="adsbygoogle"
-                       style={{display:'block', width: '100%', height: '100%'}}
-                       data-ad-client="ca-pub-5257999103693625"
-                       data-ad-slot="9876543210" 
-                       data-ad-format="auto"
-                       data-full-width-responsive="true"></ins>
+                  <AdSlot slot="video_section" className="!bg-transparent !border-none !p-0 !min-h-0 w-full h-full" />
                </div>
                
                <div className="relative z-10 space-y-4 pointer-events-none">

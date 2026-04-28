@@ -432,6 +432,9 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
+              <div className="mb-8">
+                <AdSlot slot="admin_top" />
+              </div>
               {activeTab === 'dashboard' && <AdminDashboard onTabChange={setActiveTab} user={user} />}
               {activeTab === 'bulk-ai' && (
                 <AdminBulkAIUploader 
@@ -591,6 +594,9 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
               {activeTab === 'dues' && <AdminDuesManager />}
               {activeTab === 'settings' && <AdminStoreSettings />}
               {activeTab === 'storage' && <AdminStorageManager />}
+              <div className="mt-8">
+                <AdSlot slot="admin_bottom" />
+              </div>
             </motion.div>
           </AnimatePresence>
         </div>

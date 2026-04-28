@@ -234,6 +234,7 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
             </div>
             
             <div className="pt-8 border-t border-gray-100 flex flex-col gap-6">
+              <AdSlot slot="cart_summary" />
               {!storeSettings?.isOpen && (
                 <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
