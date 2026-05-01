@@ -7,7 +7,6 @@ import { AdminUserManager } from '../components/AdminUserManager';
 import { AdminCouponManager } from '../components/AdminCouponManager';
 import { AdminBannerManager } from '../components/AdminBannerManager';
 import { AdminSupportManager } from '../components/AdminSupportManager';
-import { AdminBillingManager } from '../components/AdminBillingManager';
 import { AdminVariationManager } from '../components/AdminVariationManager';
 import { AdminStockManager } from '../components/AdminStockManager';
 import { AdminStoreSettings } from '../components/AdminStoreSettings';
@@ -19,20 +18,22 @@ import { AdminManualOrderCreator } from '../components/AdminManualOrderCreator';
 import { AdminPartyPricingManager } from '../components/AdminPartyPricingManager';
 import { AdminDuesManager } from '../components/AdminDuesManager';
 import { AdminWalletRequests } from '../components/AdminWalletRequests';
-import { AdminAdEarningsManager } from '../components/AdminAdEarningsManager';
-import { AdSlot } from '../components/AdSlot';
+import { AdminDeliveryRequests } from '../components/AdminDeliveryRequests';
+import { AdminAssistant } from '../components/AdminAssistant';
+
 import { Product, Order, UserProfile, Coupon, Banner, Expense, BulkEnquiry } from '../types';
 import { 
   LayoutDashboard, Package, ShoppingBag, Users, 
   Tag, Settings, LogOut, ChevronRight, ChevronLeft, Menu, X, 
   Bell, Search, User, Sparkles, Shield, Image as ImageIcon,
   Printer, Eye, EyeOff, Box, Layers, Cloud, CloudOff, RefreshCw, Database, HardDrive, CheckSquare,
-  IndianRupee, Zap, AlertCircle, Briefcase, Wallet
+  IndianRupee, Zap, AlertCircle, Briefcase, Wallet, Navigation, ArrowLeft
 } from 'lucide-react';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { motion, AnimatePresence } from 'motion/react';
 import { Logo } from '../components/Logo';
-import { auth, db, collection, onSnapshot, query, addDoc, updateDoc, deleteDoc, doc, where, handleFirestoreError, OperationType } from '../firebase';
+import { Link, useNavigate } from 'react-router-dom';
+import { auth, db, collection, onSnapshot, query, addDoc, updateDoc, deleteDoc, doc, where, handleFirestoreError, OperationType, writeBatch } from '../firebase';
 
 interface AdminProps {
   products: Product[];
@@ -43,13 +44,15 @@ interface AdminProps {
 }
 
 const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'bulk-ai' | 'party-pricing' | 'expenses' | 'orders' | 'workflow' | 'users' | 'wallet' | 'coupons' | 'banners' | 'support' | 'billing' | 'variations' | 'stocks' | 'settings' | 'storage' | 'bulk-enquiries' | 'dues' | 'earnings'>('dashboard');
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'bulk-ai' | 'party-pricing' | 'expenses' | 'orders' | 'workflow' | 'users' | 'wallet' | 'coupons' | 'banners' | 'support' | 'bulk-enquiries' | 'dues' | 'delivery' | 'variations' | 'stocks' | 'settings' | 'storage'>('dashboard');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isDbConnected, setIsDbConnected] = useState<boolean | null>(null);
   const [pendingQueries, setPendingQueries] = useState(0);
+  const [unreadQueries, setUnreadQueries] = useState(0);
   const [pendingEnquiries, setPendingEnquiries] = useState(0);
+  const [unreadEnquiries, setUnreadEnquiries] = useState(0);
   const [pendingWalletRequests, setPendingWalletRequests] = useState(0);
-  const [pendingAdPayouts, setPendingAdPayouts] = useState(0);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -187,16 +190,20 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
       handleFirestoreError(error, OperationType.LIST, 'users', false);
     });
 
-    const qQueries = query(collection(db, 'support_queries'), where('status', '==', 'pending'));
+    const qQueries = query(collection(db, 'support_queries'));
     const unsubscribeQueries = onSnapshot(qQueries, (snapshot) => {
-      setPendingQueries(snapshot.size);
+      const allQueries = snapshot.docs.map(doc => doc.data() as any);
+      setPendingQueries(allQueries.filter(q => q.status === 'pending').length);
+      setUnreadQueries(allQueries.filter(q => q.isRead === false).length);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'support_queries', false);
     });
 
-    const qEnquiries = query(collection(db, 'bulk_enquiries'), where('status', '==', 'Pending'));
+    const qEnquiries = query(collection(db, 'bulk_enquiries'));
     const unsubscribeEnquiries = onSnapshot(qEnquiries, (snapshot) => {
-      setPendingEnquiries(snapshot.size);
+      const all = snapshot.docs.map(doc => doc.data() as any);
+      setPendingEnquiries(all.filter(e => e.status === 'Pending').length);
+      setUnreadEnquiries(all.filter(e => e.isRead === false).length);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'bulk_enquiries', false);
     });
@@ -206,13 +213,6 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
       setPendingWalletRequests(snapshot.size);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'walletRequests', false);
-    });
-
-    const qEarnings = query(collection(db, 'adEarnings'), where('paymentStatus', '==', 'pending'));
-    const unsubscribeEarnings = onSnapshot(qEarnings, (snapshot) => {
-      setPendingAdPayouts(snapshot.size);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'adEarnings', false);
     });
 
     // Connectivity Check
@@ -230,7 +230,6 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
       unsubscribeQueries();
       unsubscribeEnquiries();
       unsubscribeWallet();
-      unsubscribeEarnings();
       window.removeEventListener('online', checkConnection);
       window.removeEventListener('offline', checkConnection);
     };
@@ -256,7 +255,17 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
               <input 
                 type={showPassword ? "text" : "password"} 
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPassword(val);
+                  // Automatic unlocking
+                  if (val === 'kalika@ansh2012') {
+                    setIsAuthorized(true);
+                    setError('');
+                    localStorage.removeItem('admin_attempts');
+                    localStorage.removeItem('admin_lockout');
+                  }
+                }}
                 placeholder="Enter Password"
                 className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-center text-lg font-black tracking-[0.5em] focus:ring-4 focus:ring-primary/10 transition-all outline-none"
                 autoFocus
@@ -294,12 +303,11 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
     { id: 'workflow', label: 'Workflow', icon: CheckSquare, badge: orders.filter(o => ['Proceeded', 'Packed'].includes(o.status)).length },
     { id: 'users', label: 'Customers', icon: Users },
     { id: 'wallet', label: 'Wallet Req', icon: Wallet, badge: pendingWalletRequests },
-    { id: 'earnings', label: 'Ads Revenue', icon: IndianRupee, badge: pendingAdPayouts },
     { id: 'coupons', label: 'Coupons', icon: Tag },
-    { id: 'billing', label: 'Billing', icon: Printer },
     { id: 'banners', label: 'Banners', icon: ImageIcon },
-    { id: 'support', label: 'Support', icon: Bell, badge: pendingQueries },
-    { id: 'bulk-enquiries', label: 'Business Inquiries', icon: Briefcase, badge: pendingEnquiries },
+    { id: 'support', label: 'Support', icon: Bell, badge: pendingQueries, hasDot: unreadQueries > 0 },
+    { id: 'delivery', label: 'Express Coord', icon: Navigation },
+    { id: 'bulk-enquiries', label: 'Business Inquiries', icon: Briefcase, badge: pendingEnquiries, hasDot: unreadEnquiries > 0 },
     { id: 'dues', label: 'Customer Dues', icon: IndianRupee },
     { id: 'settings', label: 'Store Settings', icon: Settings },
     { id: 'storage', label: 'Cloud Storage', icon: HardDrive },
@@ -310,14 +318,21 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
-        <header className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-8 py-4 flex items-center justify-between sticky top-0 z-50">
+        <header className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between sticky top-0 z-50 shadow-md">
           <div className="flex items-center gap-6">
+            <button 
+              onClick={() => navigate('/')}
+              className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-400 hover:text-primary"
+              title="Go to Website"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
             <Logo />
             <div className="h-8 w-px bg-gray-100 hidden md:block" />
             <h2 className="text-xl font-black text-gray-900 tracking-tight capitalize hidden md:block">{activeTab}</h2>
             
             {/* Sync Status Indicator */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full border border-gray-100">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full border border-gray-200">
               {isDbConnected === false ? (
                 <div className="flex items-center gap-2 text-red-500">
                   <CloudOff className="w-3 h-3 animate-pulse" />
@@ -389,7 +404,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
         </header>
 
         {/* Horizontal Navigation Strip (User requested: "sidebar in the above of every admin pages") */}
-        <div className="bg-white border-b border-gray-100 sticky top-16 z-40 overflow-x-auto scrollbar-hide">
+        <div className="bg-white border-b border-gray-200 sticky top-16 z-40 overflow-x-auto scrollbar-hide shadow-inner">
           <div className="flex items-center px-4 py-3 gap-2 min-w-max max-w-7xl mx-auto">
             {menuItems.map((item) => (
               <button 
@@ -401,26 +416,20 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                 className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap active:scale-95 ${
                   activeTab === item.id 
                     ? 'bg-primary text-white shadow-xl shadow-primary/20 translate-y-[-2px]' 
-                    : 'bg-gray-50 text-gray-400 hover:bg-primary/5 hover:text-primary'
+                    : 'bg-gray-100 text-gray-400 hover:bg-primary/5 hover:text-primary border border-gray-200'
                 }`}
               >
                 <item.icon className={`w-4 h-4 ${activeTab === item.id ? 'text-white' : 'text-gray-400'}`} />
                 {item.label}
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span className={`w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-black ${
-                    activeTab === item.id ? 'bg-white text-primary' : 'bg-primary text-white'
-                  }`}>
-                    {item.badge}
-                  </span>
+                {((item as any).hasDot || (item.badge !== undefined && item.badge > 0)) && (
+                  <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white shadow-sm`} />
                 )}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="px-8 mt-4">
-          <AdSlot />
-        </div>
+
 
         {/* Tab Content */}
         <div className="p-4 md:p-8">
@@ -432,16 +441,19 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="mb-8">
-                <AdSlot slot="admin_top" />
-              </div>
-              {activeTab === 'dashboard' && <AdminDashboard onTabChange={setActiveTab} user={user} />}
+
+              {activeTab === 'dashboard' && <AdminDashboard onTabChange={setActiveTab} user={user} products={products} orders={orders} users={users} />}
               {activeTab === 'bulk-ai' && (
                 <AdminBulkAIUploader 
+                  products={products}
                   categories={['Vegetables', 'Fruits', 'Dairy', 'Bakery', 'Meat', 'Snacks', 'Beverages', 'Staples', 'Oils', 'Household']}
                   onBulkAdd={(newProducts) => handleSyncOperation(async () => {
-                    const batch = newProducts.map(p => addDoc(collection(db, 'products'), { ...p, createdAt: Date.now() }));
-                    await Promise.all(batch);
+                    const batch = writeBatch(db);
+                    newProducts.forEach(p => {
+                      const newDocRef = doc(collection(db, 'products'));
+                      batch.set(newDocRef, { ...p, createdAt: Date.now() });
+                    });
+                    await batch.commit();
                   })}
                 />
               )}
@@ -454,8 +466,12 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                     await addDoc(collection(db, 'products'), { ...product, createdAt: Date.now() });
                   })} 
                   onBulkAdd={(newProducts) => handleSyncOperation(async () => {
-                    const batch = newProducts.map(p => addDoc(collection(db, 'products'), { ...p, createdAt: Date.now() }));
-                    await Promise.all(batch);
+                    const batch = writeBatch(db);
+                    newProducts.forEach(p => {
+                      const newDocRef = doc(collection(db, 'products'));
+                      batch.set(newDocRef, { ...p, createdAt: Date.now() });
+                    });
+                    await batch.commit();
                   })}
                   onUpdate={(id, product) => handleSyncOperation(async () => {
                     const { id: _, ...updateData } = product as any;
@@ -512,7 +528,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                           type: 'delivery_adjustment',
                           description: balanceAdjustment > 0 
                             ? `Extra payment for Order #${order.id.slice(-6).toUpperCase()}` 
-                            : `Due for Order #${order.id.slice(-6).toUpperCase()}`,
+                            : `Outstanding due for Order #${order.id.slice(-6).toUpperCase()} (Received ₹${receivedAmount} of ₹${order.total})`,
                           orderId: order.id,
                           createdAt: Date.now()
                         });
@@ -578,7 +594,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                 />
               )}
               {activeTab === 'support' && <AdminSupportManager />}
-              {activeTab === 'billing' && <AdminBillingManager orders={orders} />}
+              {activeTab === 'delivery' && <AdminDeliveryRequests />}
               {activeTab === 'variations' && <AdminVariationManager products={products} />}
               {activeTab === 'stocks' && (
                 <AdminStockManager 
@@ -590,13 +606,10 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
               )}
               {activeTab === 'bulk-enquiries' && <AdminBulkEnquiryManager />}
               {activeTab === 'wallet' && <AdminWalletRequests />}
-              {activeTab === 'earnings' && <AdminAdEarningsManager />}
               {activeTab === 'dues' && <AdminDuesManager />}
               {activeTab === 'settings' && <AdminStoreSettings />}
               {activeTab === 'storage' && <AdminStorageManager />}
-              <div className="mt-8">
-                <AdSlot slot="admin_bottom" />
-              </div>
+
             </motion.div>
           </AnimatePresence>
         </div>
@@ -616,6 +629,11 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
           />
         )}
       </AnimatePresence>
+      
+      <AdminAssistant 
+        context={{ products, orders, coupons, banners, users }}
+        title="Admin AI Assistant"
+      />
     </div>
   );
 };

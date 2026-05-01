@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, SlidersHorizontal, ChevronRight, Star, ShoppingBag, Clock, Package, Truck, CheckCircle, XCircle, AlertTriangle, Sparkles } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Order, UserProfile } from '../types';
+
 import { db, doc, updateDoc, collection, addDoc, handleFirestoreError, OperationType } from '../firebase';
 
 interface MyOrdersProps {
@@ -121,6 +122,8 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
             className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-4 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
           />
         </div>
+
+
       </div>
 
       {/* Filter Bar */}
@@ -167,7 +170,7 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
                   <div key={idx} className="relative w-20 h-20 bg-gray-50 rounded-2xl p-1 border border-gray-100 shadow-sm">
                     {item.image ? (
                       <img 
-                        src={item.image} 
+                        src={item.image || undefined} 
                         alt={item.name} 
                         className="w-full h-full object-contain mix-blend-multiply" 
                         referrerPolicy="no-referrer"

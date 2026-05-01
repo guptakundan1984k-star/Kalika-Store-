@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, doc, onSnapshot, setDoc, handleFirestoreError, OperationType } from '../firebase';
 import { StoreSettings } from '../types';
-import { Clock, Store, Save, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Clock, Store, Save, AlertCircle, CheckCircle2, Zap, Plus, X } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export const AdminStoreSettings: React.FC = () => {
@@ -23,6 +23,9 @@ export const AdminStoreSettings: React.FC = () => {
           closingTime: '20:00',
           sundayOpeningTime: '10:40',
           sundayClosingTime: '15:00',
+          isVoiceSupportEnabled: true,
+          isAiAssistantEnabled: true,
+          isDeliveryEnabled: true,
           updatedAt: Date.now()
         };
         setSettings(initial);
@@ -61,6 +64,20 @@ export const AdminStoreSettings: React.FC = () => {
       }, { merge: true });
     } catch (error) {
       console.error("Failed to toggle schedule:", error);
+    }
+  };
+
+  const toggleFeature = async (feature: 'isVoiceSupportEnabled' | 'isAiAssistantEnabled' | 'isDeliveryEnabled') => {
+    if (!settings) return;
+    const newStatus = !settings[feature];
+    setSettings(prev => prev ? { ...prev, [feature]: newStatus } : null);
+    try {
+      await setDoc(doc(db, 'settings', 'store'), {
+        [feature]: newStatus,
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (error) {
+      console.error(`Failed to toggle ${feature}:`, error);
     }
   };
 
@@ -244,6 +261,136 @@ export const AdminStoreSettings: React.FC = () => {
                 className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-gray-900 font-bold focus:ring-4 focus:ring-primary/10 transition-all outline-none"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Feature Switches */}
+        <div className="bg-white p-8 rounded-[40px] shadow-xl shadow-gray-200/50 border border-gray-100 space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center">
+              <Zap className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-gray-900 tracking-tight">Smart Features</h3>
+              <p className="text-sm font-medium text-gray-500">Toggle AI Assistant and Voice Support features.</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100">
+            <div className="space-y-1 text-left">
+              <span className={`text-[10px] font-black uppercase tracking-widest ${settings?.isDeliveryEnabled !== false ? 'text-primary' : 'text-gray-400'}`}>
+                Home Delivery: {settings?.isDeliveryEnabled !== false ? 'ENABLED' : 'DISABLED'}
+              </span>
+              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                {settings?.isDeliveryEnabled !== false ? 'Customers can order for delivery.' : 'Only Takeaway is allowed.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => toggleFeature('isDeliveryEnabled')}
+              className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                settings?.isDeliveryEnabled !== false ? 'bg-primary' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-8 w-8 transform rounded-full bg-white transition-transform duration-300 ${
+                  settings?.isDeliveryEnabled !== false ? 'translate-x-11' : 'translate-x-1'
+                } shadow-md`}
+              />
+            </button>
+          </div>
+
+          {/* Admin WhatsApp Numbers */}
+          <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1 text-left">
+                <span className="text-[10px] font-black uppercase tracking-widest text-primary">Notification Numbers</span>
+                <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">WhatsApp numbers for new orders</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const num = prompt("Enter WhatsApp Number (with country code, e.g., 918002914323):");
+                  if (num && num.length >= 10) {
+                    const current = settings?.adminWhatsAppNumbers || [];
+                    if (!current.includes(num)) {
+                      setSettings(prev => prev ? { ...prev, adminWhatsAppNumbers: [...current, num] } : null);
+                    }
+                  }
+                }}
+                className="p-2 bg-primary/10 text-primary rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(settings?.adminWhatsAppNumbers || ['918002914323']).map((num, idx) => (
+                <div key={idx} className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 shadow-sm">
+                  <span className="text-xs font-black text-gray-900">{num}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const current = settings?.adminWhatsAppNumbers || [];
+                      setSettings(prev => prev ? { ...prev, adminWhatsAppNumbers: current.filter(n => n !== num) } : null);
+                    }}
+                    className="p-1 text-red-500 hover:bg-red-50"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {(!settings?.adminWhatsAppNumbers || settings.adminWhatsAppNumbers.length === 0) && (
+              <p className="text-[10px] text-orange-500 font-bold uppercase py-2">⚠️ At least one number is recommended.</p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100">
+            <div className="space-y-1 text-left">
+              <span className={`text-[10px] font-black uppercase tracking-widest ${settings?.isAiAssistantEnabled !== false ? 'text-primary' : 'text-gray-400'}`}>
+                AI Assistant (Customer End): {settings?.isAiAssistantEnabled !== false ? 'ENABLED' : 'DISABLED'}
+              </span>
+              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                {settings?.isAiAssistantEnabled !== false ? 'Floating AI bubble is visible to users.' : 'UI is cleaner, AI assistant is hidden.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => toggleFeature('isAiAssistantEnabled')}
+              className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                settings?.isAiAssistantEnabled !== false ? 'bg-primary' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-8 w-8 transform rounded-full bg-white transition-transform duration-300 ${
+                  settings?.isAiAssistantEnabled !== false ? 'translate-x-11' : 'translate-x-1'
+                } shadow-md`}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100">
+            <div className="space-y-1 text-left">
+              <span className={`text-[10px] font-black uppercase tracking-widest ${settings?.isVoiceSupportEnabled !== false ? 'text-primary' : 'text-gray-400'}`}>
+                Voice Support (Customer End): {settings?.isVoiceSupportEnabled !== false ? 'ENABLED' : 'DISABLED'}
+              </span>
+              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                {settings?.isVoiceSupportEnabled !== false ? 'Voice search and accessibility is ON.' : 'Voice features are hidden.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => toggleFeature('isVoiceSupportEnabled')}
+              className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                settings?.isVoiceSupportEnabled !== false ? 'bg-primary' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-8 w-8 transform rounded-full bg-white transition-transform duration-300 ${
+                  settings?.isVoiceSupportEnabled !== false ? 'translate-x-11' : 'translate-x-1'
+                } shadow-md`}
+              />
+            </button>
           </div>
         </div>
 

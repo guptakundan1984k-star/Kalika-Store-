@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mic, MicOff, Volume2, VolumeX, Loader2, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Mic, MicOff, Volume2, VolumeX, Loader2, Sparkles, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Product, UserProfile } from '../types';
@@ -11,11 +12,13 @@ interface VoiceAssistantProps {
   onAddToCart: (productName: string) => boolean;
   onPlaceOrder: () => void;
   onSearch: (query: string) => void;
+  onLogout?: () => void;
   user?: UserProfile;
   cart: any[];
 }
 
-export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onPlaceOrder, onSearch, user, cart }) => {
+export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onPlaceOrder, onSearch, onLogout, user, cart }) => {
+  const navigate = useNavigate();
   const { language, t, isVoiceEnabled, setIsVoiceEnabled } = useLanguage();
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -141,6 +144,36 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
     setIsAiProcessing(true);
     setFeedback("Processing with Kalika AI...");
     try {
+      if (lowerText.includes('refresh') || lowerText.includes('reload')) {
+        window.location.reload();
+        return;
+      }
+      if (lowerText.includes('go back') || lowerText.includes('पिछला')) {
+        window.history.back();
+        return;
+      }
+      if (lowerText.includes('locate me') || lowerText.includes('कहाँ हूँ')) {
+        const locateBtn = document.querySelector('[onClick*="handleFetchLocation"]') as HTMLElement;
+        if (locateBtn) locateBtn.click();
+        speak("Attempting to find your location");
+        return;
+      }
+      if (lowerText.includes('cart') || lowerText.includes('टोकरी')) {
+        navigate('/cart');
+        speak(isHindi ? "आपका कार्ट खोल रहा हूँ" : "Opening your cart");
+        return;
+      }
+      if (lowerText.includes('logout') || lowerText.includes('लॉग आउट')) {
+        speak(isHindi ? "लॉग आउट कर रहा हूँ" : "Logging you out");
+        onLogout?.();
+        return;
+      }
+      if (lowerText.includes('admin') || lowerText.includes('पैनल')) {
+        navigate('/admin');
+        speak(isHindi ? "एडमिन पैनल खोल रहा हूँ" : "Opening admin panel");
+        return;
+      }
+
       const resp = await answerAdminQuery(text, { user, language });
       setFeedback(null);
       // Speak the AI response

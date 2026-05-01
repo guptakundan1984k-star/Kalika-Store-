@@ -26,6 +26,17 @@ export const AdminBulkEnquiryManager: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  const handleSelectEnquiry = async (enquiry: BulkEnquiry) => {
+    setSelectedEnquiry(enquiry);
+    if (!enquiry.isRead) {
+      try {
+        await updateDoc(doc(db, 'bulk_enquiries', enquiry.id), { isRead: true });
+      } catch (e) {
+        console.error("Failed to mark as read", e);
+      }
+    }
+  };
+
   const handleUpdateStatus = async (id: string, status: BulkEnquiry['status']) => {
     try {
       await updateDoc(doc(db, 'bulk_enquiries', id), { status });
@@ -126,16 +137,19 @@ export const AdminBulkEnquiryManager: React.FC = () => {
               {filteredEnquiries.map((enquiry) => (
                 <tr 
                   key={enquiry.id} 
-                  onClick={() => setSelectedEnquiry(enquiry)}
-                  className="group hover:bg-gray-50/50 transition-all cursor-pointer"
+                  onClick={() => handleSelectEnquiry(enquiry)}
+                  className="group hover:bg-gray-50/50 transition-all cursor-pointer relative"
                 >
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
+                      {!enquiry.isRead && (
+                        <div className="absolute left-2 top-1/2 -translate-y-1/2 w-2 h-2 bg-red-500 rounded-full shadow-lg shadow-red-500/50" />
+                      )}
                       <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
                         <Briefcase className="w-6 h-6" />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-sm font-black text-gray-900 tracking-tight">{enquiry.storeName}</span>
+                        <span className={`text-sm tracking-tight ${!enquiry.isRead ? 'font-black text-gray-900' : 'font-bold text-gray-600'}`}>{enquiry.storeName}</span>
                         <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{new Date(enquiry.createdAt).toLocaleDateString()}</span>
                       </div>
                     </div>
@@ -294,7 +308,36 @@ export const AdminBulkEnquiryManager: React.FC = () => {
                   </div>
                 </div>
 
-                {selectedEnquiry.billUrl && (
+                {selectedEnquiry.photos && selectedEnquiry.photos.length > 0 && (
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Enquiry Photos / Bill Attachments</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {selectedEnquiry.photos.map((photoUrl, idx) => (
+                        <div key={idx} className="bg-gray-50 p-2 rounded-[32px] border border-gray-100 overflow-hidden group/img">
+                          <img 
+                            src={photoUrl} 
+                            alt={`Bulk Enquiry Photo ${idx + 1}`} 
+                            className="w-full aspect-[4/3] object-cover rounded-2xl hover:scale-105 transition-transform duration-500"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="mt-2 flex justify-center">
+                            <a 
+                              href={photoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[8px] font-black text-indigo-600 hover:underline uppercase tracking-widest flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              View Full Size
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedEnquiry.billUrl && !selectedEnquiry.photos && (
                   <div className="space-y-4">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Paper Bill Attachment</p>
                     <div className="bg-gray-50 p-4 rounded-[40px] border border-gray-100 overflow-hidden">

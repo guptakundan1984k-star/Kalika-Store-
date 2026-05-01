@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { 
   Search, Filter, User, Shield, Mail, Phone, MoreVertical, Trash2, Edit2, 
-  UserPlus, UserCheck, UserX, CheckSquare, Square, Key, Eye, EyeOff, Loader2, Lock, Save
+  UserPlus, UserCheck, UserX, CheckSquare, Square, Key, Eye, EyeOff, 
+  Loader2, Lock, Save, XCircle, Plus, Minus, Users
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, doc, deleteDoc, updateDoc, auth, collection, addDoc } from '../firebase';
+import { db, doc, deleteDoc, updateDoc, auth, collection, addDoc, setDoc } from '../firebase';
 
 interface AdminUserManagerProps {
   users: UserProfile[];
@@ -39,11 +40,13 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [walletAdjustment, setWalletAdjustment] = useState({
     amount: 0,
-    type: 'manual_correction' as const,
+    type: 'manual_correction' as 'manual_correction' | 'manual_debit',
     description: 'Manual adjustment by admin',
     disbursalDate: new Date().toISOString().split('T')[0],
     expiresAt: ''
   });
+
+  const [sendAsBonus, setSendAsBonus] = useState(false);
 
   const handleEditProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,10 +56,23 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
       const finalBalance = editForm.walletBalance;
       const balanceChange = finalBalance - (selectedUser.walletBalance || 0);
 
-      await updateDoc(doc(db, 'users', selectedUser.uid), {
+      const updateData: any = {
         ...editForm,
         updatedAt: Date.now()
-      });
+      };
+
+      // If it's a credit and sendAsBonus is checked, set pendingBonus
+      if (balanceChange > 0 && sendAsBonus) {
+        updateData.pendingBonus = {
+          id: `bonus_${Date.now()}`,
+          amount: balanceChange,
+          description: walletAdjustment.description || 'Special Bonus from Admin',
+          expiresAt: walletAdjustment.expiresAt ? new Date(walletAdjustment.expiresAt).getTime() : Date.now() + (3 * 24 * 60 * 60 * 1000), // Default 3 days
+          createdAt: Date.now()
+        };
+      }
+
+      await updateDoc(doc(db, 'users', selectedUser.uid), updateData);
 
       // If balance was changed manually in the main field, or if we want a specific transaction
       if (balanceChange !== 0) {
@@ -161,10 +177,42 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
     }
   };
 
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUser, setNewUser] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    role: 'user' as UserProfile['role']
+  });
+
+  const handleCreateUser = async () => {
+    if (!newUser.name || !newUser.email) {
+      alert('Name and Email are required');
+      return;
+    }
+    try {
+      const userRef = doc(collection(db, 'users'), `manual_${Date.now()}`);
+      await setDoc(userRef, {
+        uid: userRef.id,
+        ...newUser,
+        walletBalance: 0,
+        totalAdEarnings: 0,
+        createdAt: Date.now(),
+        lastActive: Date.now()
+      });
+      alert('User profile created successfully! They can now sign in using Social Login if the emails match, or you can manage this dummy profile.');
+      setShowAddUser(false);
+      setNewUser({ name: '', email: '', phone: '', role: 'user' });
+    } catch (error) {
+      console.error(error);
+      alert('Failed to create user');
+    }
+  };
+
   const filteredUsers = users.filter(u => {
-    const matchesSearch = u.name.toLowerCase().includes(search.toLowerCase()) || 
-                        u.email.toLowerCase().includes(search.toLowerCase()) ||
-                        u.phone.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = (u.name || '').toLowerCase().includes(search.toLowerCase()) || 
+                        (u.email || '').toLowerCase().includes(search.toLowerCase()) ||
+                        (u.phone || '').toLowerCase().includes(search.toLowerCase());
     const matchesRole = roleFilter === 'all' || u.role === roleFilter;
     return matchesSearch && matchesRole;
   });
@@ -195,11 +243,89 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
           <p className="text-sm text-gray-500 font-medium">Manage user accounts, roles, and permissions.</p>
         </div>
         
-        <button className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 font-bold">
+        <button 
+          onClick={() => setShowAddUser(true)}
+          className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 font-bold"
+        >
           <UserPlus className="w-5 h-5" />
           Add User
         </button>
       </div>
+
+      <AnimatePresence>
+        {showAddUser && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 bg-gray-900 text-white flex justify-between items-center">
+                <h3 className="text-xl font-black tracking-tight">Create User Profile</h3>
+                <button onClick={() => setShowAddUser(false)} className="p-2 hover:bg-white/20 rounded-xl transition-all">
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Full Name</label>
+                  <input 
+                    type="text" 
+                    value={newUser.name}
+                    onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                    placeholder="e.g. John Doe"
+                    className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-4 focus:ring-primary/10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Email Address</label>
+                  <input 
+                    type="email" 
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                    placeholder="john@example.com"
+                    className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-4 focus:ring-primary/10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Phone (Optional)</label>
+                  <input 
+                    type="tel" 
+                    value={newUser.phone}
+                    onChange={(e) => setNewUser({...newUser, phone: e.target.value})}
+                    placeholder="+91 1234567890"
+                    className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-4 focus:ring-primary/10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">System Role</label>
+                  <select 
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({...newUser, role: e.target.value as any})}
+                    className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-4 focus:ring-primary/10"
+                  >
+                    <option value="user">Standard User</option>
+                    <option value="admin">Administrator</option>
+                    <option value="cs">Counter Staff / Delivery (CS)</option>
+                  </select>
+                </div>
+                <button 
+                  onClick={handleCreateUser}
+                  className="w-full py-4 bg-primary text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95"
+                >
+                  Create Profile
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden relative">
         <div className="p-6 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -214,7 +340,7 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
             />
           </div>
           <div className="flex items-center gap-2">
-            {['all', 'admin', 'user'].map((role) => (
+            {['all', 'admin', 'cs', 'user'].map((role) => (
               <button
                 key={role}
                 onClick={() => setRoleFilter(role)}
@@ -222,7 +348,7 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                   roleFilter === role ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
                 }`}
               >
-                {role}s
+                {role === 'cs' ? 'Staff' : role === 'all' ? 'All' : role + 's'}
               </button>
             ))}
           </div>
@@ -341,7 +467,8 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                   <td className="px-6 py-4">
                     <div className="relative group/role">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                        user.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
+                        user.role === 'admin' ? 'bg-purple-100 text-purple-600' : 
+                        user.role === 'cs' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
                       }`}>
                         <Shield className="w-3 h-3" />
                         {user.role}
@@ -355,6 +482,13 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                           Make Admin
                         </button>
                         <button
+                          onClick={() => onUpdateRole(user.uid, 'cs')}
+                          className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-orange-600 hover:bg-orange-50 transition-all flex items-center gap-2"
+                        >
+                          <User className="w-3 h-3" />
+                          Make Staff (CS)
+                        </button>
+                        <button
                           onClick={() => onUpdateRole(user.uid, 'user')}
                           className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-primary/5 hover:text-primary transition-all flex items-center gap-2"
                         >
@@ -366,6 +500,22 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <button 
+                        onClick={() => {
+                          const newRole = user.role === 'admin' ? 'user' : 'admin';
+                          if (window.confirm(`Change ${user.name}'s role to ${newRole.toUpperCase()}?`)) {
+                            updateDoc(doc(db, 'users', user.uid), { role: newRole });
+                          }
+                        }}
+                        className={`p-2 rounded-xl transition-all active:scale-95 ${
+                          user.role === 'admin' 
+                            ? 'text-purple-500 bg-purple-50 hover:bg-purple-100' 
+                            : 'text-gray-400 hover:text-purple-500 hover:bg-purple-50'
+                        }`}
+                        title={user.role === 'admin' ? "Demote to User" : "Promote to Admin"}
+                      >
+                        <Shield className="w-4 h-4" />
+                      </button>
                       <button 
                         onClick={() => {
                           setSelectedUser(user);
@@ -474,46 +624,87 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                       className="w-full bg-gray-50 border-none rounded-3xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all min-h-[100px] resize-none"
                     />
                   </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Wallet Balance (₹)</label>
-                    <input 
-                      type="number" 
-                      value={editForm.walletBalance}
-                      onChange={(e) => setEditForm({...editForm, walletBalance: parseFloat(e.target.value) || 0})}
-                      className={`w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-black focus:ring-4 focus:ring-primary/10 transition-all ${editForm.walletBalance < 0 ? 'text-red-500' : 'text-green-600'}`}
-                    />
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2 italic">Positive for balance, Negative for dues.</p>
-                  </div>
+                  <div className="space-y-4 md:col-span-2 bg-gray-50 p-6 rounded-[32px] border border-gray-100">
+                    <div className="flex items-center justify-between mb-2">
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Wallet Management</label>
+                       <span className={`text-lg font-black ${editForm.walletBalance < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                         Current: ₹{editForm.walletBalance}
+                       </span>
+                    </div>
 
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Reason for Adjustment</label>
-                    <input 
-                      type="text" 
-                      value={walletAdjustment.description}
-                      onChange={(e) => setWalletAdjustment({...walletAdjustment, description: e.target.value})}
-                      placeholder="e.g. Refund for order #123 or Promo credit"
-                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all"
-                    />
-                  </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Adjustment Amount (₹)</label>
+                        <input 
+                          type="number" 
+                          value={walletAdjustment.amount || ''}
+                          onChange={(e) => setWalletAdjustment({...walletAdjustment, amount: parseFloat(e.target.value) || 0})}
+                          placeholder="e.g. 100"
+                          className="w-full bg-white border-none rounded-2xl px-6 py-4 text-sm font-black focus:ring-4 focus:ring-primary/10 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Expiration Date</label>
+                        <input 
+                          type="date" 
+                          value={walletAdjustment.expiresAt}
+                          onChange={(e) => setWalletAdjustment({...walletAdjustment, expiresAt: e.target.value})}
+                          className="w-full bg-white border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all text-red-500"
+                        />
+                      </div>
+                    </div>
 
-                  {/* Manual Adjustment Metadata as requested */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Date of Disbursal</label>
-                    <input 
-                      type="date" 
-                      value={walletAdjustment.disbursalDate}
-                      onChange={(e) => setWalletAdjustment({...walletAdjustment, disbursalDate: e.target.value})}
-                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Expires At</label>
-                    <input 
-                      type="date" 
-                      value={walletAdjustment.expiresAt}
-                      onChange={(e) => setWalletAdjustment({...walletAdjustment, expiresAt: e.target.value})}
-                      className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all text-red-500 font-black"
-                    />
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Reason for Credit/Debit</label>
+                      <input 
+                        type="text" 
+                        value={walletAdjustment.description}
+                        onChange={(e) => setWalletAdjustment({...walletAdjustment, description: e.target.value})}
+                        placeholder="e.g. Compensation for late delivery"
+                        className="w-full bg-white border-none rounded-2xl px-6 py-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 transition-all"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-3 p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                      <button 
+                        type="button"
+                        onClick={() => setSendAsBonus(!sendAsBonus)}
+                        className={`w-10 h-6 rounded-full transition-all relative ${sendAsBonus ? 'bg-primary' : 'bg-gray-200'}`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${sendAsBonus ? 'left-5' : 'left-1'}`} />
+                      </button>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-900 leading-none mb-1">Popup Notification</span>
+                        <span className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Show "Free Cash" banner to user on login</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-4 pt-2">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const amt = Math.abs(walletAdjustment.amount);
+                          if (amt === 0) return;
+                          setEditForm({...editForm, walletBalance: editForm.walletBalance + amt});
+                          setWalletAdjustment({...walletAdjustment, amount: 0, type: 'manual_correction'});
+                        }}
+                        className="flex-1 bg-green-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-green-500/20 hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" /> Credit Money
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const amt = Math.abs(walletAdjustment.amount);
+                          if (amt === 0) return;
+                          setEditForm({...editForm, walletBalance: editForm.walletBalance - amt});
+                          setWalletAdjustment({...walletAdjustment, amount: 0, type: 'manual_debit'});
+                        }}
+                        className="flex-1 bg-red-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-red-500/20 hover:scale-[1.02] active:scale-95 transition-all text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
+                      >
+                        <Minus className="w-4 h-4" /> Deduct Money
+                      </button>
+                    </div>
                   </div>
                 </div>
 

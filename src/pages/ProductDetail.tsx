@@ -3,10 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Product, Review, UserProfile } from '../types';
 import { 
   Star, ShoppingCart, Heart, ArrowLeft, ShieldCheck, 
-  Truck, Clock, MessageSquare, Send, User, Trash2, Plus, Minus, Tag
+  Truck, Clock, MessageSquare, Send, User, Trash2, Plus, Minus, Tag,
+  Image as ImageIcon, X, Loader2, Camera
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AdSlot } from '../components/AdSlot';
+
 import { db, collection, query, where, onSnapshot, addDoc, Timestamp, deleteDoc, doc, getDocs } from '../firebase';
 import { Logo } from '../components/Logo';
 
@@ -29,14 +30,21 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
   
   const [reviews, setReviews] = useState<Review[]>([]);
   const [hasOrdered, setHasOrdered] = useState(false);
-  const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
+  const [newReview, setNewReview] = useState<{ rating: number, comment: string, photos: string[] }>({ rating: 5, comment: '', photos: [] });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [selectedVariations, setSelectedVariations] = useState<{
     size?: string;
     color?: string;
     flavor?: string;
   }>({});
   const [quantity, setQuantity] = useState(1);
+
+  const avgRating = reviews.length > 0 
+    ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
+    : (product.rating || 4.5);
+
+  const totalReviews = Math.max(reviews.length, product.reviewCount || 0);
 
   const isWishlisted = wishlist.includes(id || '');
 
@@ -85,6 +93,42 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
     checkOrder();
   }, [id, user]);
 
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    setIsUploading(true);
+    const ArrayFiles = Array.from(files);
+    let processed = 0;
+    const newPhotos: string[] = [];
+
+    ArrayFiles.forEach(file => {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("Each image must be less than 2MB");
+        processed++;
+        if (processed === ArrayFiles.length) setIsUploading(false);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        newPhotos.push(reader.result as string);
+        processed++;
+        if (processed === ArrayFiles.length) {
+          setNewReview(prev => ({ ...prev, photos: [...prev.photos, ...newPhotos] }));
+          setIsUploading(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removePhoto = (index: number) => {
+    setNewReview(prev => ({
+      ...prev,
+      photos: prev.photos.filter((_, i) => i !== index)
+    }));
+  };
+
   const handleAddReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !id) return;
@@ -96,9 +140,10 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
         userName: user.name,
         rating: newReview.rating,
         comment: newReview.comment,
+        photos: newReview.photos,
         createdAt: Date.now()
       });
-      setNewReview({ rating: 5, comment: '' });
+      setNewReview({ rating: 5, comment: '', photos: [] });
     } catch (error) {
       console.error("Error adding review:", error);
     } finally {
@@ -117,9 +162,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
   if (!product) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8">
-        <Logo className="mb-8" />
-        <h2 className="text-2xl font-black text-gray-900 mb-4">Product Not Found</h2>
-        <button onClick={() => navigate('/products')} className="text-primary font-bold flex items-center gap-2">
+        <h2 className="text-3xl font-black text-gray-900 tracking-tighter uppercase mb-2">Item Not Found</h2>
+        <p className="text-gray-400 font-bold mb-8">The product or page you're looking for doesn't exist.</p>
+        <button onClick={() => navigate('/products')} className="px-8 py-4 bg-primary text-white rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-primary/20">
           <ArrowLeft className="w-5 h-5" /> Back to Products
         </button>
       </div>
@@ -130,7 +175,13 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
     <div className="min-h-screen bg-gray-50 pt-24 pb-12">
       <div className="max-w-7xl mx-auto px-4 md:px-8">
         <button 
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            if (window.history.length > 2) {
+              navigate(-1);
+            } else {
+              navigate('/products');
+            }
+          }}
           className="mb-8 flex items-center gap-2 text-gray-500 font-bold hover:text-primary transition-colors"
         >
           <ArrowLeft className="w-5 h-5" /> Back
@@ -152,9 +203,17 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                   referrerPolicy="no-referrer"
                 />
               )}
+
+              {/* Global Info Banner */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-blue-600 to-cyan-400 py-3 px-6 z-10">
+                <p className="text-[10px] font-black text-white text-center leading-tight uppercase tracking-[0.2em]">
+                  Once you order your photos will be shared soon in your number
+                </p>
+              </div>
+
               <button 
                 onClick={() => toggleWishlist(product.id)}
-                className={`absolute top-6 right-6 p-4 rounded-2xl shadow-xl transition-all active:scale-90 ${
+                className={`absolute top-6 right-6 p-4 rounded-2xl shadow-xl transition-all active:scale-90 z-20 ${
                   isWishlisted ? 'bg-red-500 text-white' : 'bg-white/80 backdrop-blur-md text-gray-400 hover:text-red-500'
                 }`}
               >
@@ -206,7 +265,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                 )}
 
                 {/* Bestseller Tag */}
-                {((reviews.length || product.reviewCount || 0) >= 20 || product.price > 400) && (
+                {(totalReviews >= 20 || product.price > 400) && (
                   <span className="px-3 py-1 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-blue-200">
                     Bestseller
                   </span>
@@ -218,9 +277,9 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1 bg-yellow-400/10 px-3 py-1 rounded-xl">
                   <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                  <span className="text-sm font-black text-yellow-700">{product.rating || '4.5'}</span>
+                  <span className="text-sm font-black text-yellow-700">{avgRating}</span>
                 </div>
-                <span className="text-sm font-bold text-gray-400">({reviews.length} Reviews)</span>
+                <span className="text-sm font-bold text-gray-400">({totalReviews} Reviews)</span>
               </div>
             </div>
 
@@ -399,7 +458,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
           </motion.div>
         </div>
 
-        <AdSlot className="my-12" />
+
 
         {/* Reviews Section */}
         <div className="mt-24 grid grid-cols-1 lg:grid-cols-3 gap-12">
@@ -427,6 +486,44 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                       ))}
                     </div>
                   </div>
+                  <div className="space-y-4">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Add Photos (Optional)</label>
+                    <div className="flex flex-wrap gap-4">
+                      {newReview.photos.map((photo, index) => (
+                        <div key={index} className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-lg group">
+                          <img src={photo} alt="" className="w-full h-full object-cover" />
+                          <button 
+                            type="button"
+                            onClick={() => removePhoto(index)}
+                            className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      
+                      {newReview.photos.length < 5 && (
+                        <label className="w-20 h-20 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all">
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            multiple 
+                            onChange={handlePhotoUpload} 
+                            className="hidden" 
+                          />
+                          {isUploading ? (
+                            <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                          ) : (
+                            <>
+                              <Camera className="w-5 h-5 text-gray-400" />
+                              <span className="text-[8px] font-black text-gray-400 uppercase">Add</span>
+                            </>
+                          )}
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Your Comment</label>
                     <textarea 
@@ -504,9 +601,28 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                       {new Date(review.createdAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <p className="text-gray-600 font-medium leading-relaxed">
+                  <p className="text-gray-600 font-medium leading-relaxed mb-4">
                     {review.comment}
                   </p>
+
+                  {review.photos && review.photos.length > 0 && (
+                    <div className="flex flex-wrap gap-3 mb-4">
+                      {review.photos.map((photo, index) => (
+                        <div 
+                          key={index} 
+                          className="w-20 h-20 rounded-2xl overflow-hidden border border-gray-100 shadow-sm cursor-zoom-in hover:scale-105 transition-transform"
+                          onClick={() => window.open(photo, '_blank')}
+                        >
+                          <img 
+                            src={photo} 
+                            alt={`Review photo ${index + 1}`} 
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   
                   {user && (user.uid === review.userId || user.role === 'admin') && (
                     <button 

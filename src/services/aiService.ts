@@ -101,9 +101,26 @@ export const aiService = {
    * Detects products from multiple photos for bulk creation.
    */
   async detectProductsBulk(images: { data: string; mimeType: string }[]): Promise<Partial<Product>[]> {
+    const numImages = images.length;
     const parts = [
       ...images.map(img => ({ inlineData: { data: img.data, mimeType: img.mimeType } })),
-      { text: "Act as an expert retail catalog curator. For each photo provided, identify the primary product. Provide: 1. Full marketing name, 2. Best fitting category, 3. Engaging technical description, 4. Estimated weight/volume if visible (e.g. 500g, 1L), 5. Estimated market price in INR (if possible based on product type). Return ONLY a raw JSON array of objects. Schema: [{\"name\": string, \"category\": string, \"description\": string, \"weight\": string, \"price\": number}]. If multiple products are in one photo, detect only the most prominent one." }
+      { text: `Act as an expert retail catalog curator. You have been provided with ${numImages} photos.
+      For EACH photo, in the EXACT same order they were provided, identify the primary product.
+      
+      CRITICAL: You MUST return exactly ${numImages} objects in the array. 
+      If you cannot identify a product in a specific photo, still provide an object for that index with name "Unknown Product" and filler details.
+      
+      For each item provide: 
+      1. Full marketing name
+      2. Best fitting category (Vegetables, Fruits, Dairy, Bakery, Meat, Snacks, Beverages, Staples, Oils, Household)
+      3. Engaging technical description
+      4. Estimated weight/volume (e.g. 500g, 1L)
+      5. Estimated market price in INR as a NUMBER.
+      
+      Return ONLY a raw JSON array of objects. 
+      Schema: [{"name": string, "category": string, "description": string, "weight": string, "price": number}]
+      
+      If multiple products are in one photo, detect only the most prominent one.` }
     ];
 
     const response = await ai.models.generateContent({

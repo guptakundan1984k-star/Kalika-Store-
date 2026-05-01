@@ -14,6 +14,7 @@ interface SupportQuery {
   userPhone: string;
   chatHistory: { role: 'user' | 'ai' | 'admin', content: string, image?: string }[];
   status: 'pending' | 'resolved';
+  isRead?: boolean;
   createdAt: number;
 }
 
@@ -84,6 +85,17 @@ export const AdminSupportManager: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  const handleSelectQuery = async (q: SupportQuery) => {
+    setSelectedQuery(q);
+    if (!q.isRead) {
+      try {
+        await updateDoc(doc(db, 'support_queries', q.id), { isRead: true });
+      } catch (e) {
+        console.error("Failed to mark as read", e);
+      }
+    }
+  };
 
   const handleResolve = async (id: string) => {
     await updateDoc(doc(db, 'support_queries', id), { status: 'resolved' });
@@ -168,13 +180,16 @@ export const AdminSupportManager: React.FC = () => {
               queries.map((q) => (
                 <button
                   key={q.id}
-                  onClick={() => setSelectedQuery(q)}
-                  className={`w-full text-left p-4 rounded-2xl border transition-all active:scale-95 ${
+                  onClick={() => handleSelectQuery(q)}
+                  className={`w-full text-left p-4 rounded-2xl border transition-all active:scale-95 relative ${
                     selectedQuery?.id === q.id 
                       ? 'bg-primary/5 border-primary shadow-sm' 
                       : 'bg-white border-gray-100 hover:border-primary/30'
                   }`}
                 >
+                  {!q.isRead && (
+                    <div className="absolute left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-red-500 rounded-full shadow-lg shadow-red-500/50" />
+                  )}
                   <div className="flex items-center justify-between mb-2">
                     <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${
                       q.status === 'pending' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'

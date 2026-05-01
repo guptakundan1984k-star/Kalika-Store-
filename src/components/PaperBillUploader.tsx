@@ -3,6 +3,7 @@ import { Camera, FileText, Loader2, Check, X, ShoppingCart, Plus, Printer, Bluet
 import { motion, AnimatePresence } from 'motion/react';
 import { parsePaperBill } from '../services/geminiService';
 import { Product } from '../types';
+import { printerService } from '../services/BluetoothPrinterService';
 
 interface DetectedItem {
   name: string;
@@ -102,62 +103,80 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
   };
 
   const handleBluetoothPrint = async () => {
-    setBluetoothStatus('searching');
-    setIsPrinting(true);
+    if (detectedItems.length === 0) return;
     
-    // Simulate Bluetooth Connection (Web Bluetooth API is restricted in most iframes/preview)
+    setIsPrinting(true);
+    setBluetoothStatus('searching');
+    
     try {
-      await new Promise(r => setTimeout(r, 2000));
+      // First try to connect
+      await printerService.connect();
       setBluetoothStatus('connected');
       
-      // Mock Printing process
-      await new Promise(r => setTimeout(r, 1500));
+      // Construct ESC/POS data
+      const orderData = {
+        id: `BILL-${Date.now().toString().slice(-6)}`,
+        items: detectedItems.map(i => ({
+          name: i.name,
+          quantity: i.quantity,
+          price: i.price || 0
+        })),
+        total: detectedItems.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0),
+        customerName: 'Quick Bill',
+        createdAt: Date.now()
+      };
       
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        const billHtml = `
-          <html>
-            <head>
-              <title>Print Receipt</title>
-              <style>
-                body { font-family: 'Courier New', Courier, monospace; width: 300px; margin: 0 auto; padding: 20px; }
-                .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
-                .item { display: flex; justify-content: space-between; margin: 5px 0; font-size: 14px; }
-                .total { border-top: 1px solid #000; margin-top: 10px; padding-top: 10px; font-weight: bold; }
-                .footer { text-align: center; margin-top: 20px; font-size: 12px; }
-              </style>
-            </head>
-            <body>
-              <div class="header">
-                <h2>KALIKA STORE</h2>
-                <p>Digitalized Bill Receipt</p>
-                <p>${new Date().toLocaleString()}</p>
-              </div>
-              ${detectedItems.map(item => `
-                <div class="item">
-                  <span>${item.name} x${item.quantity}</span>
-                  <span>₹${(item.price || 0) * item.quantity}</span>
-                </div>
-              `).join('')}
-              <div class="total item">
-                <span>TOTAL</span>
-                <span>₹${detectedItems.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0)}</span>
-              </div>
-              <div class="footer">
-                <p>Thank you for shopping!</p>
-                <p>Visit us again at KalikaStore.in</p>
-              </div>
-              <script>window.onload = () => { window.print(); window.close(); }</script>
-            </body>
-          </html>
-        `;
-        printWindow.document.write(billHtml);
-        printWindow.document.close();
-      }
-      
+      await printerService.printOrder(orderData);
+      alert('Bill printed successfully!');
       setBluetoothStatus('idle');
-    } catch (e) {
+    } catch (e: any) {
+      console.error('Print failed:', e);
       setBluetoothStatus('error');
+      
+      // Fallback to Window Print if Bluetooth fails or is restricted
+      if (confirm('Bluetooth printing failed. Would you like to print using the standard system print instead?')) {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          const billHtml = `
+            <html>
+              <head>
+                <title>Print Receipt</title>
+                <style>
+                  body { font-family: 'Courier New', Courier, monospace; width: 300px; margin: 0 auto; padding: 20px; }
+                  .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+                  .item { display: flex; justify-content: space-between; margin: 5px 0; font-size: 14px; }
+                  .total { border-top: 1px solid #000; margin-top: 10px; padding-top: 10px; font-weight: bold; }
+                  .footer { text-align: center; margin-top: 20px; font-size: 12px; }
+                </style>
+              </head>
+              <body>
+                <div class="header">
+                  <h2>KALIKA STORE</h2>
+                  <p>Digitalized Bill Receipt</p>
+                  <p>${new Date().toLocaleString()}</p>
+                </div>
+                ${detectedItems.map(item => `
+                  <div class="item">
+                    <span>${item.name} x${item.quantity}</span>
+                    <span>₹${(item.price || 0) * item.quantity}</span>
+                  </div>
+                `).join('')}
+                <div class="total item">
+                  <span>TOTAL</span>
+                  <span>₹${detectedItems.reduce((acc, item) => acc + ((item.price || 0) * item.quantity), 0)}</span>
+                </div>
+                <div class="footer">
+                  <p>Thank you for shopping!</p>
+                  <p>Visit us again at KalikaStore.in</p>
+                </div>
+                <script>window.onload = () => { window.print(); window.close(); }</script>
+              </body>
+            </html>
+          `;
+          printWindow.document.write(billHtml);
+          printWindow.document.close();
+        }
+      }
       setTimeout(() => setBluetoothStatus('idle'), 3000);
     } finally {
       setIsPrinting(false);
@@ -187,7 +206,7 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
             <div className="relative aspect-[3/4] max-w-sm mx-auto rounded-[40px] overflow-hidden shadow-2xl border-8 border-white">
               <img src={previewUrl} alt="Bill Preview" className="w-full h-full object-cover" />
               {loading && (
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center text-white space-y-4">
+                <div className="absolute inset-0 bg-black flex flex-col items-center justify-center text-white space-y-4">
                   <Loader2 className="w-12 h-12 animate-spin" />
                   <p className="text-xs font-black uppercase tracking-widest">Analyzing Bill...</p>
                 </div>
@@ -195,7 +214,7 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
               {!loading && (
                 <button 
                   onClick={() => setPreviewUrl(null)}
-                  className="absolute top-4 right-4 p-3 bg-white/20 backdrop-blur-md text-white rounded-2xl hover:bg-white/40 transition-all"
+                  className="absolute top-4 right-4 p-3 bg-white text-gray-900 rounded-2xl hover:bg-gray-100 transition-all border border-gray-100"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -212,7 +231,7 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-gray-900"
               onClick={() => setShowConfirmation(false)}
             />
             <motion.div 
@@ -223,7 +242,7 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
             >
               <div className="p-8 bg-gray-900 text-white">
                 <div className="flex items-center gap-4 mb-2">
-                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                  <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-gray-900">
                     <FileText className="w-6 h-6" />
                   </div>
                   <div>
@@ -261,7 +280,7 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-100/50">
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Qty</span>
                         <div className="flex items-center bg-white rounded-xl border border-gray-100 px-1 shadow-sm">
@@ -327,7 +346,7 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
                   <button 
                     onClick={handleConfirm}
                     disabled={detectedItems.filter(i => i.matchedProduct).length === 0}
-                    className="flex-1 bg-primary text-white px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="flex-1 bg-primary text-white px-6 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-primary hover:bg-primary-dark transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     <Plus className="w-5 h-5" />
                     Add {detectedItems.filter(i => i.matchedProduct).length} to Cart

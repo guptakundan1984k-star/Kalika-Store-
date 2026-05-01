@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../contexts/StoreContext';
 
+import { ProductImage } from './ProductImage';
+
 interface ProductCardProps {
   product: Product;
   onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean) => void;
@@ -42,8 +44,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="aspect-square relative bg-[#F9FAFB] rounded-[32px] overflow-hidden group-hover:bg-gray-50 transition-colors">
         {/* Wishlist Heart Icon (Matched to screenshot) */}
         <button 
-          className={`absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm p-1.5 rounded-full border border-gray-100 shadow-sm transition-colors ${
-            isWishlisted ? 'text-red-500' : 'text-gray-400 hover:text-red-500'
+          className={`absolute top-4 right-4 z-10 bg-white p-2 rounded-full border-2 border-gray-100 shadow-md transition-colors ${
+            isWishlisted ? 'text-red-500 border-red-100' : 'text-gray-400 hover:text-red-500'
           }`}
           onClick={(e) => {
             e.preventDefault();
@@ -54,19 +56,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <Heart className={`w-5 h-5 stroke-[2] ${isWishlisted ? 'fill-current' : ''}`} />
         </button>
 
-        <Link to={`/product/${product.id}`} className="block w-full h-full p-4 flex items-center justify-center">
-          {product.image ? (
-            <img 
-              src={product.image} 
-              alt={product.name}
-              className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-200 font-bold text-2xl">
-              PRODUCT
-            </div>
-          )}
+        <Link to={`/product/${product.id}`} className="block w-full h-full p-4">
+          <ProductImage 
+            src={product.image} 
+            alt={product.name}
+            className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 rounded-2xl"
+          />
         </Link>
       </div>
 
@@ -75,6 +70,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <Link to={`/product/${product.id}`} className="text-[14px] font-black text-gray-900 line-clamp-2 leading-snug tracking-tight">
           {product.name}
         </Link>
+
+        {/* Rating Summary */}
+        <div className="flex items-center gap-1.5 -mt-1">
+          <div className="flex items-center gap-0.5 px-2 py-0.5 bg-yellow-400/10 rounded-full">
+            <Star className="w-2.5 h-2.5 text-yellow-500 fill-current" />
+            <span className="text-[10px] font-black text-yellow-700">{product.rating || '4.5'}</span>
+          </div>
+          <span className="text-[10px] font-bold text-gray-300">({product.reviewCount || '20'}+ reviews)</span>
+        </div>
         
         <div className="flex items-center justify-between mt-auto">
           <div className="flex flex-col">

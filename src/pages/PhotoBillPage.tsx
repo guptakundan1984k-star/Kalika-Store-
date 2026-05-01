@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Product, UserProfile } from '../types';
 import { Camera, Image as ImageIcon, Sparkles, Loader2, ArrowRight, ShoppingCart, Trash2, ShoppingBag, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
 import { PageLoader } from '../components/PageLoader';
 import { GoogleGenAI } from "@google/genai";
 
@@ -123,6 +124,7 @@ const PhotoBillPageContent: React.FC<PhotoBillPageProps> = ({ products, user, on
           </div>
           <h1 className="text-4xl font-black text-gray-900 tracking-tight">Photo Bill System</h1>
           <p className="text-gray-500 font-medium">Upload a photo of your handwritten list and we'll automatically add items to your cart.</p>
+
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">

@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Product, CartItem } from '../types';
 import { ProductCard } from '../components/ProductCard';
 import { Search } from '../components/Search';
 import { Filter, LayoutGrid, List, ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link } from 'react-router-dom';
-import { AdSlot } from '../components/AdSlot';
+import { Link, useSearchParams } from 'react-router-dom';
+
 
 interface ItemsProps {
   products: Product[];
@@ -27,8 +27,14 @@ const Items: React.FC<ItemsProps> = ({
   wishlist,
   storeSettings
 }) => {
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'price-low' | 'price-high' | 'newest'>('newest');
+
+  useEffect(() => {
+    const query = searchParams.get('q') || searchParams.get('query') || searchParams.get('request') || '';
+    if (query) setSearch(query);
+  }, [searchParams]);
 
   const filteredProducts = products.filter(p => {
     const searchTerms = search.toLowerCase().split(' ').filter(t => t.length > 0);
@@ -89,9 +95,7 @@ const Items: React.FC<ItemsProps> = ({
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 mt-12">
-        <AdSlot />
-      </div>
+
 
       {/* Products Grid */}
       <div className="max-w-7xl mx-auto px-6 py-12">

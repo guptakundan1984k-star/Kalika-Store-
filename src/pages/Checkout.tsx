@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CartItem, UserProfile, Order, Coupon, StoreSettings } from '../types';
 import { useStore } from '../contexts/StoreContext';
-import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, ShieldCheck, Clock, XCircle, Navigation, Smartphone, Wallet, Banknote, Sparkles, AlertCircle, IndianRupee } from 'lucide-react';
+import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, ShieldCheck, Clock, XCircle, Navigation, Smartphone, Wallet, Banknote, Sparkles, AlertCircle, IndianRupee, FileText, ArrowLeft, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
-import { doc, updateDoc, db, addDoc, collection } from '../firebase';
-import { AdSlot } from '../components/AdSlot';
+import { doc, updateDoc, db, addDoc, collection, getDoc, onSnapshot, handleFirestoreError, OperationType } from '../firebase';
+import { InvoiceGenerator } from '../components/InvoiceGenerator';
+import { ProductImage } from '../components/ProductImage';
+
 
 interface CheckoutProps {
   cart: CartItem[];
@@ -17,21 +19,28 @@ interface CheckoutProps {
 
 const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced, storeSettings }) => {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   const [deliveryType, setDeliveryType] = useState<'Takeaway' | 'Delivery'>('Delivery');
   const [manualAddress, setManualAddress] = useState(user?.address || '');
   const [deliverySlot, setDeliverySlot] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'COD'>('COD');
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'WALLET'>('COD');
   const [liveLocation, setLiveLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [couponError, setCouponError] = useState('');
   const [isPlaced, setIsPlaced] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [orderPin, setOrderPin] = useState('');
   const [inBag, setInBag] = useState(false);
   const [selectedDate, setSelectedDate] = useState(0); // 0: Today, 1: Tomorrow, etc.
   const [checkoutStep, setCheckoutStep] = useState<0 | 1>(0);
+  const [inWalletStep, setInWalletStep] = useState(false); // To handle back button in payment
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const addressRef = useRef<HTMLDivElement>(null);
@@ -91,7 +100,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
     setCouponError('');
   };
 
-  const getAvailableSlots = () => {
+  const availableDays = React.useMemo(() => {
     const days = [];
     const now = new Date();
     
@@ -100,12 +109,13 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       date.setDate(now.getDate() + i);
       const day = date.getDay();
       
-      let openTime = storeSettings?.openingTime || "08:30";
+      // Default times to match user request (image shows 6:30 AM start)
+      let openTime = storeSettings?.openingTime || "06:30";
       let closeTime = storeSettings?.closingTime || "21:00";
       
       if (day === 0) { // Sunday
-        openTime = storeSettings?.sundayOpeningTime || "10:00";
-        closeTime = storeSettings?.sundayClosingTime || "15:00";
+        openTime = storeSettings?.sundayOpeningTime || "08:30";
+        closeTime = storeSettings?.sundayClosingTime || "20:00";
       }
       
       const [openH, openM] = openTime.split(':').map(Number);
@@ -118,21 +128,30 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       const startTime = openH * 60 + openM;
       const endTime = closeH * 60 + closeM;
       
+      const formatTime = (hour: number, minute: number) => {
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const displayH = hour % 12 || 12;
+        return `${displayH}:${minute.toString().padStart(2, '0')} ${ampm}`;
+      };
+
       for (let m = startTime; m < endTime; m += 120) {
-        const h = Math.floor(m / 60);
-        const mins = m % 60;
-        const h_end = Math.floor((m + 120) / 60);
-        const mins_end = (m + 120) % 60;
+        // Slot 1: m to m + 60 (1 hour)
+        if (m + 60 <= endTime) {
+          const h1 = Math.floor(m / 60);
+          const m1 = m % 60;
+          const h2 = Math.floor((m + 60) / 60);
+          const m2 = (m + 60) % 60;
+          daySlots.push(`${formatTime(h1, m1)} - ${formatTime(h2, m2)}`);
+        }
         
-        if (m + 120 > endTime) break;
-
-        const formatTime = (hour: number, minute: number) => {
-          const ampm = hour >= 12 ? 'PM' : 'AM';
-          const displayH = hour % 12 || 12;
-          return `${displayH}:${minute.toString().padStart(2, '0')} ${ampm}`;
-        };
-
-        daySlots.push(`${formatTime(h, mins)} - ${formatTime(h_end, mins_end)}`);
+        // Slot 2: m + 30 to m + 90 (1 hour, starts 30 mins after slot 1)
+        if (m + 90 <= endTime) {
+          const h3 = Math.floor((m + 30) / 60);
+          const m3 = (m + 30) % 60;
+          const h4 = Math.floor((m + 90) / 60);
+          const m4 = (m + 90) % 60;
+          daySlots.push(`${formatTime(h3, m3)} - ${formatTime(h4, m4)}`);
+        }
       }
 
       // Filter out past slots for today
@@ -150,7 +169,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
           
           const slotTime = hour * 60 + parseInt(minute);
           const currentTime = currentHour * 60 + currentMinute;
-          return slotTime > currentTime + 45; // At least 45 mins in advance
+          return slotTime > currentTime + 30; // At least 30 mins in advance
         });
       }
 
@@ -161,16 +180,31 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       });
     }
     return days;
-  };
-
-  const availableDays = getAvailableSlots();
+  }, [storeSettings]);
 
   // Auto-select next available day if today is exhausted
   useEffect(() => {
     if (availableDays.length > 0 && selectedDate === 0 && availableDays[0].slots.length === 0) {
       setSelectedDate(1);
     }
-  }, [availableDays, selectedDate]);
+  }, [availableDays.length]); // Fix: only trigger when length changes
+
+  const [settings, setSettings] = useState<StoreSettings | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, 'settings', 'store'), (snapshot) => {
+      if (snapshot.exists()) {
+        setSettings(snapshot.data() as StoreSettings);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (settings && settings.isDeliveryEnabled === false) {
+      setDeliveryType('Takeaway');
+    }
+  }, [settings]);
 
   const handleGetLocation = () => {
     setIsLocating(true);
@@ -248,13 +282,11 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
         return;
       }
       setCheckoutStep(1); // Go straight to Review
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const handlePlaceOrder = async () => {
-    // Only ask once
-    if (!window.confirm("Confirm your order placement?")) return;
-    
     // Check if it's a pre-order (Tomorrow or beyond)
     const isPreOrder = selectedDate > 0;
 
@@ -276,6 +308,11 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
     }
 
     if (deliveryType === 'Delivery') {
+      if (storeSettings?.isDeliveryEnabled === false) {
+        alert("Home delivery is currently unavailable. Please choose Self Pickup.");
+        setDeliveryType('Takeaway');
+        return;
+      }
       if (!manualAddress || manualAddress.length < 10) {
         setErrors(prev => ({ ...prev, address: "Give the correct address (minimum 10 characters required)." }));
         setCheckoutStep(0);
@@ -325,6 +362,13 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       paymentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
+
+    if (paymentMethod === 'WALLET' && walletBalance < total) {
+      alert("Insufficient wallet balance.");
+      return;
+    }
+
+    setIsProcessing(true);
 
     const pin = Math.floor(1000 + Math.random() * 9000).toString();
     const newOrder: Order = {
@@ -378,19 +422,29 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
           updates.walletBalance = walletBalance - walletCredit;
           
           // Log transaction
-          await addDoc(collection(db, 'walletTransactions'), {
-            userId: user.uid,
-            amount: -walletCredit,
-            balanceAfter: updates.walletBalance,
-            type: 'order_payment',
-            description: `Payment for Order #${newOrder.id.slice(-6).toUpperCase()}`,
-            orderId: newOrder.id,
-            createdAt: Date.now()
-          });
+          try {
+            await addDoc(collection(db, 'walletTransactions'), {
+              userId: user.uid,
+              amount: -walletCredit,
+              balanceAfter: updates.walletBalance,
+              type: 'order_payment',
+              description: `Payment for Order #${newOrder.id.slice(-6).toUpperCase()}`,
+              orderId: newOrder.id,
+              createdAt: Date.now()
+            });
+          } catch (txError) {
+            console.error("Wallet transaction failed, but continuing order:", txError);
+            handleFirestoreError(txError, OperationType.WRITE, 'walletTransactions');
+          }
         }
 
         if (Object.keys(updates).length > 0) {
-          await updateDoc(doc(db, 'users', user.uid), updates);
+          try {
+            await updateDoc(doc(db, 'users', user.uid), updates);
+          } catch (userRelError) {
+            console.error("User wallet update failed:", userRelError);
+            handleFirestoreError(userRelError, OperationType.UPDATE, `users/${user.uid}`);
+          }
         }
       }
 
@@ -404,13 +458,27 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       audio.play().catch(e => console.log("Audio play failed:", e));
 
       // Notification
-      const adminNumbers = ['916205284423', '919608123427', '919905516803'];
-      const message = `New Order! ID: ${docRef.id}%0ATotal: ₹${total}%0AAddress: ${manualAddress || 'Takeaway'}`;
+      const adminNumbers = settings?.adminWhatsAppNumbers && settings.adminWhatsAppNumbers.length > 0
+        ? settings.adminWhatsAppNumbers 
+        : ['918002914323', '916205284423', '919608123427', '919905516803'];
+        
+      const mapsLink = liveLocation ? `https://www.google.com/maps?q=${liveLocation.lat},${liveLocation.lng}` : '';
+      const shopLink = 'https://maps.app.goo.gl/ejW8MKHT5Y2V1DW2A?g_st=aw';
+      const addressText = deliveryType === 'Delivery' 
+        ? `${manualAddress}${mapsLink ? `%0ALocation: ${mapsLink}` : ''}`
+        : `Self Pickup (Takeaway)%0AShop: ${shopLink}`;
+      
+      const message = `*NEW ORDER RECEIVED!*%0A--------------------------%0A*Order ID:* ${newOrder.id}%0A*Customer:* ${user?.name}%0A*Phone:* ${user?.phone}%0A*Total:* ₹${total.toFixed(2)}%0A*Method:* ${paymentMethod}%0A*Delivery:* ${deliveryType}%0A*Slot:* ${deliverySlot}%0A*Address:* ${addressText}%0A--------------------------%0A_Powered by Kalika Store_`;
+      
+      // Notify all admins sequentially or just open one for the coordinator
       window.open(`https://wa.me/${adminNumbers[0]}?text=${message}`, '_blank');
 
     } catch (error) {
       console.error("Error placing order:", error);
-      alert("Failed to place order. Please try again.");
+      handleFirestoreError(error, OperationType.CREATE, 'orders');
+      alert("Failed to place order. Please check your connection and try again.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -510,6 +578,30 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
               <span className="text-sm font-black text-gray-900">Verified</span>
             </div>
           </div>
+
+          <div className="pt-6 border-t border-primary/10">
+            <div className="flex flex-col items-center gap-4">
+              <div className="flex items-center gap-2 text-primary">
+                <FileText className="w-5 h-5" />
+                <span className="text-sm font-black uppercase tracking-tight">Order Invoice</span>
+              </div>
+              <InvoiceGenerator order={{
+                id: orderId,
+                userId: user?.uid || '',
+                userName: user?.name || '',
+                userPhone: user?.phone || '',
+                items: cart,
+                total: total,
+                status: 'Pending',
+                deliveryType,
+                deliverySlot,
+                paymentMethod,
+                pin: orderPin,
+                createdAt: Date.now(),
+                address: manualAddress ? { manual: manualAddress } : undefined
+              }} />
+            </div>
+          </div>
         </div>
         
         <div className="flex flex-wrap justify-center gap-4">
@@ -567,21 +659,56 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
             <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${checkoutStep === 1 ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>2. Review</div>
           </div>
 
-          <AdSlot />
-
           <AnimatePresence mode="wait">
             {checkoutStep === 0 && (
-              <motion.div key="step0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
+              <motion.div 
+                key="step0"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="space-y-8"
+              >
+                {/* Wallet Info (User requested: "load from the top") */}
+                {user && walletBalance !== 0 && (
+                  <motion.div 
+                    initial={{ y: -50, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    className={`p-6 rounded-[32px] overflow-hidden relative group border mb-8 ${
+                      walletBalance > 0 
+                        ? 'bg-blue-50 border-blue-200' 
+                        : 'bg-red-50 border-red-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4 relative z-10">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
+                        walletBalance > 0 ? 'bg-blue-500 text-white' : 'bg-red-500 text-white'
+                      }`}>
+                        <Wallet className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Wallet Status</p>
+                        <p className="text-lg font-black text-gray-900 tracking-tight">₹{walletBalance.toFixed(2)}</p>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${
+                          walletBalance > 30 ? 'text-blue-600' : 'text-red-600'
+                        }`}>
+                          {walletBalance > 30 ? 'Balance for instant pay' : 'Low Balance! Top up soon'}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
                 <div className="grid grid-cols-2 gap-6">
                   <button 
+                    disabled={storeSettings?.isDeliveryEnabled === false}
                     onClick={() => setDeliveryType('Delivery')}
                     className={`p-6 rounded-[32px] border-2 transition-all flex flex-col items-center gap-4 ${
                       deliveryType === 'Delivery' ? 'bg-primary/5 border-primary text-primary' : 'bg-white border-gray-100 text-gray-400'
-                    }`}
+                    } ${storeSettings?.isDeliveryEnabled === false ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
                   >
                     <Truck className="w-10 h-10" />
                     <span className="text-sm font-black uppercase tracking-widest text-center">Home Delivery</span>
-                    <span className="text-[10px] font-bold opacity-60">Within 10km Radius</span>
+                    <span className="text-[10px] font-bold opacity-60">{storeSettings?.isDeliveryEnabled === false ? 'Currently Unavailable' : 'Within 10km Radius'}</span>
                   </button>
                   <button 
                     onClick={() => setDeliveryType('Takeaway')}
@@ -596,7 +723,11 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                 </div>
 
                 {deliveryType === 'Delivery' && (
-                  <div className="p-6 bg-orange-50 rounded-[32px] border border-orange-100 flex items-start gap-4">
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-6 bg-orange-50 rounded-[32px] border border-orange-100 flex items-start gap-4"
+                  >
                     <div className="w-10 h-10 bg-orange-500 text-white rounded-2xl flex items-center justify-center shrink-0">
                       <MapPin className="w-5 h-5" />
                     </div>
@@ -606,326 +737,324 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                         We currently deliver only within a 10km radius of our store location in Ranchi. Orders outside this range may be cancelled.
                       </p>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
 
-          {/* Address Section */}
-          <div className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 space-y-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
-                  <MapPin className="w-5 h-5" />
-                </div>
-                <h3 className="text-xl font-black text-gray-900 tracking-tight">
-                  {deliveryType === 'Delivery' ? 'Delivery Address' : 'Pickup Location'}
-                </h3>
-              </div>
-              {deliveryType === 'Delivery' && (
-                <span className="text-[10px] font-black text-primary bg-primary/10 px-3 py-1 rounded-full uppercase tracking-widest animate-pulse">
-                  Jharkhand Only
-                </span>
-              )}
-            </div>
-
-            {deliveryType === 'Delivery' ? (
-              <div className="space-y-6">
-                <div className="space-y-4" ref={addressRef}>
+                {/* Address Section */}
+                <div className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 space-y-8">
                   <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Delivery Address</label>
-                      <p className="text-[9px] font-black text-red-500 uppercase tracking-widest">⚠️ Please Use Live Location for accuracy</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
+                        <MapPin className="w-5 h-5" />
+                      </div>
+                      <h3 className="text-xl font-black text-gray-900 tracking-tight">
+                        {deliveryType === 'Delivery' ? 'Delivery Address' : 'Pickup Location'}
+                      </h3>
                     </div>
-                    <button 
-                      onClick={handleGetLocation}
-                      disabled={isLocating}
-                      className="flex items-center gap-2 text-[10px] font-black text-white bg-primary px-4 py-2 rounded-xl hover:bg-primary-dark transition-all shadow-lg shadow-primary/20 active:scale-95"
-                    >
-                      <Navigation className={`w-3 h-3 ${isLocating ? 'animate-pulse' : ''}`} />
-                      {isLocating ? 'LOCATING...' : 'GET LIVE LOCATION'}
-                    </button>
-                  </div>
-                  <textarea 
-                    rows={3}
-                    value={manualAddress}
-                    onChange={(e) => {
-                      setManualAddress(e.target.value);
-                      if (errors.address) setErrors(prev => ({ ...prev, address: '' }));
-                    }}
-                    placeholder="Enter your full address, building name, and landmark..."
-                    className={`w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-4 transition-all resize-none ${errors.address ? 'ring-2 ring-red-500 focus:ring-red-100' : 'focus:ring-primary/10'}`}
-                  />
-                  {errors.address && <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest px-2">{errors.address}</p>}
-                </div>
-
-                <div className="space-y-4" ref={slotRef}>
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Select Delivery Slot</label>
-                    {errors.slot && <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">{errors.slot}</span>}
-                  </div>
-                  
-                  {/* Day Selection Tabs */}
-                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                    {availableDays.map((day, i) => (
-                      <button
-                        key={day.dateStr}
-                        onClick={() => setSelectedDate(i)}
-                        className={`flex flex-col items-center min-w-[100px] p-3 rounded-2xl border-2 transition-all ${
-                          selectedDate === i ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
-                        }`}
-                      >
-                        <span className="text-[10px] font-black uppercase tracking-widest">{day.dayName}</span>
-                        <span className="text-xs font-bold">{day.dateStr}</span>
-                      </button>
-                    ))}
+                    {deliveryType === 'Delivery' && (
+                      <span className="text-[10px] font-black text-primary bg-primary/10 px-3 py-1 rounded-full uppercase tracking-widest animate-pulse">
+                        Jharkhand Only
+                      </span>
+                    )}
                   </div>
 
-                  {/* Slots Grid */}
-                  <div className="max-h-[300px] overflow-y-auto pr-2 scrollbar-hide">
-                    <div className="grid grid-cols-2 gap-3 pb-2">
-                      {availableDays[selectedDate].slots.length > 0 ? (
-                        availableDays[selectedDate].slots.map((slot) => {
-                          const fullSlot = `${availableDays[selectedDate].dayName} (${slot})`;
-                          return (
-                            <button
-                              key={slot}
-                              onClick={() => {
-                                setDeliverySlot(fullSlot);
-                                if (errors.slot) setErrors(prev => ({ ...prev, slot: '' }));
-                              }}
-                              className={`p-4 rounded-2xl border-2 text-left transition-all ${
-                                deliverySlot === fullSlot ? 'bg-primary/5 border-primary text-primary' : 'bg-gray-50 border-transparent text-gray-500 hover:border-gray-200'
-                              } ${errors.slot && deliverySlot !== fullSlot ? 'border-red-100' : ''}`}
-                            >
-                              <span className="text-xs font-black tracking-tight">{slot}</span>
-                            </button>
-                          );
-                        })
-                      ) : (
-                        <div className="col-span-2 py-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                          <Clock className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No slots available for today</p>
+                  {deliveryType === 'Delivery' ? (
+                    <div className="space-y-6">
+                      <div className="space-y-4" ref={addressRef}>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Delivery Address</label>
+                            <p className="text-[9px] font-black text-red-500 uppercase tracking-widest">⚠️ Please Use Live Location for accuracy</p>
+                          </div>
                           <button 
-                            onClick={() => setSelectedDate(1)}
-                            className="mt-2 text-[10px] font-black text-primary uppercase tracking-widest hover:underline"
+                            onClick={handleGetLocation}
+                            disabled={isLocating}
+                            className="flex items-center gap-2 text-[10px] font-black text-white bg-primary px-4 py-2 rounded-xl hover:bg-primary-dark transition-all shadow-lg shadow-primary/20 active:scale-95"
                           >
-                            Check Tomorrow
+                            <Navigation className={`w-3 h-3 ${isLocating ? 'animate-pulse' : ''}`} />
+                            {isLocating ? 'LOCATING...' : 'GET LIVE LOCATION'}
                           </button>
                         </div>
-                      )}
+                        <textarea 
+                          rows={3}
+                          value={manualAddress}
+                          onChange={(e) => {
+                            setManualAddress(e.target.value);
+                            if (errors.address) setErrors(prev => ({ ...prev, address: '' }));
+                          }}
+                          placeholder="Enter your full address, building name, and landmark..."
+                          className={`w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-4 transition-all resize-none ${errors.address ? 'ring-2 ring-red-500 focus:ring-red-100' : 'focus:ring-primary/10'}`}
+                        />
+                        {errors.address && <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest px-2">{errors.address}</p>}
+                      </div>
+
+                      <div className="space-y-4" ref={slotRef}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Select Delivery Slot</label>
+                          {errors.slot && <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">{errors.slot}</span>}
+                        </div>
+                        
+                        {/* Day Selection Tabs */}
+                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                          {availableDays.map((day, i) => {
+                            if (i === 0 && day.slots.length === 0) return null;
+                            return (
+                              <button
+                                key={day.dateStr}
+                                onClick={() => setSelectedDate(i)}
+                                className={`flex flex-col items-center min-w-[100px] p-3 rounded-2xl border-2 transition-all ${
+                                  selectedDate === i ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
+                                }`}
+                              >
+                                <span className="text-[10px] font-black uppercase tracking-widest">{day.dayName}</span>
+                                <span className="text-xs font-bold">{day.dateStr}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Slots Grid */}
+                        <div className="max-h-[300px] overflow-y-auto pr-2 scrollbar-hide">
+                          <div className="grid grid-cols-2 gap-3 pb-2">
+                            {availableDays[selectedDate].slots.length > 0 ? (
+                              availableDays[selectedDate].slots.map((slot, idx) => {
+                                const fullSlot = `${availableDays[selectedDate].dayName} (${slot})`;
+                                return (
+                                  <button
+                                    key={`${slot}-${idx}`}
+                                    onClick={() => {
+                                      setDeliverySlot(fullSlot);
+                                      if (errors.slot) setErrors(prev => ({ ...prev, slot: '' }));
+                                    }}
+                                    className={`p-4 rounded-2xl border-2 text-left transition-all ${
+                                      deliverySlot === fullSlot ? 'bg-primary/5 border-primary text-primary' : 'bg-gray-50 border-transparent text-gray-500 hover:border-gray-200'
+                                    } ${errors.slot && deliverySlot !== fullSlot ? 'border-red-100' : ''}`}
+                                  >
+                                    <span className="text-xs font-black tracking-tight">{slot}</span>
+                                  </button>
+                                );
+                              })
+                            ) : (
+                              <div className="col-span-2 py-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                <Clock className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No slots available for today</p>
+                                {selectedDate === 0 && availableDays[1]?.slots.length > 0 && (
+                                  <button 
+                                    onClick={() => setSelectedDate(1)}
+                                    className="mt-4 px-6 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all"
+                                  >
+                                    Check Tomorrow
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="bg-orange-50 p-6 rounded-3xl border border-orange-100 flex items-start gap-4">
+                        <div className="w-10 h-10 bg-primary text-white rounded-xl flex items-center justify-center shrink-0">
+                          <MapPin className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-gray-900">opp. Krishi Market beside hotel white House, Ranchi, Jharkhand</p>
+                          <p className="text-xs text-gray-500 font-medium mt-1">Visit our store to collect your items. No delivery charges apply.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="bg-orange-50 p-6 rounded-3xl border border-orange-100 flex items-start gap-4">
-                  <div className="w-10 h-10 bg-primary text-white rounded-xl flex items-center justify-center shrink-0">
-                    <MapPin className="w-5 h-5" />
+
+                {/* Payment Method Section */}
+                <div className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 space-y-8" ref={paymentRef}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-xl font-black text-gray-900 tracking-tight">Payment Method</h3>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-900">opp. Krishi Market beside hotel white House, Ranchi, Jharkhand</p>
-                    <p className="text-xs text-gray-500 font-medium mt-1">Visit our store to collect your items. No delivery charges apply.</p>
-                    <a 
-                      href="https://maps.app.goo.gl/ejW8MKHT5Y2V1DW2A?g_st=aw" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 mt-4 text-xs font-black text-primary bg-white px-4 py-2 rounded-xl shadow-sm hover:shadow-md transition-all border border-primary/10"
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button 
+                      onClick={() => setPaymentMethod('COD')}
+                      className={`p-6 rounded-3xl border-2 transition-all flex items-center gap-4 text-left ${
+                        paymentMethod === 'COD' ? 'bg-primary/5 border-primary text-primary' : 'bg-white border-gray-100 text-gray-400'
+                      }`}
                     >
-                      <Navigation className="w-3 h-3" />
-                      Open in Google Maps
-                    </a>
+                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
+                        <Banknote className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black uppercase tracking-widest">Cash on Delivery</p>
+                        <p className="text-[10px] font-bold opacity-60">Pay when order arrives</p>
+                      </div>
+                    </button>
+
+                    <button 
+                      onClick={() => {
+                        if (walletBalance < total) {
+                          alert("Low Balance! Please top up your wallet.");
+                          return;
+                        }
+                        setPaymentMethod('WALLET');
+                      }}
+                      className={`p-6 rounded-3xl border-2 transition-all flex items-center gap-4 text-left relative overflow-hidden ${
+                        paymentMethod === 'WALLET' ? 'bg-primary/5 border-primary text-primary' : 'bg-white border-gray-100 text-gray-400'
+                      } ${walletBalance < total ? 'opacity-80 bg-red-50/10' : ''}`}
+                    >
+                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
+                        <Wallet className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black uppercase tracking-widest">Wallet Payment</p>
+                        <p className="text-[10px] font-bold opacity-60">Balance: ₹{walletBalance.toFixed(2)}</p>
+                        {walletBalance < total && (
+                          <span className="text-[8px] font-black text-red-500 uppercase tracking-tighter mt-1 block">Low Balance</span>
+                        )}
+                      </div>
+                    </button>
                   </div>
-                </div>
-              </div>
-            )}
-          </div>
 
-          {/* Payment Method Section */}
-          <div className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 space-y-8" ref={paymentRef}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
-                <CreditCard className="w-5 h-5" />
-              </div>
-              <h3 className="text-xl font-black text-gray-900 tracking-tight">Payment Method</h3>
-            </div>
-
-            {/* Phone Number Section (In-Checkout) */}
-            {!user?.phone && (
-              <div id="checkout-phone-input" className={`p-6 bg-red-50 rounded-3xl border transition-all space-y-4 ${errors.phone ? 'border-red-500 shadow-lg shadow-red-500/10' : 'border-red-100'}`}>
-                <div className="flex items-center gap-3 text-red-600">
-                  <Smartphone className="w-5 h-5" />
-                  <p className="text-sm font-black uppercase tracking-widest">Add Phone Number</p>
-                </div>
-                <p className="text-xs text-gray-500 font-medium">We need your phone number for verification calls before processing the order.</p>
-                <input 
-                  type="tel"
-                  placeholder="Enter 10-digit phone number"
-                  className={`w-full bg-white border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-4 transition-all ${errors.phone ? 'focus:ring-red-100' : 'focus:ring-red-100'}`}
-                  onChange={(e) => {
-                    if (user && e.target.value.length === 10) {
-                      updateDoc(doc(db, 'users', user.uid), { phone: e.target.value })
-                        .then(() => {
-                          if (errors.phone) setErrors(prev => ({ ...prev, phone: '' }));
-                        })
-                        .catch(err => console.error("Update phone failed", err));
-                    }
-                  }}
-                />
-                {errors.phone && <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest px-2">{errors.phone}</p>}
-              </div>
-            )}
-
-            <div className="bg-primary/5 p-6 rounded-3xl border border-primary/10 flex items-center gap-4">
-              <div className="w-12 h-12 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
-                <Banknote className="w-7 h-7" />
-              </div>
-              <div>
-                <p className="text-lg font-black text-gray-900">Cash on Delivery (COD)</p>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pay when you receive your order</p>
-              </div>
-            </div>
-
-            {/* Bag Toggle */}
-            <div className="pt-8 border-t border-gray-100">
-              <button 
-                onClick={() => setInBag(!inBag)}
-                className={`w-full flex items-center justify-between p-6 rounded-[32px] border-2 transition-all ${
-                  inBag ? 'bg-primary/5 border-primary text-primary shadow-xl shadow-primary/10' : 'bg-gray-50 border-transparent text-gray-500 hover:border-gray-200'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
-                    inBag ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-white shadow-sm'
-                  }`}>
-                    <ShoppingBag className="w-6 h-6" />
-                  </div>
-                  <div className="text-left">
-                    <h4 className="text-sm font-black tracking-tight">Eco-friendly Bag</h4>
-                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Help us reduce plastic</p>
-                  </div>
-                </div>
-                <div className={`w-12 h-6 rounded-full relative transition-all ${inBag ? 'bg-primary' : 'bg-gray-300'}`}>
-                  <motion.div animate={{ x: inBag ? 24 : 4 }} className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <button 
-            onClick={handleNextStep}
-            className="w-full bg-primary text-white font-black py-6 rounded-[32px] shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-[0.98] uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-2"
-          >
-            Continue to Review
-            <ArrowRight className="w-5 h-5" />
-          </button>
-        </motion.div>
-        )}
-
-        {checkoutStep === 1 && (
-          <motion.div key="step1" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8">
-            {/* Wallet Info (User requested: "load from the top") */}
-            {user && walletBalance !== 0 && (
-              <motion.div 
-                initial={{ y: -50, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                className={`p-6 rounded-[32px] overflow-hidden relative group border ${
-                  walletBalance > 0 
-                    ? 'bg-blue-50 border-blue-200' 
-                    : 'bg-red-50 border-red-200'
-                }`}
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <Wallet className={`w-16 h-16 ${walletBalance > 0 ? 'text-blue-600' : 'text-red-600'}`} />
-                </div>
-                <div className="flex items-center justify-between gap-6 relative z-10">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Wallet className={`w-5 h-5 ${walletBalance > 0 ? 'text-blue-600' : 'text-red-600'}`} />
-                      <h4 className={`text-lg font-black tracking-tight ${walletBalance > 0 ? 'text-blue-900' : 'text-red-900'}`}>
-                        Digital Wallet
-                      </h4>
+                  {/* Phone Number Section (In-Checkout) */}
+                  {!user?.phone && (
+                    <div id="checkout-phone-input" className={`p-6 bg-red-50 rounded-3xl border transition-all space-y-4 ${errors.phone ? 'border-red-500 shadow-lg shadow-red-500/10' : 'border-red-100'}`}>
+                      <div className="flex items-center gap-3 text-red-600">
+                        <Smartphone className="w-5 h-5" />
+                        <p className="text-sm font-black uppercase tracking-widest">Add Phone Number</p>
+                      </div>
+                      <p className="text-xs text-gray-500 font-medium">We need your phone number for verification calls before processing the order.</p>
+                      <input 
+                        type="tel"
+                        placeholder="Enter 10-digit phone number"
+                        className={`w-full bg-white border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-4 transition-all ${errors.phone ? 'focus:ring-red-100 shadow-lg ring-red-500' : 'focus:ring-red-100'}`}
+                        onChange={(e) => {
+                          if (user && e.target.value.length === 10) {
+                            updateDoc(doc(db, 'users', user.uid), { phone: e.target.value })
+                              .then(() => { if (errors.phone) setErrors(prev => ({ ...prev, phone: '' })); })
+                              .catch(err => console.error("Update phone failed", err));
+                          }
+                        }}
+                      />
+                      {errors.phone && <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest px-2">{errors.phone}</p>}
                     </div>
-                    <p className={`text-xs font-medium ${walletBalance > 0 ? 'text-blue-700/80' : 'text-red-700/80'}`}>
-                      Current Balance: <span className="font-black">₹{walletBalance}</span>
-                    </p>
-                    {walletCredit > 0 && (
-                      <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest animate-pulse">
-                        Applied: -₹{walletCredit}
+                  )}
+
+                  {/* Bag Toggle */}
+                  <div className="pt-8 border-t border-gray-100">
+                    <button 
+                      onClick={() => setInBag(!inBag)}
+                      className={`w-full flex items-center justify-between p-6 rounded-[32px] border-2 transition-all ${
+                        inBag ? 'bg-primary/5 border-primary text-primary shadow-xl shadow-primary/10' : 'bg-gray-50 border-transparent text-gray-500 hover:border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                          inBag ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-white shadow-sm'
+                        }`}>
+                          <ShoppingBag className="w-6 h-6" />
+                        </div>
+                        <div className="text-left">
+                          <h4 className="text-sm font-black tracking-tight">Eco-friendly Bag</h4>
+                          <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Help us reduce plastic</p>
+                        </div>
+                      </div>
+                      <div className={`w-12 h-6 rounded-full relative transition-all ${inBag ? 'bg-primary' : 'bg-gray-300'}`}>
+                        <motion.div animate={{ x: inBag ? 24 : 4 }} className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleNextStep}
+                  className="w-full bg-primary text-white font-black py-6 rounded-[32px] shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-[0.98] uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-2"
+                >
+                  Continue to Review
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              </motion.div>
+            )}
+
+            {checkoutStep === 1 && (
+              <motion.div key="step1" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-8">
+                <div className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 space-y-8">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-3xl font-black text-gray-900 tracking-tight">Order Review</h2>
+                    <button 
+                      onClick={() => setCheckoutStep(0)}
+                      className="bg-gray-100 text-gray-400 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all flex items-center gap-2"
+                    >
+                      <ArrowLeft className="w-3 h-3" />
+                      Edit Details
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-8 rounded-[32px]">
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Delivery To</p>
+                      <p className="text-sm font-bold text-gray-900 line-clamp-2">{deliveryType === 'Delivery' ? manualAddress : 'Store Pickup'}</p>
+                    </div>
+                    <div className="md:text-right">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Time Slot</p>
+                      <p className="text-sm font-bold text-gray-900">{deliveryType === 'Delivery' ? deliverySlot : 'N/A'}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-primary/5 p-6 rounded-[32px] border border-primary/10 flex items-center gap-4">
+                    <div className="w-12 h-12 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
+                      {paymentMethod === 'COD' ? <Banknote className="w-6 h-6" /> : <Wallet className="w-6 h-6" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-gray-900">{paymentMethod === 'COD' ? 'Cash on Delivery' : 'Wallet Payment'}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        {paymentMethod === 'COD' ? 'Pay when you receive' : `Paid from Wallet (Bal: ₹${walletBalance})`}
                       </p>
-                    )}
-                    {walletDue > 0 && (
-                      <p className="text-[10px] font-black text-red-600 uppercase tracking-widest leading-tight">
-                        Note: Your outstanding dues of ₹{walletDue} will be adjusted by admin during order delivery or you can pay them now.
-                      </p>
-                    )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <button 
+                      onClick={() => setCheckoutStep(0)} 
+                      className="flex-1 py-5 bg-gray-100 text-gray-500 rounded-[32px] font-black uppercase text-[10px] tracking-widest hover:bg-gray-200 transition-all outline-none"
+                    >
+                      Back to Details
+                    </button>
+                    <button 
+                      onClick={handlePlaceOrder}
+                      disabled={isProcessing}
+                      className={`flex-[2] bg-gray-900 text-white font-black py-5 rounded-[32px] shadow-2xl shadow-gray-900/30 hover:bg-black transition-all uppercase tracking-[0.2em] text-[10px] flex items-center justify-center gap-2 outline-none ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    >
+                      {isProcessing ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin text-primary" />
+                          Order is being processed...
+                        </>
+                      ) : (
+                        <>
+                          Place Order (₹{total.toFixed(0)})
+                          <CheckCircle className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               </motion.div>
             )}
-
-            <div className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 space-y-8">
-              <h2 className="text-3xl font-black text-gray-900 tracking-tight">Order Details</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-8 rounded-[32px]">
-                <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Delivery To</p>
-                  <p className="text-sm font-bold text-gray-900 line-clamp-2">{manualAddress || 'Pickup at Store'}</p>
-                </div>
-                <div className="md:text-right">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Time Slot</p>
-                  <p className="text-sm font-bold text-gray-900">{deliverySlot}</p>
-                </div>
-              </div>
-
-              <div className="bg-primary/5 p-6 rounded-[32px] border border-primary/10 flex items-center gap-4">
-                <div className="w-12 h-12 bg-primary text-white rounded-2xl flex items-center justify-center">
-                  <Banknote className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-gray-900">Cash on Delivery</p>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pay when you receive</p>
-                </div>
-              </div>
-
-              {!user?.phone && (
-                <div className="p-6 bg-red-50 rounded-3xl border border-red-500">
-                  <p className="text-sm font-black text-red-600">Verification Call Number Needed</p>
-                  <input 
-                    type="tel"
-                    onChange={(e) => {
-                      if (e.target.value.length === 10 && user) {
-                        updateDoc(doc(db, 'users', user.uid), { phone: e.target.value });
-                      }
-                    }}
-                    className="w-full mt-4 p-4 rounded-xl border-none focus:ring-4 focus:ring-red-100"
-                    placeholder="Enter 10-digit phone number"
-                  />
-                </div>
-              )}
-
-              <div className="flex gap-4">
-                <button onClick={() => setCheckoutStep(0)} className="flex-1 py-5 bg-gray-100 rounded-[32px] font-black uppercase text-[10px]">Back</button>
-                <button 
-                  onClick={handlePlaceOrder}
-                  className="flex-[2] bg-primary text-white font-black py-5 rounded-[32px] shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all uppercase tracking-widest text-[10px]"
-                >
-                  Place Order (₹{total.toFixed(0)})
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </AnimatePresence>
     </div>
+
     <div className="lg:col-span-1 space-y-8">
           <div className="bg-white p-8 rounded-[40px] shadow-xl shadow-gray-200/50 border border-gray-100 space-y-8 overflow-y-auto max-h-[calc(100vh-200px)] scrollbar-hide">
             <h2 className="text-2xl font-black text-gray-900 tracking-tight">Order Summary</h2>
             
             <div className="space-y-4 pr-2">
-              {cart.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-4">
+              {cart.map((item, idx) => (
+                <div key={`${item.id}-${idx}`} className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gray-50 rounded-xl overflow-hidden shrink-0">
-                      {item.image && <img src={item.image} alt={item.name} className="w-full h-full object-cover" />}
+                      <ProductImage src={item.image} alt={item.name} className="w-full h-full object-cover" />
                     </div>
                     <div>
                       <p className="text-sm font-bold text-gray-900 line-clamp-1">{item.name}</p>

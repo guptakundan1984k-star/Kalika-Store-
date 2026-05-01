@@ -3,7 +3,7 @@ import { Product } from '../types';
 import { Heart, ShoppingCart, Trash2, ArrowRight, ShoppingBag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, Link } from 'react-router-dom';
-import { AdSlot } from '../components/AdSlot';
+
 
 interface WishlistProps {
   products: Product[];
@@ -43,10 +43,9 @@ const Wishlist: React.FC<WishlistProps> = ({ products, wishlist, onAddToCart, to
           </Link>
         </div>
 
-        <AdSlot className="mb-12" />
-
         {wishlistedProducts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
             <AnimatePresence mode="popLayout">
               {wishlistedProducts.map((product) => (
                 <motion.div
@@ -60,7 +59,7 @@ const Wishlist: React.FC<WishlistProps> = ({ products, wishlist, onAddToCart, to
                   <div className="aspect-square overflow-hidden relative">
                     {product.image && (
                       <img 
-                        src={product.image} 
+                        src={product.image || undefined} 
                         alt={product.name}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                         referrerPolicy="no-referrer"
@@ -111,7 +110,8 @@ const Wishlist: React.FC<WishlistProps> = ({ products, wishlist, onAddToCart, to
               ))}
             </AnimatePresence>
           </div>
-        ) : (
+        </div>
+      ) : (
           <div className="text-center py-32 bg-white rounded-[60px] border border-dashed border-gray-200 shadow-2xl shadow-gray-200/20">
             <div className="w-24 h-24 bg-gray-50 rounded-[40px] flex items-center justify-center text-gray-200 mx-auto mb-8 shadow-inner">
               <ShoppingBag className="w-12 h-12" />

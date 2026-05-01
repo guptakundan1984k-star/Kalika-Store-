@@ -33,6 +33,8 @@ import {
   getDocFromServer, 
   addDoc, 
   arrayUnion,
+  deleteField,
+  writeBatch,
   enableMultiTabIndexedDbPersistence, 
   terminate 
 } from 'firebase/firestore';
@@ -200,6 +202,8 @@ export {
   Timestamp,
   addDoc,
   arrayUnion,
+  deleteField,
+  writeBatch,
   ref,
   uploadBytes,
   getDownloadURL

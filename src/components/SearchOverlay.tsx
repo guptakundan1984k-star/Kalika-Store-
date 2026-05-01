@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Product } from '../types';
 import { CATEGORIES } from '../constants';
 
+
 import { aiService } from '../services/aiService';
 
 interface SearchOverlayProps {
@@ -180,6 +181,8 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
               </div>
           </div>
 
+
+
           <div className="flex-1 overflow-y-auto pb-24">
             {!searchQuery ? (
               <div className="space-y-8 py-6">
@@ -279,7 +282,7 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
                       >
                         <div className="w-20 h-20 rounded-full border-2 border-gray-100 p-1 group-hover:border-primary transition-all overflow-hidden bg-white shadow-sm">
                           <img 
-                            src={cat.image} 
+                            src={cat.image || undefined} 
                             alt={cat.name} 
                             className="w-full h-full object-cover rounded-full group-hover:scale-110 transition-transform duration-500" 
                           />
@@ -321,7 +324,7 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
                       >
                         <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gray-50 shrink-0">
                           <img 
-                            src={product.image} 
+                            src={product.image || undefined} 
                             alt={product.name} 
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                             referrerPolicy="no-referrer"

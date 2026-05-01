@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, BulkEnquiry } from '../types';
-import { Briefcase, Send, Phone, MessageSquare, CheckCircle, Clock, FileText, Upload, X, Loader2 } from 'lucide-react';
+import { Briefcase, Send, Phone, MessageSquare, CheckCircle, Clock, FileText, Upload, X, Loader2, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, collection, addDoc, onSnapshot, query, where, ref, uploadBytes, getDownloadURL, storage } from '../firebase';
+
+import { db, collection, addDoc, onSnapshot, query, where, ref, uploadBytes, getDownloadURL, storage, handleFirestoreError, OperationType } from '../firebase';
 import { PageLoader } from '../components/PageLoader';
 
 interface BulkEnquiryPageProps {
@@ -16,26 +17,35 @@ const BulkEnquiryPageContent: React.FC<BulkEnquiryPageProps> = ({ user }) => {
     storeName: '',
     message: '',
     phone: user.phone || '',
-    billUrl: ''
+    email: user.email || ''
   });
-  const [billFile, setBillFile] = useState<File | null>(null);
-  const [billPreview, setBillPreview] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setBillFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setBillPreview(reader.result as string);
-      reader.readAsDataURL(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPhotos(prev => [...prev, { file, preview: reader.result as string }]);
+        };
+        reader.readAsDataURL(file);
+      });
     }
   };
 
-  const uploadBill = async (file: File): Promise<string> => {
-    const storageRef = ref(storage, `bulk_enquiry_bills/${user.uid}_${Date.now()}_${file.name}`);
-    const snapshot = await uploadBytes(storageRef, file);
-    return await getDownloadURL(snapshot.ref);
+  const removePhoto = (index: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadPhotos = async (photoFiles: File[]): Promise<string[]> => {
+    const uploadPromises = photoFiles.map(async (file) => {
+      const storageRef = ref(storage, `bulk_enquiry_photos/${user.uid}_${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      return await getDownloadURL(snapshot.ref);
+    });
+    return Promise.all(uploadPromises);
   };
 
   useEffect(() => {
@@ -43,6 +53,8 @@ const BulkEnquiryPageContent: React.FC<BulkEnquiryPageProps> = ({ user }) => {
     const q = query(collection(db, 'bulk_enquiries'), where('userId', '==', user.uid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setBulkEnquiries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BulkEnquiry)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'bulk_enquiries', false);
     });
     return () => unsubscribe();
   }, [user.uid]);
@@ -52,28 +64,28 @@ const BulkEnquiryPageContent: React.FC<BulkEnquiryPageProps> = ({ user }) => {
     if (!user.uid) return;
     setIsSubmitting(true);
     try {
-      let billUrl = '';
-      if (billFile) {
+      let photoUrls: string[] = [];
+      if (photos.length > 0) {
         setIsUploading(true);
-        billUrl = await uploadBill(billFile);
+        photoUrls = await uploadPhotos(photos.map(p => p.file));
         setIsUploading(false);
       }
 
       const enquiry = {
         userId: user.uid,
         name: user.name,
-        email: user.email,
+        email: formData.email,
         phone: formData.phone,
         storeName: formData.storeName,
         message: formData.message,
-        billUrl,
+        photos: photoUrls,
         status: 'Pending',
+        isRead: false,
         createdAt: Date.now()
       };
       await addDoc(collection(db, 'bulk_enquiries'), enquiry);
-      setFormData({ storeName: '', message: '', phone: user.phone || '', billUrl: '' });
-      setBillFile(null);
-      setBillPreview(null);
+      setFormData({ storeName: '', message: '', phone: user.phone || '', email: user.email || '' });
+      setPhotos([]);
       alert("Bulk Enquiry submitted successfully. We will contact you soon.");
     } catch (error) {
       console.error("Error submitting bulk enquiry:", error);
@@ -94,6 +106,7 @@ const BulkEnquiryPageContent: React.FC<BulkEnquiryPageProps> = ({ user }) => {
           <p className="text-gray-500 font-medium max-w-lg mx-auto">
             Wholesale, institutions, and bulk orders. Tell us your requirements and we'll get back to you with the best rates.
           </p>
+
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -137,39 +150,49 @@ const BulkEnquiryPageContent: React.FC<BulkEnquiryPageProps> = ({ user }) => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Upload Paper Bill (Optional)</label>
-                {!billPreview ? (
-                  <div className="relative group">
-                    <input 
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    />
-                    <div className="w-full bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-8 flex flex-col items-center justify-center gap-3 group-hover:border-primary/20 transition-all">
-                      <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-gray-300 group-hover:text-primary shadow-sm">
-                        <Upload className="w-6 h-6" />
-                      </div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Click or drag paper bill photo</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="relative rounded-2xl overflow-hidden border border-gray-100 shadow-sm aspect-video bg-gray-100">
-                    <img src={billPreview} alt="Bill Preview" className="w-full h-full object-contain" />
-                    <button 
-                      onClick={() => { setBillFile(null); setBillPreview(null); }}
-                      className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-all"
+              <div className="space-y-4">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Upload Product/Bill Photos</label>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {photos.map((photo, index) => (
+                    <motion.div 
+                      layout
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      key={index}
+                      className="relative rounded-2xl overflow-hidden border border-gray-100 shadow-sm aspect-square bg-gray-100 group"
                     >
-                      <X className="w-4 h-4" />
-                    </button>
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                      <p className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                        <FileText className="w-4 h-4" />
-                        Selected
-                      </p>
+                      <img src={photo.preview} alt={`Preview ${index}`} className="w-full h-full object-cover" />
+                      <button 
+                        type="button"
+                        onClick={() => removePhoto(index)}
+                        className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-all z-20"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </motion.div>
+                  ))}
+                  
+                  {photos.length < 6 && (
+                    <div className="relative aspect-square">
+                      <input 
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleFileChange}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      />
+                      <div className="w-full h-full bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-primary/20 transition-all">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-gray-300">
+                          <Plus className="w-5 h-5" />
+                        </div>
+                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Add Photo</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
+                </div>
+                {photos.length === 0 && (
+                  <p className="text-[10px] text-gray-300 font-bold italic">Upload up to 6 photos for your enquiry.</p>
                 )}
               </div>
 
@@ -183,7 +206,7 @@ const BulkEnquiryPageContent: React.FC<BulkEnquiryPageProps> = ({ user }) => {
                 ) : (
                   <>
                     <Send className="w-5 h-5" />
-                    {billFile ? 'Submit with Bill' : 'Submit Enquiry'}
+                    {photos.length > 0 ? `Submit with ${photos.length} Photos` : 'Submit Enquiry'}
                   </>
                 )}
               </button>

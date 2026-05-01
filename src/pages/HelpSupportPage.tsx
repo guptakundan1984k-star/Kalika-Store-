@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, Order } from '../types';
 import { HelpCircle, MessageSquare, Send, Image as ImageIcon, Sparkles, Volume2, User, Loader2, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
 import { db, doc, onSnapshot, setDoc } from '../firebase';
 import { answerAdminQuery } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
@@ -164,6 +165,8 @@ const HelpSupportPageContent: React.FC<HelpSupportPageProps> = ({ user, orders }
             )}
             <div ref={messagesEndRef} />
           </div>
+
+
 
           {/* Input Area */}
           <div className="p-6 border-t border-gray-100 bg-gray-50/50">

@@ -32,7 +32,7 @@ export const StoreStatusBanner: React.FC<StoreStatusBannerProps> = ({ settings, 
       >
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-center">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
+            <div className="w-8 h-8 bg-red-700 rounded-xl flex items-center justify-center">
               <ShoppingBag className="w-5 h-5 text-white" />
             </div>
             <p className="text-xs md:text-sm font-black uppercase tracking-[0.2em] text-white">

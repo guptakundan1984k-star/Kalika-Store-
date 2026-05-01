@@ -12,7 +12,9 @@ export const Footer: React.FC = () => {
     <footer className="bg-gray-50 pt-16 pb-24 md:pb-12 px-6 border-t border-gray-100">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
         <div className="space-y-6">
-          <Logo />
+          <h2 className="text-2xl font-black tracking-tighter text-blue-600 uppercase">
+            Kalika <span className="text-gray-900">Store</span>
+          </h2>
           <p className="text-sm text-gray-500 leading-relaxed">
             Your neighborhood grocery store, now online. Fresh products delivered to your doorstep across Jharkhand.
           </p>
@@ -83,32 +85,12 @@ export const Footer: React.FC = () => {
       <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-gray-100 flex flex-col gap-8">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
           <p className="text-xs text-gray-400 font-medium">
-            &copy; {new Date().getFullYear()} Kalika Store.
+            &copy; {new Date().getFullYear()} <span className="bg-primary/5 px-2 py-0.5 rounded-lg border border-primary/10">Kalika Store</span>. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <button onClick={() => setShowTerms(true)} className="text-xs text-gray-400 hover:text-primary transition-colors">Privacy Policy</button>
             <button onClick={() => setShowTerms(true)} className="text-xs text-gray-400 hover:text-primary transition-colors">Terms of Service</button>
-            <button 
-              onClick={() => setShowTerms(true)}
-              className="text-xs text-gray-400 hover:text-primary transition-colors"
-            >
-              Return Policy
-            </button>
           </div>
-        </div>
-
-        <div className="bg-primary/5 p-6 rounded-[32px] border border-primary/10 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-1 text-center md:text-left">
-            <p className="text-sm font-black text-gray-900 tracking-tight">Want a website or app like this?</p>
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Get your business online today</p>
-          </div>
-          <a 
-            href="tel:6205284423"
-            className="flex items-center gap-3 bg-primary text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 group"
-          >
-            Call: 6205284423
-            <ExternalLink className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-          </a>
         </div>
       </div>
 

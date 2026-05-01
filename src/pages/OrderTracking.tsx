@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { 
   ChevronLeft, Package, Truck, CheckCircle2, 
   MapPin, Clock, Phone, AlertCircle, ShoppingBag,
-  Box, Info, ArrowRight, Home, IndianRupee, XCircle
+  Box, Info, ArrowRight, Home, IndianRupee, XCircle, Printer, FileText
 } from 'lucide-react';
 import { Order } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -14,6 +14,139 @@ export const OrderTracking: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const handlePrintInvoice = () => {
+    if (!order) return;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      const invoiceHtml = `
+        <html>
+          <head>
+            <title>Invoice - ${order.id}</title>
+            <style>
+              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+              body { font-family: 'Inter', sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; color: #1f2937; }
+              .header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 60px; }
+              .logo-container { text-align: left; }
+              .logo { font-size: 32px; font-weight: 900; letter-spacing: -0.05em; margin-bottom: 5px; }
+              .logo span { color: #2563eb; }
+              .company-info { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.1em; }
+              .invoice-title { font-size: 48px; font-weight: 900; letter-spacing: -0.02em; margin: 0; color: #f3f4f6; position: absolute; right: 40px; top: 40px; z-index: -1; }
+              .bill-details { display: grid; grid-template-cols: 1fr 1fr; gap: 40px; margin-bottom: 60px; }
+              .section-title { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; color: #9ca3af; margin-bottom: 15px; }
+              .detail-group { margin-bottom: 20px; }
+              .detail-label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+              .detail-value { font-size: 14px; font-weight: 700; }
+              .items-table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+              .items-table th { text-align: left; padding: 20px 0; border-bottom: 2px solid #f3f4f6; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca3af; }
+              .items-table td { padding: 25px 0; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+              .item-name { font-size: 16px; font-weight: 900; margin: 0; }
+              .item-meta { font-size: 12px; color: #6b7280; margin-top: 4px; }
+              .price { font-size: 16px; font-weight: 700; }
+              .total-section { display: flex; flex-direction: column; align-items: flex-end; gap: 15px; }
+              .total-row { display: flex; justify-content: space-between; width: 300px; font-size: 14px; }
+              .grand-total { font-size: 24px; font-weight: 900; color: #2563eb; margin-top: 10px; padding-top: 20px; border-top: 2px solid #2563eb; }
+              .footer { margin-top: 80px; text-align: center; border-t: 1px solid #f3f4f6; padding-top: 40px; }
+              .qr-mock { width: 100px; height: 100px; background: #f3f4f6; margin: 20px auto; border-radius: 20px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 10px; font-weight: 900; text-align: center; padding: 15px; }
+            </style>
+          </head>
+          <body>
+            <div class="invoice-title">INVOICE</div>
+            <div class="header">
+              <div class="logo-container">
+                <div class="logo">KALIKA <span>STORE</span></div>
+                <div class="company-info">Ranchi, Jharkhand | Est. 2010</div>
+              </div>
+              <div style="text-align: right">
+                <div class="section-title">Invoice Information</div>
+                <div class="detail-value">#${order.id.slice(-8).toUpperCase()}</div>
+                <div class="detail-label" style="margin-top: 5px;">Issued on ${new Date(order.createdAt).toLocaleDateString()}</div>
+              </div>
+            </div>
+
+            <div class="bill-details">
+              <div>
+                <div class="section-title">Customer Details</div>
+                <div class="detail-group">
+                  <div class="detail-label">Store ID / Phone</div>
+                  <div class="detail-value">${order.userId.slice(0, 15)}</div>
+                </div>
+                <div class="detail-group">
+                  <div class="detail-label">Verification PIN</div>
+                  <div class="detail-value" style="color: #2563eb; font-size: 24px;">${order.pin}</div>
+                </div>
+              </div>
+              <div>
+                <div class="section-title">Delivery Details</div>
+                <div class="detail-group">
+                  <div class="detail-label">Address</div>
+                  <div class="detail-value">${order.address?.manual || "Store Pickup"}</div>
+                </div>
+                <div class="detail-group">
+                  <div class="detail-label">Delivery Type</div>
+                  <div class="detail-value">${order.deliveryType}</div>
+                </div>
+              </div>
+            </div>
+
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th style="width: 50%;">Product Description</th>
+                  <th style="text-align: center;">Quantity</th>
+                  <th style="text-align: right;">Unit Price</th>
+                  <th style="text-align: right;">Total Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${order.items.map(item => `
+                  <tr>
+                    <td>
+                      <div class="item-name">${item.name}</div>
+                      <div class="item-meta">${item.id.slice(0, 8)}</div>
+                    </td>
+                    <td style="text-align: center; font-weight: 700;">${item.quantity}</td>
+                    <td style="text-align: right;" class="price">₹${item.price}</td>
+                    <td style="text-align: right;" class="price">₹${item.price * item.quantity}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+
+            <div class="total-section">
+              <div class="total-row">
+                <span style="color: #6b7280; font-weight: 700;">Subtotal</span>
+                <span style="font-weight: 700;">₹${order.total}</span>
+              </div>
+              <div class="total-row">
+                <span style="color: #10b981; font-weight: 700;">Delivery Fee</span>
+                <span style="color: #10b981; font-weight: 700;">FREE</span>
+              </div>
+              <div class="total-row grand-total">
+                <span>Amount Paid</span>
+                <span>₹${order.total}</span>
+              </div>
+            </div>
+
+            <div class="footer">
+              <div class="qr-mock">SCAN TO TRACK ORDER</div>
+              <p style="font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; font-size: 12px;">Thank you for your purchase!</p>
+              <p style="color: #6b7280; font-size: 11px; margin-top: 10px;">This is a computer generated invoice. No signature required.</p>
+            </div>
+
+            <script>
+              window.onload = () => {
+                window.print();
+                setTimeout(() => window.close(), 1000);
+              };
+            </script>
+          </body>
+        </html>
+      `;
+      printWindow.document.write(invoiceHtml);
+      printWindow.document.close();
+    }
+  };
 
   useEffect(() => {
     if (!orderId) return;
@@ -140,7 +273,14 @@ export const OrderTracking: React.FC = () => {
                   <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">Current Status</p>
                   <h2 className={`text-2xl font-black tracking-tight transition-all ${order.status !== 'Delivered' && order.status !== 'Cancelled' ? 'text-green-600 animate-pulse' : 'text-gray-900'}`}>{order.status}</h2>
                 </div>
-                <div className="text-right">
+                <div className="flex flex-col items-end">
+                  <button 
+                    onClick={handlePrintInvoice}
+                    className="mb-2 p-2 bg-gray-50 text-gray-900 rounded-xl hover:bg-primary hover:text-white transition-all active:scale-95 border border-gray-100 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest shadow-sm"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Invoice
+                  </button>
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Expected Delivery</p>
                   <p className="text-sm font-black text-gray-900">{order.estimatedDelivery ? new Date(order.estimatedDelivery).toLocaleDateString([], { day: 'numeric', month: 'short' }) : 'Today'}</p>
                 </div>

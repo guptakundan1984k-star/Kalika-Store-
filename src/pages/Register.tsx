@@ -64,7 +64,10 @@ const Register: React.FC<RegisterProps> = ({ onRegister }) => {
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full -mr-48 -mt-48 blur-3xl" />
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-white/10 rounded-full -ml-48 -mb-48 blur-3xl" />
         
-        <Logo className="text-white brightness-0 invert" />
+        <div className="flex flex-col items-center">
+          <Logo large />
+          <p className="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Create Account</p>
+        </div>
         
         <div className="space-y-8 relative z-10">
           <motion.h1 

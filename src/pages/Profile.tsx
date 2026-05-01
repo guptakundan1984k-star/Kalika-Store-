@@ -9,6 +9,8 @@ import {
   Image as ImageIcon, X, Languages, Volume2, VolumeX, Smartphone, Loader2, Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+import { ProductImage } from '../components/ProductImage';
 import { auth, signOut, db, doc, updateDoc, collection, addDoc, setDoc, onSnapshot, query, where, handleFirestoreError, OperationType } from '../firebase';
 import { useNavigate, Link } from 'react-router-dom';
 import { answerAdminQuery } from '../services/geminiService';
@@ -47,7 +49,6 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
     const edit = params.get('edit');
-    if (tab === 'earn') navigate('/earn');
     if (tab === 'orders') setActiveTab('orders');
     if (tab === 'help') setActiveTab('help');
     if (tab === 'bulk') setActiveTab('bulk');
@@ -80,7 +81,15 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
           <style>
             body { font-family: sans-serif; padding: 40px; color: #333; }
             .header { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 20px; }
-            .logo { font-size: 24px; font-weight: 900; }
+            .logo { 
+              font-size: 24px; 
+              font-weight: 900; 
+              background: #00AEEF1A; 
+              color: #00AEEF; 
+              padding: 10px 20px; 
+              border-radius: 12px;
+              border: 1px solid #00AEEF33;
+            }
             .info { margin-top: 30px; display: grid; grid-template-cols: 1fr 1fr; gap: 40px; }
             table { width: 100%; border-collapse: collapse; margin-top: 40px; }
             th { text-align: left; border-bottom: 1px solid #eee; padding: 10px; font-size: 12px; color: #999; text-transform: uppercase; }
@@ -145,7 +154,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({
     name: user.name || '',
-    phone: user.phone || ''
+    phone: user.phone || '',
+    email: user.email || ''
   });
 
   const handleUpdateProfile = async () => {
@@ -219,6 +229,9 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
     if (helpMessages.length > 1) {
       const syncChat = async () => {
         try {
+          const lastMsg = helpMessages[helpMessages.length - 1];
+          const isUserMessage = lastMsg && lastMsg.role === 'user';
+          
           await setDoc(doc(db, 'support_queries', user.uid), {
             userId: user.uid,
             userName: user.name || 'Anonymous',
@@ -227,6 +240,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
             chatHistory: helpMessages,
             status: 'pending',
             updatedAt: Date.now(),
+            ...(isUserMessage ? { isRead: false } : {}),
             createdAt: Date.now() // This will be overwritten by server if exists, but we use setDoc with merge
           }, { merge: true });
         } catch (error) {
@@ -298,22 +312,6 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
       setIsSubmittingFeature(false);
     }
   };
-
-  const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
-
-  React.useEffect(() => {
-    const q = query(
-      collection(db, 'walletTransactions'), 
-      where('userId', '==', user.uid)
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-      setWalletTransactions(docs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'walletTransactions', false);
-    });
-    return () => unsubscribe();
-  }, [user.uid]);
 
   const handleSignOut = async () => {
     await signOut(auth);
@@ -451,6 +449,15 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                         className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20"
                       />
                     </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Email</label>
+                      <input 
+                        type="email"
+                        value={profileForm.email}
+                        onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                        className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
                     <button 
                       onClick={handleUpdateProfile}
                       className="w-full bg-primary text-white text-[10px] font-black py-3 rounded-xl uppercase tracking-widest shadow-lg shadow-primary/20"
@@ -471,6 +478,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                   </>
                 )}
               </div>
+
+
 
               <div className="mt-8 pt-8 border-t border-gray-100 space-y-4">
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
@@ -595,16 +604,6 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <ChevronRight className="w-4 h-4" />
               </button>
               <button 
-                onClick={() => navigate('/earn')}
-                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 text-gray-500 hover:bg-gray-50`}
-              >
-                <div className="flex items-center gap-3">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  Earn AND Shop
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400" />
-              </button>
-              <button 
                 onClick={() => navigate('/photo-bill')}
                 className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-primary bg-primary/5 hover:bg-primary/10 transition-all border border-primary/10 active:scale-95"
               >
@@ -704,15 +703,6 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <span className="text-xs font-black uppercase tracking-widest text-gray-900">Orders</span>
               </button>
 
-              <button 
-                onClick={() => navigate('/earn')}
-                className={`p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group text-center flex flex-col items-center gap-3 active:scale-95 bg-white`}
-              >
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform bg-amber-50 text-amber-600`}>
-                  <Sparkles className="w-6 h-6" />
-                </div>
-                <span className="text-xs font-black uppercase tracking-widest text-gray-900">Earn AND Shop</span>
-              </button>
 
               <button 
                 onClick={() => navigate('/bulk-enquiry')}
@@ -744,6 +734,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <span className="text-xs font-black uppercase tracking-widest text-gray-900">Addresses</span>
               </button>
             </div>
+
+
 
             <AnimatePresence mode="wait">
               {activeTab === 'orders' ? (
@@ -809,7 +801,11 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                             {order.items.map((item, i) => (
                               <div key={`order-item-${order.id}-${i}`} className="bg-gray-50 px-3 py-2 rounded-xl text-xs font-bold text-gray-600 border border-gray-100 flex items-center gap-2">
                                 {item.image && (
-                                  <img src={item.image} alt={item.name} className="w-6 h-6 rounded-lg object-cover" />
+                                  <ProductImage 
+                                    src={item.image || undefined} 
+                                    alt={item.name} 
+                                    className="w-6 h-6 rounded-lg object-cover" 
+                                  />
                                 )}
                                 {item.name} x{item.quantity}
                               </div>
@@ -882,60 +878,6 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                     </div>
                   )}
 
-                  {/* Wallet History Section */}
-                  <div className="pt-12 space-y-6">
-                    <div className="flex items-center justify-between px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-600">
-                          <ShoppingBag className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h3 className="text-2xl font-black text-gray-900 tracking-tight">Wallet Transactions</h3>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">History of your wallet credits and usage</p>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none">Current Balance</span>
-                        <span className="text-2xl font-black text-primary">₹{user.walletBalance || 0}</span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4">
-                      {walletTransactions.length > 0 ? (
-                        walletTransactions.map((tx) => (
-                          <div key={tx.id} className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all group flex items-center justify-between gap-6">
-                            <div className="flex items-center gap-4">
-                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${tx.amount > 0 ? 'bg-green-50 text-green-500' : 'bg-red-50 text-red-500'}`}>
-                                {tx.amount > 0 ? <Plus className="w-6 h-6" /> : <Minus className="w-6 h-6" />}
-                              </div>
-                              <div className="space-y-1">
-                                <h5 className="font-black text-gray-900 group-hover:text-primary transition-colors">{tx.description || (tx.amount > 0 ? 'Wallet Credit' : 'Wallet Debit')}</h5>
-                                <div className="flex items-center gap-3">
-                                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{new Date(tx.createdAt).toLocaleDateString()} {new Date(tx.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                                  {tx.expiresAt && (
-                                    <span className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-1 bg-red-50 px-2 py-0.5 rounded-full">
-                                      <Clock className="w-3 h-3" />
-                                      Valid till {new Date(tx.expiresAt).toLocaleDateString()}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <span className={`text-xl font-black ${tx.amount > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                {tx.amount > 0 ? '+' : ''}₹{Math.abs(tx.amount)}
-                              </span>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-center py-12 bg-white rounded-[40px] border border-dashed border-gray-100">
-                          <ShoppingBag className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                          <p className="text-sm font-bold text-gray-400">No transactions recorded yet.</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
                 </motion.div>
               ) : activeTab === 'bulk' ? (
                 <motion.div 
@@ -1179,7 +1121,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                     <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center text-red-500 mx-auto shadow-inner">
                       <Heart className="w-10 h-10 fill-current" />
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                       <h4 className="text-2xl font-black text-gray-900">{user.wishlist?.length || 0} Items Saved</h4>
                       <p className="text-gray-500 font-medium max-w-sm mx-auto">Your personal collection of favorites is ready for you to explore and shop.</p>
                     </div>
@@ -1223,7 +1165,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                           }`}>
                             {msg.image && (
                               <img 
-                                src={msg.image} 
+                                src={msg.image || undefined} 
                                 alt="Shared" 
                                 className="w-full max-w-[200px] rounded-xl mb-2 object-cover"
                                 referrerPolicy="no-referrer"
@@ -1456,7 +1398,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                       if (adminPassword === 'admin123') { // Mock admin password
                         navigate('/admin');
                       } else {
-                        setAdminError('Invalid passcode. Access denied.');
+                        setAdminError("It's not");
                         setTimeout(() => setAdminError(''), 3000);
                       }
                     }}

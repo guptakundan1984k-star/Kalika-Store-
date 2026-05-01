@@ -111,7 +111,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full -mr-48 -mt-48 blur-3xl" />
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-white/10 rounded-full -ml-48 -mb-48 blur-3xl" />
         
-        <Logo className="text-white brightness-0 invert" />
+        <div className="flex flex-col items-center">
+          <Logo large />
+          <p className="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Welcome Back</p>
+        </div>
         
         <div className="space-y-8 relative z-10">
           <motion.h1 
@@ -120,7 +123,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             className="text-6xl font-black text-white leading-tight tracking-tighter"
           >
             Welcome Back <br />
-            To <span className="text-gray-900">Kalika Store</span>
+            To <span className="bg-white/20 px-3 py-1 rounded-xl backdrop-blur-sm border border-white/30 text-white ml-2 inline-block">Kalika Store</span>
           </motion.h1>
           <p className="text-white/80 font-medium text-lg max-w-md">
             Sign in to access your orders, track deliveries, and get personalized grocery recommendations.

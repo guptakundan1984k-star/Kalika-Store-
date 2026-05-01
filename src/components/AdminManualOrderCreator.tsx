@@ -49,15 +49,27 @@ export const AdminManualOrderCreator: React.FC<AdminManualOrderCreatorProps> = (
   const addToCart = (product: Product) => {
     const finalPrice = (targetUser?.customPrices?.[product.id]) ?? product.price;
     
+    let isDuplicate = false;
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
+        isDuplicate = true;
         return prev.map(item => 
           item.id === product.id ? { ...item, quantity: item.quantity + 1, price: finalPrice } : item
         );
       }
       return [...prev, { ...product, quantity: 1, price: finalPrice }];
     });
+
+    if (isDuplicate) {
+      alert(`${product.name} is already in the cart. Increased quantity!`);
+    }
+  };
+
+  const handleClearCart = () => {
+    if (window.confirm("Remove all items from this order?")) {
+      setCart([]);
+    }
   };
 
   const removeFromCart = (id: string) => {
@@ -265,9 +277,20 @@ export const AdminManualOrderCreator: React.FC<AdminManualOrderCreatorProps> = (
             {/* Cart and Checkout */}
             <div className="md:w-1/2 p-6 bg-white flex flex-col overflow-hidden">
                <div className="flex-1 overflow-y-auto space-y-4">
-                 <div className="flex items-center gap-2 mb-4">
-                   <ShoppingBag className="w-5 h-5 text-gray-900" />
-                   <h4 className="text-lg font-black text-gray-900 tracking-tight">Order Items</h4>
+                 <div className="flex items-center justify-between mb-4">
+                   <div className="flex items-center gap-2">
+                     <ShoppingBag className="w-5 h-5 text-gray-900" />
+                     <h4 className="text-lg font-black text-gray-900 tracking-tight">Order Items</h4>
+                   </div>
+                   {cart.length > 0 && (
+                     <button 
+                       onClick={handleClearCart}
+                       className="px-4 py-2 bg-red-50 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center gap-2"
+                     >
+                       <Trash2 className="w-3 h-3" />
+                       Clear All
+                     </button>
+                   )}
                  </div>
 
                  <AnimatePresence mode="popLayout">

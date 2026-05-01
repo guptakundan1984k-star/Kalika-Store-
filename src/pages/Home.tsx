@@ -4,7 +4,6 @@ import { ProductCard } from '../components/ProductCard';
 import { Product, Banner, StoreSettings, CartItem } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, MapPin, Clock, AlertCircle, ShoppingBag, Package } from 'lucide-react';
-import { AdSlot } from '../components/AdSlot';
 import { Logo } from '../components/Logo';
 
 interface HomeProps {
@@ -54,7 +53,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
       {/* Brand Identity / Header Section */}
       <div className="w-full pt-12 pb-8 flex flex-col items-center">
         <div className="w-full px-6 flex flex-col items-center text-center">
-          <Logo showBg className="w-full mb-8" />
+          <Logo large className="mb-8" />
           <div className="flex items-center gap-3">
             <span className="h-px w-12 bg-gray-200" />
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em]">
@@ -73,86 +72,23 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
               <span className="text-red-600 text-[9px] font-black uppercase tracking-widest">Currently Accepting Pre-orders Only</span>
             </motion.div>
           )}
+
+          <div className="mt-8 flex flex-col items-center gap-4 w-full">
+              <button 
+                onClick={() => navigate('/items')}
+                className="w-full max-w-xs bg-primary text-white px-8 py-4 rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-primary transition-all flex items-center justify-center gap-3 group"
+              >
+                Browse Products
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+
+          </div>
         </div>
       </div>
 
-      {/* Hero Banners Section - Only show if active banners exist */}
-      {activeBanners.length > 0 && (
-        <div className="px-4 py-4">
-          <div className="relative aspect-[16/9] md:aspect-[21/9] rounded-[40px] overflow-hidden shadow-xl bg-gray-100 border-4 border-white group">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeBanners[currentBanner].id}
-                initial={{ opacity: 0, scale: 1.05 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
-                className="absolute inset-0"
-              >
-                {activeBanners[currentBanner].type === 'video' ? (
-                  <video 
-                    src={activeBanners[currentBanner].image} 
-                    className="w-full h-full object-cover"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                  />
-                ) : (
-                  <img 
-                    src={activeBanners[currentBanner].image} 
-                    alt={activeBanners[currentBanner].title} 
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                )}
-                <div 
-                  className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent flex flex-col items-start justify-end p-8 md:p-12 cursor-pointer"
-                  onClick={() => {
-                    if (activeBanners[currentBanner].link) {
-                      navigate(activeBanners[currentBanner].link!);
-                    }
-                  }}
-                >
-                  <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="space-y-2 max-w-lg"
-                  >
-                    <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight leading-tight drop-shadow-xl">
-                      {activeBanners[currentBanner].title}
-                    </h2>
-                    
-                    {activeBanners[currentBanner].link && (
-                      <div className="inline-flex items-center gap-2 bg-white text-black px-6 py-3 rounded-full font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-primary hover:text-white transition-all active:scale-95 group">
-                        Explore Collection
-                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    )}
-                  </motion.div>
-                </div>
-              </motion.div>
-            </AnimatePresence>
 
-            {/* Pagination dots */}
-            {activeBanners.length > 1 && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                {activeBanners.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentBanner(idx)}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${
-                      currentBanner === idx ? 'w-8 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'
-                    }`}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
+      {/* Banners removed (ads) */}
       {/* Popular Items Header (Matched style to screenshot) */}
       <div className="px-6 py-6 flex items-center justify-between">
         <h2 className="text-2xl font-black text-[#1F2937] tracking-tight">Popular Items</h2>
@@ -164,30 +100,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
         </button>
       </div>
       
-      <div className="px-6 mb-4">
-        <AdSlot />
-      </div>
-
-      {/* Horizontal Scroll Sections */}
-      <div className="space-y-10">
-        {productSections.map((section, idx) => (
-          <section key={idx}>
-            <div className="flex gap-4 overflow-x-auto px-6 scrollbar-hide pb-4">
-              {section.items.map((product) => (
-                <div key={product.id} className="min-w-[180px] w-[180px]">
-                  <ProductCard 
-                    product={product} 
-                    quantityInCart={cart.find(c => c.id === product.id)?.quantity}
-                    onAddToCart={(p, q) => onAddToCart(p, q)} 
-                    toggleWishlist={toggleWishlist}
-                    isWishlisted={wishlist.includes(product.id)}
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
+      {/* Horizontal Scroll Sections removed as per request */}
     </motion.div>
   );
 };

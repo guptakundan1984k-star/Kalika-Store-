@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { printerService } from '../services/BluetoothPrinterService';
 import { 
   Plus, Search, Edit2, Trash2, Package, Filter, Download, 
   Upload, Image as ImageIcon, Sparkles, Loader2, AlertCircle, Save, X,
-  CheckSquare, Square, Cloud, ScanBarcode
+  CheckSquare, Square, Cloud, ScanBarcode, Printer
 } from 'lucide-react';
 import { Product } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -13,6 +14,7 @@ import * as XLSX from 'xlsx';
 import { db, doc, deleteDoc, updateDoc, storage, ref, uploadBytes, getDownloadURL, handleFirestoreError, OperationType } from '../firebase';
 import { aiService } from '../services/aiService';
 import { BarcodeScanner } from './BarcodeScanner';
+
 
 interface AdminProductManagerProps {
   products: Product[];
@@ -42,6 +44,8 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     image: '',
     images: [],
     weight: '',
+    rating: 0,
+    reviewCount: 0,
     tag: undefined
   });
   const [bulkStockValue, setBulkStockValue] = useState<number>(0);
@@ -222,6 +226,18 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     }
   };
 
+  const handleDeleteEverything = async () => {
+    if (!window.confirm("CRITICAL: This will delete EVERY SINGLE PRODUCT in the database. Are you sure?")) return;
+    if (window.prompt("Type 'DELETE ALL' to confirm:") !== 'DELETE ALL') return;
+    
+    try {
+      await Promise.all(products.map(p => deleteDoc(doc(db, 'products', p.id))));
+      alert("Success: All products removed.");
+    } catch (e) {
+      console.error("Total clear failed", e);
+    }
+  };
+
   const handleBulkStockUpdate = async (stock: number) => {
     try {
       await Promise.all(selectedIds.map(id => updateDoc(doc(db, 'products', id), { stock })));
@@ -282,40 +298,47 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     }
   };
 
+  const handleSimplePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAnalyzingPhoto(true);
+    try {
+      const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
+      const uploadResult = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(uploadResult.ref);
+      
+      setEditingProduct(prev => ({
+        ...prev,
+        image: downloadURL,
+        images: Array.from(new Set([...(prev.images || []), downloadURL]))
+      }));
+    } catch (error) {
+      console.error("Manual photo upload failed", error);
+      alert("Failed to upload photo. Check your connection.");
+    } finally {
+      setAnalyzingPhoto(false);
+    }
+  };
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setAnalyzingPhoto(true);
     try {
-      // Upload to Firebase Storage
       const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      // Analyze with Gemini
-      const base64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-        reader.readAsDataURL(file);
-      });
-
-      const result = await analyzeProductImage(base64);
-      if (result.name) {
-        setEditingProduct(prev => ({
-          ...prev,
-          name: result.name,
-          category: result.category || prev.category,
-          price: result.price || prev.price,
-          description: result.description || prev.description,
-          image: downloadURL
-        }));
-      } else {
-        setEditingProduct(prev => ({ ...prev, image: downloadURL }));
-      }
+      const uploadResult = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(uploadResult.ref);
+      
+      setEditingProduct(prev => ({
+        ...prev,
+        image: downloadURL,
+        images: Array.from(new Set([...(prev.images || []), downloadURL]))
+      }));
     } catch (error) {
-      console.error("Photo upload/analysis failed", error);
-      alert("Failed to process photo. Please try again.");
+      console.error("Photo upload failed", error);
+      alert("Failed to process photo. Please check Storage permissions or try again.");
     } finally {
       setAnalyzingPhoto(false);
     }
@@ -473,6 +496,8 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
       image: '',
       images: [],
       weight: '',
+      rating: 0,
+      reviewCount: 0,
       tag: undefined
     });
   };
@@ -484,6 +509,8 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
   return (
     <div className="space-y-8 p-6">
+
+      
       {/* Photo Alerts Section */}
       {products.filter(p => !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder')).length > 0 && (
         <motion.div 
@@ -516,7 +543,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
               <div key={`alert-${p.id}`} className="min-w-[200px] bg-white p-4 rounded-2xl border border-blue-100 flex flex-col gap-3 shadow-sm">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gray-50 rounded-lg overflow-hidden border border-gray-100">
-                    <img src={p.image} alt="" className="w-full h-full object-cover grayscale opacity-50" />
+                    <img src={p.image} alt="" className="w-full h-full object-cover grayscale opacity-50" referrerPolicy="no-referrer" />
                   </div>
                   <p className="text-xs font-black text-gray-900 line-clamp-1">{p.name}</p>
                 </div>
@@ -562,13 +589,43 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
       )}
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         <div>
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight">Inventory Management</h2>
-          <p className="text-sm text-gray-500 font-medium">Manage your products, stock levels, and pricing.</p>
+          <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase leading-none">
+            Catalog <span className="text-primary italic">Manager</span>
+          </h2>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Manage your products, stock levels, and pricing.</p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
+          <button 
+                onClick={async () => {
+                  if (window.confirm("⚠️ DANGER: Delete ALL products? This cannot be undone.")) {
+                    setIsSyncing(true);
+                    try {
+                      const { getDocs, collection, writeBatch, doc } = await import('firebase/firestore');
+                      const snapshot = await getDocs(collection(db, 'products'));
+                      for (let i = 0; i < snapshot.docs.length; i += 500) {
+                        const batch = writeBatch(db);
+                        const chunk = snapshot.docs.slice(i, i + 500);
+                        chunk.forEach(d => batch.delete(d.ref));
+                        await batch.commit();
+                      }
+                      alert("All items removed.");
+                      window.location.reload();
+                    } catch (e) {
+                      console.error(e);
+                      alert("Error removing items.");
+                    } finally {
+                      setIsSyncing(false);
+                    }
+                  }
+                }}
+                className="flex items-center gap-2 bg-red-600 text-white px-5 py-3.5 rounded-2xl hover:bg-red-700 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-red-200"
+              >
+                <X className="w-4 h-4" />
+                Remove All
+              </button>
           <div className="relative group">
             <button 
               disabled={isSyncing}
@@ -694,33 +751,11 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
             </label>
           )}
           <button 
-            onClick={async () => {
-              if (products.length === 0) return;
-              const confirmText = window.prompt(`DANGER: Type "DELETE ALL ${products.length}" to confirm permanent deletion:`);
-              if (confirmText === `DELETE ALL ${products.length}`) {
-                setIsSyncing(true);
-                try {
-                  const { writeBatch } = await import('firebase/firestore');
-                  for (let i = 0; i < products.length; i += 500) {
-                    const batch = writeBatch(db);
-                    const chunk = products.slice(i, i + 500);
-                    chunk.forEach(p => batch.delete(doc(db, 'products', p.id)));
-                    await batch.commit();
-                  }
-                  alert('Inventory cleared.');
-                } catch (e) {
-                  console.error(e);
-                  alert("Clear failed.");
-                } finally {
-                  setIsSyncing(false);
-                }
-              }
-            }}
-            disabled={products.length === 0 || isSyncing}
-            className="flex items-center gap-2 bg-red-600 text-white px-4 py-3 rounded-2xl shadow-xl shadow-red-600/20 hover:bg-black transition-all font-black text-sm uppercase tracking-widest disabled:opacity-50"
+            onClick={handleDeleteEverything}
+            className="flex items-center gap-2 bg-red-50 text-red-500 px-6 py-3 rounded-2xl hover:bg-red-500 hover:text-white transition-all active:scale-95 font-bold border border-red-100 shadow-xl shadow-red-500/10"
           >
             <Trash2 className="w-5 h-5" />
-            Remove All Items
+            Delete All
           </button>
           <button 
             onClick={() => {
@@ -991,6 +1026,34 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button 
+                        onClick={async () => {
+                          try {
+                            if (!printerService.isConnected()) {
+                              await printerService.connect();
+                            }
+                            // Simplified label printing for Bluetooth
+                            await printerService.connect(); // Ensure we try connecting
+                            // Note: The printerService currently handles Order data.
+                            // I'll make it generic or use it to print product info.
+                            const labelData = {
+                              id: product.id,
+                              items: [{ name: product.name, quantity: 1, price: product.price }],
+                              total: product.price,
+                              customerName: 'TAG PRINT',
+                              createdAt: Date.now()
+                            };
+                            await printerService.printOrder(labelData);
+                            alert('Label printed via Bluetooth!');
+                          } catch (e: any) {
+                            alert('Bluetooth print failed: ' + e.message);
+                          }
+                        }}
+                        title="Bluetooth Print Label"
+                        className="p-2 text-gray-400 hover:text-green-500 hover:bg-green-50 rounded-xl transition-all"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                      <button 
                         onClick={() => {
                           const printWindow = window.open('', '_blank');
                           if (printWindow) {
@@ -1044,6 +1107,51 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                         className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
                       >
                         <ScanBarcode className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const printWindow = window.open('', '_blank');
+                          if (printWindow) {
+                            printWindow.document.write(`
+                              <html>
+                                <head>
+                                  <title>Print Product Ticket - ${product.name}</title>
+                                  <style>
+                                    body { font-family: system-ui, sans-serif; padding: 20px; color: #111; }
+                                    .ticket { border: 2px dashed #ccc; padding: 20px; border-radius: 12px; max-width: 300px; text-align: center; }
+                                    .name { font-size: 24px; font-weight: 900; margin-bottom: 5px; text-transform: uppercase; }
+                                    .category { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; }
+                                    .price { font-size: 32px; font-weight: 900; color: #10b981; }
+                                    .info { font-size: 12px; color: #888; margin-top: 10px; }
+                                    .store { font-weight: 900; color: #1e40af; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px; }
+                                  </style>
+                                </head>
+                                <body>
+                                  <div class="ticket">
+                                    <div class="category">${product.category}</div>
+                                    <div class="name">${product.name}</div>
+                                    <div class="price">₹${product.price}</div>
+                                    <div class="info">${product.weight || ''}</div>
+                                    <div class="store">KALIKA STORE</div>
+                                  </div>
+                                  <script>
+                                    window.onload = () => {
+                                      setTimeout(() => {
+                                        window.print();
+                                        window.close();
+                                      }, 500);
+                                    }
+                                  </script>
+                                </body>
+                              </html>
+                            `);
+                            printWindow.document.close();
+                          }
+                        }}
+                        title="Print Price Ticket"
+                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all"
+                      >
+                        <Printer className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => { setEditingProduct(product); setIsEditing(true); }}
@@ -1171,7 +1279,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       {editingProduct.images?.map((img, i) => (
                         <div key={i} className={`relative group aspect-square rounded-2xl overflow-hidden border-2 transition-all ${editingProduct.image === img ? 'border-primary shadow-lg shadow-primary/10' : 'border-gray-50'}`}>
-                          <img src={img} alt="" className="w-full h-full object-cover" />
+                          <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 px-2">
                             <button 
                               onClick={() => setEditingProduct(prev => ({ ...prev, image: img }))}
@@ -1210,26 +1318,30 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                     </div>
 
                     <div className="flex gap-2">
+                      <label className="flex-1 flex items-center justify-center gap-2 bg-gray-900 text-white py-3 rounded-xl hover:bg-black transition-all font-black text-[10px] uppercase tracking-widest cursor-pointer">
+                        <Upload className="w-4 h-4" />
+                        Manual Upload
+                        <input type="file" accept="image/*" onChange={handleSimplePhotoUpload} className="hidden" />
+                      </label>
+                      <div className="flex-[1.5] relative">
+                         <input 
+                           type="text"
+                           value={editingProduct.image}
+                           onChange={(e) => setEditingProduct(prev => ({ ...prev, image: e.target.value }))}
+                           placeholder="Paste Image URL manually..."
+                           className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-[10px] font-bold text-gray-900 focus:ring-2 focus:ring-primary/20 pr-10"
+                         />
+                         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300">
+                           <ImageIcon className="w-4 h-4" />
+                         </div>
+                      </div>
                       <button 
                         onClick={handleGoogleSearch}
                         disabled={searchingGoogle || !editingProduct.name}
                         className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-3 rounded-xl hover:bg-blue-600 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest disabled:opacity-50"
                       >
                         {searchingGoogle ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                        AI Search Images
-                      </button>
-                      <button 
-                        onClick={async () => {
-                          if (!editingProduct.name) return;
-                          setSearchingGoogle(true);
-                          const urls = await aiService.findProductImages(editingProduct.name, editingProduct.category);
-                          setEditingProduct(prev => ({ ...prev, images: Array.from(new Set([...(prev.images || []), ...urls])), image: prev.image || urls[0] }));
-                          setSearchingGoogle(false);
-                        }}
-                        className="flex-1 flex items-center justify-center gap-2 bg-primary/10 text-primary py-3 rounded-xl hover:bg-primary hover:text-white transition-all font-black text-[10px] uppercase tracking-widest"
-                      >
-                        <Sparkles className="w-4 h-4" />
-                        AI Auto-Fill
+                        AI Search
                       </button>
                     </div>
                   </div>
@@ -1338,6 +1450,27 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                         onChange={(e) => setEditingProduct(prev => ({ ...prev, stock: parseInt(e.target.value) }))}
                         className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
                         aria-label="Stock"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Initial Rating (1-5)</label>
+                      <input 
+                        type="number" 
+                        step="0.1"
+                        min="1"
+                        max="5"
+                        value={editingProduct.rating || ''}
+                        onChange={(e) => setEditingProduct(prev => ({ ...prev, rating: parseFloat(e.target.value) }))}
+                        className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Initial Review Count</label>
+                      <input 
+                        type="number" 
+                        value={editingProduct.reviewCount || ''}
+                        onChange={(e) => setEditingProduct(prev => ({ ...prev, reviewCount: parseInt(e.target.value) }))}
+                        className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
                       />
                     </div>
                   </div>

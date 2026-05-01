@@ -7,15 +7,15 @@ import {
   TrendingUp, Users, ShoppingBag, DollarSign, 
   ArrowUpRight, ArrowDownRight, ArrowRight, Package, Clock,
   Shield, BarChart3, Calendar, RefreshCw, Download, Ticket, Layout, AlertCircle,
-  Camera, Image as ImageIcon, Sparkles, Loader2, Upload, Link as LinkIcon, Save, Trash2, Plus, X
+  Camera, Image as ImageIcon, Sparkles, Loader2, Upload, Link as LinkIcon, Save, Trash2, Plus, X, Truck, Mic
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, collection, onSnapshot, query, orderBy, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL } from '../firebase';
-import { Order, Product, UserProfile } from '../types';
+import { Order, Product, UserProfile, StoreSettings } from '../types';
 import { AdminOrderManager } from './AdminOrderManager';
 import { AdminProductManager } from './AdminProductManager';
 import { AdminUserManager } from './AdminUserManager';
-import { updateDoc, doc, deleteDoc, addDoc } from 'firebase/firestore';
+import { writeBatch, updateDoc, doc, deleteDoc, addDoc } from 'firebase/firestore';
 import { aiService } from '../services/aiService';
 
 const COLORS = ['#f97316', '#facc15', '#fb923c', '#fde047'];
@@ -23,21 +23,29 @@ const COLORS = ['#f97316', '#facc15', '#fb923c', '#fde047'];
 interface AdminDashboardProps {
   onTabChange?: (tab: any) => void;
   user?: UserProfile | null;
+  products: Product[];
+  orders: Order[];
+  users: UserProfile[];
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, user }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, user, products, orders, users }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'users' | 'coupons'>('overview');
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isDbConnected, setIsDbConnected] = useState<boolean | null>(null);
   const [lastOrderCount, setLastOrderCount] = useState<number | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [requests, setRequests] = useState<any[]>([]);
   const [selectedNavigationTab, setSelectedNavigationTab] = useState('orders');
   const [showPhotoAlertFix, setShowPhotoAlertFix] = useState(false);
   const [showPriceAlertList, setShowPriceAlertList] = useState(false);
+  const [settings, setSettings] = useState<StoreSettings | null>(null);
+  const [requests, setRequests] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'store'), (s) => {
+      if (s.exists()) setSettings(s.data() as StoreSettings);
+    });
+    return () => unsub();
+  }, []);
   const [showContinuousPhotoAdder, setShowContinuousPhotoAdder] = useState(false);
   const [continuousPhotos, setContinuousPhotos] = useState<{file: File, preview: string, productName?: string, matchedId?: string}[]>([]);
   const [isProcessingBatch, setIsProcessingBatch] = useState(false);
@@ -50,9 +58,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
 
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
-    // The useEffect will re-run because of the dependency if we add it, 
-    // but onSnapshot is already real-time. 
-    // However, this might help if the connection was lost.
   };
 
   const scrollToWidgets = () => {
@@ -92,55 +97,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
   };
 
   useEffect(() => {
-    if (!user || user.role !== 'admin') {
-      setLoading(false);
-      return;
-    }
+    if (!user || user.role !== 'admin') return;
 
     // Request notification permission
     if (Notification.permission === "default") {
       Notification.requestPermission();
     }
-
-    const qOrders = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-    const unsubscribeOrders = onSnapshot(qOrders, (snapshot) => {
-      const newOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-      
-      // Play ring sound if new order arrives
-      if (lastOrderCount !== null && newOrders.length > lastOrderCount) {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.play().catch(e => console.log("Audio play failed:", e));
-        
-        // Also show a browser notification if possible
-        if (Notification.permission === "granted") {
-          new Notification("New Order Received!", {
-            body: `Order #${newOrders[0].id.slice(-8)} for ₹${newOrders[0].total}`,
-            icon: "/favicon.ico"
-          });
-        }
-      }
-      
-      setOrders(newOrders);
-      setLastOrderCount(newOrders.length);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'orders', false);
-    });
-
-    const qProducts = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
-    const unsubscribeProducts = onSnapshot(qProducts, (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'products', false);
-    });
-
-    const qUsers = query(collection(db, 'users'));
-    const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'users', false);
-      setLoading(false);
-    });
 
     const qRequests = query(collection(db, 'product_requests'), orderBy('createdAt', 'desc'));
     const unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
@@ -153,7 +115,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
         audio.play().catch(e => console.log("Audio play failed:", e));
       }
     }, (error) => {
-      console.error("Requests sync failed", error);
+      handleFirestoreError(error, OperationType.LIST, 'product_requests', false);
     });
 
     // Connectivity Check
@@ -165,17 +127,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
     checkConnection();
 
     return () => {
-      unsubscribeOrders();
-      unsubscribeProducts();
-      unsubscribeUsers();
       unsubscribeRequests();
       window.removeEventListener('online', checkConnection);
       window.removeEventListener('offline', checkConnection);
     };
-  }, [user, refreshKey]);
+  }, [user]);
+
+  // Monitor for new orders from props
+  useEffect(() => {
+    if (lastOrderCount !== null && orders.length > lastOrderCount) {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.play().catch(e => console.log("Audio play failed:", e));
+      
+      if (Notification.permission === "granted" && orders[0]) {
+        new Notification("New Order Received!", {
+          body: `Order #${orders[0].id.slice(-8)} for ₹${orders[0].total}`,
+          icon: "/favicon.ico"
+        });
+      }
+    }
+    setLastOrderCount(orders.length);
+  }, [orders]);
+
+  const systemStats = [
+    { label: 'Delivery', status: settings?.isDeliveryEnabled !== false ? 'ON' : 'OFF', icon: Truck, color: settings?.isDeliveryEnabled !== false ? 'text-green-500' : 'text-red-500' },
+    { label: 'Voice AI', status: settings?.isVoiceSupportEnabled ? 'ON' : 'OFF', icon: Mic, color: settings?.isVoiceSupportEnabled ? 'text-green-500' : 'text-red-500' },
+    { label: 'Staff Online', status: users.filter(u => u.role === 'admin' || u.role === 'cs').length, icon: Shield, color: 'text-purple-500' },
+  ];
 
   const stats = [
-    { label: 'Total Revenue', value: `₹${orders.reduce((sum, o) => sum + o.total, 0)}`, icon: DollarSign, trend: '+12.5%', color: 'primary', tab: 'billing' },
+    { label: 'Total Revenue', value: `₹${orders.reduce((sum, o) => sum + o.total, 0)}`, icon: DollarSign, trend: '+12.5%', color: 'primary', tab: 'dashboard' },
     { label: 'Total Orders', value: orders.length, icon: ShoppingBag, trend: '+8.2%', color: 'blue', tab: 'orders' },
     { label: 'Active Users', value: users.length, icon: Users, trend: '+5.4%', color: 'purple', tab: 'users' },
     { label: 'Products', value: products.length, icon: Package, trend: '+2.1%', color: 'orange', tab: 'products' },
@@ -286,7 +267,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
               <option value="orders">Orders</option>
               <option value="users">Customers</option>
               <option value="coupons">Coupons</option>
-              <option value="billing">Billing</option>
               <option value="banners">Banners</option>
               <option value="settings">Settings</option>
             </select>
@@ -401,7 +381,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
               if (window.confirm("⚠️ DANGER: This will delete ALL products permanently. Proceed?")) {
                 const confirmInput = window.prompt("Type 'DELETE' to confirm:");
                 if (confirmInput === 'DELETE') {
-                  const { writeBatch } = await import('firebase/firestore');
                   setIsFixing(true);
                   try {
                     const batch = writeBatch(db);
@@ -640,7 +619,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
                  </div>
                </div>
                
-                <div className="flex-1 overflow-y-auto p-4 md:p-12 bg-gray-50/50">
+                <div className="flex-1 overflow-y-auto p-4 md:p-12 bg-gray-50">
                   {continuousPhotos.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center opacity-20 text-center">
                       <ImageIcon className="w-24 h-24 mb-6" />
@@ -868,6 +847,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
         )}
       </AnimatePresence>
 
+      {/* System Status Indicators */}
+      <div className="flex flex-wrap gap-4 mb-8">
+        {systemStats.map((s) => (
+          <div key={s.label} className="bg-white px-4 py-2 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
+            <div className={`p-1.5 rounded-lg bg-gray-50 ${s.color}`}>
+              <s.icon className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none">{s.label}</p>
+              <p className={`text-[10px] font-black uppercase tracking-tight ${s.color}`}>{s.status}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {stats.map((stat) => (
           <button 
@@ -916,7 +910,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
           </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={orders.slice(0, 7).map((o, i) => ({ name: new Date(o.createdAt).toLocaleDateString('en-US', { weekday: 'short' }), revenue: o.total }))}>
+              <AreaChart data={
+                // Group sales by day to avoid duplicate key errors on the chart axis
+                Array.from(
+                  orders.slice(0, 30).reduce((acc, o) => {
+                    const day = new Date(o.createdAt).toLocaleDateString('en-US', { weekday: 'short' });
+                    acc.set(day, (acc.get(day) || 0) + o.total);
+                    return acc;
+                  }, new Map<string, number>())
+                ).map(([name, revenue]) => ({ name, revenue }))
+              }>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#f97316" stopOpacity={0.3}/>
@@ -1015,7 +1018,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
 
             <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-8 rounded-[32px] text-white shadow-xl shadow-indigo-600/20 flex items-center justify-between gap-6">
               <div className="flex items-center gap-6">
-                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+                <div className="w-16 h-16 bg-white/30 rounded-2xl flex items-center justify-center shrink-0">
                   <Users className="w-8 h-8" />
                 </div>
                 <div>
@@ -1033,7 +1036,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
 
             <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-8 rounded-[32px] text-white shadow-xl shadow-emerald-600/20 flex items-center justify-between gap-6">
               <div className="flex items-center gap-6">
-                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+                <div className="w-16 h-16 bg-white/30 rounded-2xl flex items-center justify-center shrink-0">
                   <Package className="w-8 h-8" />
                 </div>
                 <div>
@@ -1061,7 +1064,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="bg-gray-50/50">
+                <tr className="bg-gray-100">
                   <th className="px-8 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Order</th>
                   <th className="px-8 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
                   <th className="px-8 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</th>
@@ -1069,7 +1072,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {orders.slice(0, 5).map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
+                  <tr key={`recent-${order.id}`} className="hover:bg-gray-50 transition-colors">
                     <td className="px-8 py-6">
                       <p className="text-sm font-black text-gray-900">#{order.id.slice(-8).toUpperCase()}</p>
                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{new Date(order.createdAt).toLocaleDateString()}</p>
@@ -1100,7 +1103,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
           </div>
           <div className="p-8 space-y-6">
             {products.slice(0, 4).map((product) => (
-              <div key={product.id} className="flex items-center gap-4 group">
+              <div key={`top-${product.id}`} className="flex items-center gap-4 group">
                 <div className="w-14 h-14 bg-gray-50 rounded-2xl overflow-hidden shadow-inner group-hover:scale-105 transition-transform">
                   {product.image && <img src={product.image} alt={product.name} className="w-full h-full object-cover" />}
                 </div>

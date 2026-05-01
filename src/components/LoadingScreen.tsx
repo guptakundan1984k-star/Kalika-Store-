@@ -17,14 +17,15 @@ import {
   Beef,
   Coffee,
   Truck,
-  Star
+  Star,
+  SprayCan
 } from 'lucide-react';
 
 const ITEMS = [
   { label: 'PREMIUM STAPLES', icon: Wheat },
   { label: 'BEVERAGE', icon: Coffee },
   { label: 'BISCUITS', icon: Cookie },
-  { label: 'CLEANING SUPPLIES', icon: Package },
+  { label: 'CLEANING SUPPLIES', icon: SprayCan, useBlue: true },
   { label: 'AND MANY MORE..', icon: Sparkles },
 ];
 
@@ -84,7 +85,7 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
               exit={{ opacity: 0, y: -20 }}
               className="flex flex-col items-center gap-8"
             >
-              <div className="w-24 h-24 bg-primary/10 rounded-[32px] flex items-center justify-center text-primary relative">
+              <div className={`w-24 h-24 ${currentItem.useBlue ? 'bg-blue-500/10 text-blue-500' : 'bg-primary/10 text-primary'} rounded-[32px] flex items-center justify-center relative`}>
                 <motion.div
                   initial={{ scale: 0.5, rotate: -45 }}
                   animate={{ scale: 1, rotate: 0 }}
@@ -125,15 +126,20 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
               className="flex flex-col items-center gap-6"
             >
               <div className="flex flex-col items-center gap-4 text-center">
-                <Logo showImage className="mb-4" />
-                <motion.h1 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
+                <Logo large />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.3 }}
-                  className="text-6xl md:text-8xl font-black text-gray-900 tracking-tighter uppercase italic font-bubbly"
+                  className="bg-primary/5 px-8 py-4 rounded-[40px] border border-primary/10 backdrop-blur-md shadow-2xl relative"
                 >
-                  Kalika Store
-                </motion.h1>
+                  <motion.h1 
+                    className="text-6xl md:text-8xl font-black text-gray-900 tracking-tighter uppercase italic font-bubbly relative z-10"
+                  >
+                    Kalika Store
+                  </motion.h1>
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-blue-500/10 rounded-[40px] animate-pulse" />
+                </motion.div>
                 <motion.span 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}

@@ -11,6 +11,7 @@
         "userName": { "type": "string" },
         "rating": { "type": "number" },
         "comment": { "type": "string" },
+        "photos": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "number" }
       },
       "required": ["productId", "userId", "rating", "comment"]
@@ -29,6 +30,7 @@
         "addresses": { "type": "array", "items": { "type": "object" } },
         "wishlist": { "type": "array", "items": { "type": "string" } },
         "lastActiveAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
         "walletBalance": { "type": "number", "description": "User wallet balance (can be negative for dues)" },
         "upiId": { "type": "string" },
         "upiName": { "type": "string" },
@@ -97,6 +99,7 @@
         "userName": { "type": "string" },
         "userPhone": { "type": "string" },
         "amount": { "type": "number" },
+        "method": { "type": "string", "enum": ["online", "offline"] },
         "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
         "createdAt": { "type": "number" }
       },
@@ -145,6 +148,9 @@
         "paymentMethod": { "type": "string" },
         "inBag": { "type": "boolean" },
         "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "deliveredBy": { "type": "string" },
+        "receivedAmount": { "type": "number" },
         "prescriptionImage": { "type": "string" },
         "tracking": { "type": "array", "items": { "type": "object" } }
       },

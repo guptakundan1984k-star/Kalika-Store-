@@ -30,6 +30,7 @@ export interface Review {
   userName: string;
   rating: number;
   comment: string;
+  photos?: string[];
   createdAt: number;
 }
 
@@ -77,7 +78,7 @@ export interface Order {
   };
   pin: string;
   deliverySlot?: string;
-  paymentMethod?: 'PhonePe' | 'Paytm' | 'Google Pay' | 'COD' | 'UPI' | 'Cards';
+  paymentMethod?: 'PhonePe' | 'Paytm' | 'Google Pay' | 'COD' | 'UPI' | 'Cards' | 'WALLET';
   inBag?: boolean;
   createdAt: number;
   prescriptionImage?: string;
@@ -86,6 +87,7 @@ export interface Order {
   estimatedDelivery?: number;
   isPreOrder?: boolean;
   cancellationReason?: string;
+  deliveredBy?: string; // staff UID
   tracking?: {
     status: string;
     timestamp: number;
@@ -119,7 +121,7 @@ export interface UserProfile {
   name: string;
   email: string;
   phone: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'cs';
   password?: string;
   address?: string;
   addresses?: Address[];
@@ -132,6 +134,13 @@ export interface UserProfile {
   totalAdEarnings?: number;
   customPrices?: Record<string, number>; // productId -> custom price
   introSeen?: boolean;
+  pendingBonus?: {
+    id: string;
+    amount: number;
+    description: string;
+    expiresAt: number;
+    createdAt: number;
+  };
 }
 
 export interface AdEarning {
@@ -166,6 +175,8 @@ export interface WalletRequest {
   userName: string;
   userPhone: string;
   amount: number;
+  method?: 'online' | 'offline';
+  screenshot?: string;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: number;
 }
@@ -189,7 +200,27 @@ export interface BulkEnquiry {
   email: string;
   message: string;
   billUrl?: string;
+  photos?: string[];
   status: 'Pending' | 'Contacted' | 'Closed' | 'Accepted';
+  isRead?: boolean;
+  createdAt: number;
+}
+
+export interface SupportQuery {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  chatHistory: {
+    role: 'user' | 'ai' | 'admin';
+    content: string;
+    image?: string;
+    timestamp?: number;
+  }[];
+  status: 'pending' | 'resolved' | 'closed';
+  isRead?: boolean;
+  updatedAt: number;
   createdAt: number;
 }
 
@@ -229,5 +260,9 @@ export interface StoreSettings {
   logoUrl?: string;
   deliveryFee?: number;
   freeDeliveryThreshold?: number;
+  isVoiceSupportEnabled?: boolean;
+  isAiAssistantEnabled?: boolean;
+  isDeliveryEnabled?: boolean;
+  adminWhatsAppNumbers?: string[];
   updatedAt: number;
 }

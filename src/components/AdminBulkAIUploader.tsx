@@ -12,9 +12,10 @@ import { storage, ref, uploadBytes, getDownloadURL } from '../firebase';
 interface AdminBulkAIUploaderProps {
   onBulkAdd: (products: Partial<Product>[]) => Promise<void>;
   categories: string[];
+  products?: Product[];
 }
 
-export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulkAdd, categories }) => {
+export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulkAdd, categories, products = [] }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -71,30 +72,33 @@ export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulk
         return;
       }
 
-      // Upload images to storage first and assign to results
-      const resultsWithImages = await Promise.all(results.map(async (p, idx) => {
-        if (files[idx]) {
-          const storageRef = ref(storage, `products/bulk_${Date.now()}_${files[idx].name}`);
-          await uploadBytes(storageRef, files[idx]);
-          const url = await getDownloadURL(storageRef);
-          return { 
-            ...p, 
-            image: url, 
-            images: [url], 
-            stock: 100,
-            price: p.price || 0,
-            weight: p.weight || ''
-          };
-        }
+      // Ensure mapping is 1:1 using files array as base
+      const resultsWithSortedImages = await Promise.all(files.map(async (file, idx) => {
+        // Find corresponding AI result or use a fallback
+        const p = results[idx] || { 
+          name: 'Manual Product Entry', 
+          category: categories[0], 
+          description: 'AI couldn\'t identify this product details. Please fill manually.',
+          price: 0,
+          weight: ''
+        };
+        
+        const storageRef = ref(storage, `products/bulk_${Date.now()}_${idx}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        
         return { 
           ...p, 
-          price: p.price || 0, 
+          image: url, 
+          images: [url], 
           stock: 100,
-          weight: p.weight || ''
+          price: p.price || 0,
+          weight: p.weight || '',
+          category: p.category || categories[0]
         };
       }));
 
-      setDetectedProducts(resultsWithImages);
+      setDetectedProducts(resultsWithSortedImages);
     } catch (e) {
       console.error("AI Analysis failed", e);
       setShowAlert({ show: true, message: "AI recognition failed. Please check your network or try smaller batches.", type: 'error' });
@@ -105,6 +109,16 @@ export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulk
   };
 
   const handleCreate = async () => {
+    // Check for duplicates before adding
+    const existingNames = new Set(products.map(p => p.name.toLowerCase()));
+    const duplicates = detectedProducts.filter(p => p.name && existingNames.has(p.name.toLowerCase()));
+    
+    if (duplicates.length > 0) {
+      if (!window.confirm(`Warning: ${duplicates.length} products (like "${duplicates[0].name}") already exist in your catalog. Do you want to add them anyway?`)) {
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
       await onBulkAdd(detectedProducts);

@@ -3,28 +3,34 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Wallet, Plus, History, ArrowUpRight, ArrowDownRight, 
-  IndianRupee, Send, Clock, CheckCircle2, XCircle, AlertCircle, Loader2
+  IndianRupee, Send, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Copy
 } from 'lucide-react';
 import { UserProfile, WalletTransaction, WalletRequest } from '../types';
 import { db, collection, addDoc, query, where, orderBy, onSnapshot, updateDoc, doc, handleFirestoreError, OperationType } from '../firebase';
+
+import { useNavigate } from 'react-router-dom';
 
 interface WalletManagerProps {
   user: UserProfile;
 }
 
 export const WalletManager: React.FC<WalletManagerProps> = ({ user }) => {
+  const navigate = useNavigate();
   const [activeView, setActiveView] = useState<'overview' | 'history' | 'request'>('overview');
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [requests, setRequests] = useState<WalletRequest[]>([]);
   const [isRequesting, setIsRequesting] = useState(false);
   const [requestAmount, setRequestAmount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     // Listen for transactions
+    const fourMonthsAgo = Date.now() - (120 * 24 * 60 * 60 * 1000);
     const txQuery = query(
       collection(db, 'walletTransactions'),
       where('userId', '==', user.uid),
+      where('createdAt', '>=', fourMonthsAgo),
       orderBy('createdAt', 'desc')
     );
     const unsubscribeTx = onSnapshot(txQuery, (snapshot) => {
@@ -37,6 +43,7 @@ export const WalletManager: React.FC<WalletManagerProps> = ({ user }) => {
     const reqQuery = query(
       collection(db, 'walletRequests'),
       where('userId', '==', user.uid),
+      where('createdAt', '>=', fourMonthsAgo),
       orderBy('createdAt', 'desc')
     );
     const unsubscribeReq = onSnapshot(reqQuery, (snapshot) => {
@@ -68,22 +75,42 @@ export const WalletManager: React.FC<WalletManagerProps> = ({ user }) => {
         createdAt: Date.now()
       });
       setRequestAmount(0);
+      setSuccessMessage('Top up sent! Let the admin verify your payment');
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
         setActiveView('overview');
-      }, 3000);
+      }, 5000);
     } catch (error) {
       console.error("Error creating wallet request:", error);
+      handleFirestoreError(error, OperationType.CREATE, 'walletRequests');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleCancelRequest = async (requestId: string) => {
+    if (!window.confirm("Cancel this top-up request?")) return;
+    try {
+      await updateDoc(doc(db, 'walletRequests', requestId), { status: 'rejected' });
+    } catch (e) {
+      console.error("Cancel failed", e);
+      handleFirestoreError(e, OperationType.UPDATE, `walletRequests/${requestId}`);
+    }
+  };
+
+  const handleUPICopy = () => {
+    navigator.clipboard.writeText('6205284423@fam');
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
+  };
+
+  const [copySuccess, setCopySuccess] = useState(false);
+
   const balance = user.walletBalance || 0;
 
   return (
-    <div className="bg-white rounded-[40px] border border-gray-100 shadow-xl shadow-gray-200/50 overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-[40px] border border-gray-100 dark:border-gray-700 shadow-xl shadow-gray-200/50 dark:shadow-none overflow-hidden transition-colors">
       {/* Wallet Header */}
       <div className="p-8 bg-primary text-white relative overflow-hidden">
         <div className="absolute -right-8 -top-8 w-48 h-48 bg-white/10 rounded-full blur-3xl animate-pulse" />
@@ -93,11 +120,21 @@ export const WalletManager: React.FC<WalletManagerProps> = ({ user }) => {
               <Wallet className="w-4 h-4 text-white/60" />
               <p className="text-[10px] font-black uppercase tracking-widest text-white/60">Digital Wallet</p>
             </div>
-            <h3 className="text-4xl font-black tracking-tighter">₹{balance.toFixed(2)}</h3>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Closing Balance</p>
+            <h3 className={`text-4xl font-black tracking-tighter ${balance < 0 ? 'text-red-200 animate-pulse' : 'text-white'}`}>
+              ₹{balance.toFixed(2)}
+            </h3>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+              {balance < 0 ? 'Total Due Payment' : 'Closing Balance'}
+            </p>
           </div>
+          {balance < 0 && (
+            <div className="bg-red-500/20 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 flex items-center gap-2">
+              <AlertCircle className="w-3 h-3 text-white" />
+              <span className="text-[8px] font-black uppercase tracking-widest text-white">Negative Balance</span>
+            </div>
+          )}
           <button 
-            onClick={() => setActiveView('request')}
+            onClick={() => navigate('/topup')}
             className="bg-white text-primary px-6 py-4 rounded-3xl font-black text-xs uppercase tracking-widest shadow-xl shadow-black/10 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -105,6 +142,35 @@ export const WalletManager: React.FC<WalletManagerProps> = ({ user }) => {
           </button>
         </div>
       </div>
+
+      {/* UPI Section during request */}
+      {activeView === 'request' && (
+        <div className="px-8 pt-8">
+          <div className="bg-gradient-to-br from-gray-900 to-black p-6 rounded-[32px] shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-16 -mt-16" />
+            <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className="space-y-3 text-center sm:text-left">
+                <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">UPI Payment Hub</p>
+                <div className="flex items-center gap-3 bg-white/5 p-3 rounded-2xl border border-white/10">
+                  <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center text-primary font-black text-lg">
+                    AG
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">Ansh Gupta</p>
+                    <p className="text-white font-black text-sm">6205284423@fam</p>
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={handleUPICopy}
+                className="bg-primary text-white px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+              >
+                Pay Now <Copy className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-gray-100">
@@ -186,15 +252,23 @@ export const WalletManager: React.FC<WalletManagerProps> = ({ user }) => {
                     <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Pending Top-Ups</h4>
                   </div>
                   {requests.filter(r => r.status === 'pending').map(req => (
-                    <div key={req.id} className="flex items-center justify-between bg-white/50 p-3 rounded-xl border border-blue-100">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-black text-gray-900">₹{req.amount}</p>
-                        <p className="text-[10px] font-medium text-blue-400 uppercase tracking-widest">Requested on {new Date(req.createdAt).toLocaleDateString()}</p>
+                    <div key={req.id} className="flex flex-col gap-3 bg-white/50 p-4 rounded-2xl border border-blue-100">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-black text-gray-900">₹{req.amount}</p>
+                          <p className="text-[10px] font-medium text-blue-400 uppercase tracking-widest">Requested on {new Date(req.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-100 px-3 py-1 rounded-full">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Awaiting Admin
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-100 px-3 py-1 rounded-full">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        Awaiting Admin
-                      </div>
+                      <button 
+                        onClick={() => handleCancelRequest(req.id)}
+                        className="w-full py-2 bg-red-50 text-red-500 rounded-xl font-black text-[8px] uppercase tracking-widest hover:bg-red-100 transition-colors border border-red-100"
+                      >
+                        Cancel Request
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -273,7 +347,7 @@ export const WalletManager: React.FC<WalletManagerProps> = ({ user }) => {
                       className="p-6 bg-green-50 border border-green-100 rounded-3xl text-center space-y-2"
                     >
                       <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
-                      <h5 className="text-lg font-black text-green-900 tracking-tight">Request Sent!</h5>
+                      <h5 className="text-lg font-black text-green-900 tracking-tight">{successMessage}</h5>
                       <p className="text-xs font-bold text-green-600 uppercase tracking-widest leading-tight">Admin will verify and credit your wallet shortly.</p>
                     </motion.div>
                   )}
@@ -290,6 +364,25 @@ export const WalletManager: React.FC<WalletManagerProps> = ({ user }) => {
                       className="w-full bg-gray-50 border-none rounded-2xl py-6 pl-14 pr-6 text-2xl font-black text-gray-900 focus:ring-4 focus:ring-primary/10 transition-all outline-none"
                     />
                     <IndianRupee className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-300" />
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {[100, 500, 1000, 2000].map(val => (
+                      <button 
+                        key={val}
+                        type="button"
+                        onClick={() => setRequestAmount(prev => prev + val)}
+                        className="px-4 py-2 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-primary hover:border-primary transition-all active:scale-90"
+                      >
+                        +₹{val}
+                      </button>
+                    ))}
+                    <button 
+                      type="button"
+                      onClick={() => setRequestAmount(0)}
+                      className="px-4 py-2 bg-red-50 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all active:scale-90"
+                    >
+                      Reset
+                    </button>
                   </div>
                 </div>
 
