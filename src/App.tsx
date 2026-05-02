@@ -79,6 +79,17 @@ function AppContent() {
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [showSplash, setShowSplash] = useState(() => sessionStorage.getItem('splashShown') !== 'true');
+
+  useEffect(() => {
+    // Safety timeout: Ensure app loads after 3 seconds even if auth state is delayed
+    const timer = setTimeout(() => {
+      if (!isAuthReady) {
+        console.warn("Auth state delayed, forcing ready state for UX.");
+        setIsAuthReady(true);
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [isAuthReady]);
   const [searchQuery, setSearchQuery] = useState('');
   const [cartNotification, setCartNotification] = useState<{ show: boolean, productName: string } | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -96,21 +107,10 @@ function AppContent() {
     const handleScroll = () => { setShowBackToTop(window.scrollY > 400); };
     window.addEventListener('scroll', handleScroll);
     
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        const path = window.location.pathname;
-        if (path !== '/' && path !== '/shop' && path !== '/products') {
-          navigate(-1);
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [navigate]);
+  }, []);
 
   useEffect(() => { localStorage.setItem('cart', JSON.stringify(cart)); }, [cart]);
 
@@ -275,19 +275,7 @@ function AppContent() {
     if (p) { setRequestedProductName(decodeURIComponent(p)); setIsRequestModalOpen(true); window.history.replaceState({}, '', location.pathname); }
   }, [location.pathname]);
 
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Handle "minimization" - take user to previous page when they return
-        // Only if not on home page to avoid infinite loops or weird UX
-        if (window.location.pathname !== '/') {
-          navigate(-1);
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [navigate]);
+  // Removed disruptive visibility-change back-navigation
 
   if (!isAuthReady || showSplash) return <LoadingScreen onComplete={() => { setShowSplash(false); sessionStorage.setItem('splashShown', 'true'); }} />;
 

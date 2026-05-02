@@ -374,23 +374,35 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
   const processImportedData = async (data: any[]) => {
     setIsImporting(true);
     const newProducts: Partial<Product>[] = [];
+    const existingNames = new Set(products.map(p => p.name.toLowerCase().trim()));
 
     // Preparation for auto-fixing images during import
     const rowsRequiringAI = data.filter((row: any) => {
-      const name = row.name || row.ItemName || row.Name || row['Item Name'];
-      const img = row.image || row.Image || row['Product Photo Link'];
-      return name && (!img || img.includes('picsum.photos') || img.includes('placeholder'));
+      const name = (row.name || row.ItemName || row.Name || row['Item Name'] || row.ProductName || row.item_name)?.toString().trim();
+      if (!name) return false;
+      
+      // Skip if product already exists in catalog
+      if (existingNames.has(name.toLowerCase())) return false;
+
+      const img = row.image || row.Image || row['Product Photo Link'] || row.photo || row.Photo || row.url || row.URL || row.image_url || row.ImageUrl || row.Img || row.Link || row.Thumbnail;
+      return (!img || (typeof img === 'string' && (img.includes('picsum.photos') || img.includes('placeholder'))));
     });
 
     if (rowsRequiringAI.length > 0 && window.confirm(`Found ${rowsRequiringAI.length} items without clear images. Should I automatically find real product photos using AI?`)) {
       for (const row of data) {
-        const name = row.name || row.ItemName || row.Name || row['Item Name'];
+        const name = (row.name || row.ItemName || row.Name || row['Item Name'] || row.ProductName || row.item_name)?.toString().trim();
         if (!name) continue;
         
-        let img = row.image || row.Image || row['Product Photo Link'];
+        // Skip duplicates
+        if (existingNames.has(name.toLowerCase())) {
+          console.log(`Skipping duplicate product: ${name}`);
+          continue;
+        }
+
+        let img = row.image || row.Image || row['Product Photo Link'] || row.photo || row.Photo || row.url || row.URL || row.image_url || row.ImageUrl || row.Img || row.Link || row.Thumbnail;
         let images: string[] = [];
 
-        if (!img || img.includes('picsum.photos') || img.includes('placeholder')) {
+        if (!img || (typeof img === 'string' && (img.includes('picsum.photos') || img.includes('placeholder')))) {
           try {
             const urls = await aiService.findProductImages(name, row.category || row.Category);
             if (urls.length > 0) {
@@ -404,34 +416,51 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
         newProducts.push({
           name: name,
-          price: parseFloat(row.price || row.SalePrice || row.Price || row['Sale Price']) || 0,
-          purchasePrice: parseFloat(row.purchasePrice || row.PurchasePrice || row['Purchase Price']) || 0,
-          category: row.category || row.Category || 'Staples',
-          stock: parseInt(row.stock || row.Stock || row.Quantity || row['Item Stock quantity']) || 0,
+          price: parseFloat(row.price || row.SalePrice || row.Price || row['Sale Price'] || row.rate || row.Rate) || 0,
+          purchasePrice: parseFloat(row.purchasePrice || row.PurchasePrice || row['Purchase Price'] || row.cost || row.Cost) || 0,
+          category: row.category || row.Category || row.group || row.Group || 'Staples',
+          stock: parseInt(row.stock || row.Stock || row.Quantity || row.qty || row.Qty || row['Item Stock quantity']) || 0,
           description: row.description || row.Description || '',
           image: img || `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/800/800`,
           images: images.length > 0 ? images : [img || `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/800/800`],
-          weight: row.weight || row.Weight || ''
+          weight: row.weight || row.Weight || row.unit || row.Unit || ''
         });
+        
+        // Add to existing names to prevent duplicates within the same import file
+        existingNames.add(name.toLowerCase());
       }
     } else {
       data.forEach((row: any) => {
-        const name = row.name || row.ItemName || row.Name || row['Item Name'];
+        const name = (row.name || row.ItemName || row.Name || row['Item Name'] || row.ProductName || row.item_name)?.toString().trim();
         if (name) {
-          const img = row.image || row.Image || row['Product Photo Link'] || `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/800/800`;
+          // Skip duplicates
+          if (existingNames.has(name.toLowerCase())) {
+            console.log(`Skipping duplicate product: ${name}`);
+            return;
+          }
+
+          const img = row.image || row.Image || row['Product Photo Link'] || row.photo || row.Photo || row.url || row.URL || row.image_url || row.ImageUrl || row.Img || row.Link || row.Thumbnail || `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/800/800`;
           newProducts.push({
             name: name,
-            price: parseFloat(row.price || row.SalePrice || row.Price || row['Sale Price']) || 0,
-            purchasePrice: parseFloat(row.purchasePrice || row.PurchasePrice || row['Purchase Price']) || 0,
-            category: row.category || row.Category || 'Staples',
-            stock: parseInt(row.stock || row.Stock || row.Quantity || row['Item Stock quantity']) || 0,
+            price: parseFloat(row.price || row.SalePrice || row.Price || row['Sale Price'] || row.rate || row.Rate) || 0,
+            purchasePrice: parseFloat(row.purchasePrice || row.PurchasePrice || row['Purchase Price'] || row.cost || row.Cost) || 0,
+            category: row.category || row.Category || row.group || row.Group || 'Staples',
+            stock: parseInt(row.stock || row.Stock || row.Quantity || row.qty || row.Qty || row['Item Stock quantity']) || 0,
             description: row.description || row.Description || '',
             image: img,
             images: [img],
-            weight: row.weight || row.Weight || ''
+            weight: row.weight || row.Weight || row.unit || row.Unit || ''
           });
+          
+          existingNames.add(name.toLowerCase());
         }
       });
+    }
+
+    if (newProducts.length === 0) {
+      alert("No new items to import. All items in the file already exist in your catalog.");
+      setIsImporting(false);
+      return;
     }
 
     try {
@@ -600,31 +629,51 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
         <div className="flex flex-wrap items-center gap-3">
           <button 
                 onClick={async () => {
-                  if (window.confirm("⚠️ DANGER: Delete ALL products? This cannot be undone.")) {
+                  if (window.confirm("⚠️ CRITICAL WARNING: You are about to DELETE EVERY SINGLE PRODUCT from the website. This cannot be undone and will empty your catalog for all customers. Are you absolutely sure?")) {
+                    const confirmText = 'WIPE CATALOG';
+                    if (window.prompt(`To confirm, please type "${confirmText}" below:`) !== confirmText) {
+                      alert("Deletion cancelled. Text did not match.");
+                      return;
+                    }
+
                     setIsSyncing(true);
                     try {
-                      const { getDocs, collection, writeBatch, doc } = await import('firebase/firestore');
+                      const { getDocs, collection, writeBatch } = await import('firebase/firestore');
                       const snapshot = await getDocs(collection(db, 'products'));
-                      for (let i = 0; i < snapshot.docs.length; i += 500) {
+                      
+                      if (snapshot.empty) {
+                        alert("Catalog is already empty.");
+                        return;
+                      }
+
+                      const total = snapshot.docs.length;
+                      let deleted = 0;
+
+                      for (let i = 0; i < total; i += 500) {
                         const batch = writeBatch(db);
                         const chunk = snapshot.docs.slice(i, i + 500);
                         chunk.forEach(d => batch.delete(d.ref));
                         await batch.commit();
+                        deleted += chunk.length;
+                        setSyncProgress({ current: deleted, total: total });
                       }
-                      alert("All items removed.");
+                      
+                      alert(`SUCCESS: All ${deleted} items have been removed from the catalog.`);
                       window.location.reload();
                     } catch (e) {
                       console.error(e);
-                      alert("Error removing items.");
+                      alert("Error during catalog wipe. Please check your connection.");
                     } finally {
                       setIsSyncing(false);
+                      setSyncProgress({ current: 0, total: 0 });
                     }
                   }
                 }}
-                className="flex items-center gap-2 bg-red-600 text-white px-5 py-3.5 rounded-2xl hover:bg-red-700 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-red-200"
+                disabled={isSyncing || products.length === 0}
+                className="flex items-center gap-2 bg-red-600 text-white px-5 py-3.5 rounded-2xl hover:bg-red-700 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-red-200 disabled:opacity-50 disabled:grayscale"
               >
-                <X className="w-4 h-4" />
-                Remove All
+                <Trash2 className="w-4 h-4" />
+                Wipe Catalog
               </button>
           <div className="relative group">
             <button 
@@ -750,13 +799,6 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
               />
             </label>
           )}
-          <button 
-            onClick={handleDeleteEverything}
-            className="flex items-center gap-2 bg-red-50 text-red-500 px-6 py-3 rounded-2xl hover:bg-red-500 hover:text-white transition-all active:scale-95 font-bold border border-red-100 shadow-xl shadow-red-500/10"
-          >
-            <Trash2 className="w-5 h-5" />
-            Delete All
-          </button>
           <button 
             onClick={() => {
               setEditingProduct({ name: '', price: 0, category: 'Vegetables', stock: 0, description: '', image: '', weight: '' });

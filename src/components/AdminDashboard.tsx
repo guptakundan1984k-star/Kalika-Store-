@@ -378,29 +378,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
             </div>
             <button 
               onClick={async () => {
-              if (window.confirm("⚠️ DANGER: This will delete ALL products permanently. Proceed?")) {
-                const confirmInput = window.prompt("Type 'DELETE' to confirm:");
-                if (confirmInput === 'DELETE') {
+                if (window.confirm("⚠️ CRITICAL WARNING: This will DELETE EVERY PRODUCT from the catalog. This cannot be undone. Proceed?")) {
+                  const confirmText = 'WIPE CATALOG';
+                  if (window.prompt(`To confirm, type "${confirmText}":`) !== confirmText) return;
+                  
                   setIsFixing(true);
                   try {
-                    const batch = writeBatch(db);
-                    products.forEach(p => {
-                      batch.delete(doc(db, 'products', p.id));
-                    });
-                    await batch.commit();
-                    alert("Catalog cleared successfully!");
+                    const { writeBatch, doc } = await import('firebase/firestore');
+                    const total = products.length;
+                    
+                    for (let i = 0; i < total; i += 500) {
+                      const batch = writeBatch(db);
+                      const chunk = products.slice(i, i + 500);
+                      chunk.forEach(p => batch.delete(doc(db, 'products', p.id)));
+                      await batch.commit();
+                    }
+                    
+                    alert("Catalog wiped successfully!");
+                    window.location.reload();
                   } catch (e) {
                     console.error("Failed to clear catalog", e);
-                    alert("Some items could not be deleted. Please check permissions.");
+                    alert("Wipe failed. Check permissions.");
                   } finally {
                     setIsFixing(false);
                   }
                 }
-              }
-            }}
+              }}
               className="bg-red-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-600/20 hover:bg-black transition-all"
             >
-              Clear All
+              Wipe Catalog
             </button>
           </div>
         </div>
