@@ -239,5 +239,39 @@ export const aiService = {
     }
 
     return [];
+  },
+
+  /**
+   * Generates smart search metadata (keywords, synonyms, tags) for a product.
+   */
+  async generateSearchMetadata(name: string, description: string, category: string): Promise<{keywords: string[], synonyms: string[], tags: string[]}> {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `You are a search engine optimization expert for a grocery e-commerce app.
+      For the following product, generate:
+      1. Hidden keywords (internal search terms like 'nutrition', 'healthy', 'breakfast')
+      2. Synonyms (words users actually type, like 'soft drink' for 'Coca-Cola')
+      3. Public tags (short, visible highlights like 'Fresh', 'Sugar-free', 'Organic')
+
+      Product Name: ${name}
+      Description: ${description}
+      Category: ${category}
+
+      Return ONLY a JSON object with schema:
+      {"keywords": ["tag1", "tag2"], "synonyms": ["word1", "word2"], "tags": ["highlight1", "highlight2"]}
+      Keep arrays to 5-10 highly relevant items.`,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    try {
+      const text = response.text || "{}";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+    } catch (e) {
+      console.error("Failed to generate metadata", e);
+      return { keywords: [], synonyms: [], tags: [] };
+    }
   }
 };

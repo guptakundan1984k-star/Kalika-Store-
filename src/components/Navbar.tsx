@@ -92,6 +92,23 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
     return () => unsubscribeWallet();
   }, [user]);
 
+  const [searchPlaceholderIdx, setSearchPlaceholderIdx] = React.useState(0);
+  const placeholders = [
+    t('home') === 'Home' ? 'Search for "Milk"' : 'दूध खोजें',
+    'Search for "Atta"',
+    'Search for "Cold Drinks"',
+    'Search for "Soap"',
+    'Search for "Chips"',
+    'Search for "Chocolate"',
+  ];
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setSearchPlaceholderIdx(prev => (prev + 1) % placeholders.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   const hideBottomNav = ['/admin', '/order-tracking', '/checkout', '/scan', '/cs'].some(path => location.pathname.startsWith(path));
 
   const mobileNavItems = [
@@ -251,11 +268,24 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
             <div className="absolute left-4 top-1/2 -translate-y-1/2">
               <Search className="w-5 h-5 text-gray-900 stroke-[2.5]" />
             </div>
-            <div className="w-full bg-[#F3F4F6] border border-gray-100 rounded-2xl pl-12 pr-28 py-4 text-[14px] font-bold text-gray-400/80 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)] flex items-center group-hover:bg-gray-100 transition-all">
-              Search for "Milk", "Bread", "Eggs"...
+            <div className="w-full bg-[#F3F4F6] border border-gray-100 rounded-2xl pl-12 pr-28 py-4 text-[14px] font-bold text-gray-400/80 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)] flex items-center group-hover:bg-gray-100 transition-all overflow-hidden h-[54px]">
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={searchPlaceholderIdx}
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -20, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="absolute left-12"
+                >
+                  {placeholders[searchPlaceholderIdx]}
+                </motion.span>
+              </AnimatePresence>
             </div>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-4 text-gray-400">
-              <FileText className="w-5 h-5 cursor-pointer hover:text-primary transition-colors" />
+               <Mic className="w-5 h-5 cursor-pointer hover:text-primary transition-colors" />
+               <div className="w-px h-4 bg-gray-200" />
+               <Search className="w-5 h-5 text-primary" />
             </div>
           </div>
         </div>

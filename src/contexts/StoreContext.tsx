@@ -54,6 +54,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
       }
       setLoading(false);
+    }, (error) => {
+      console.error("Store settings snapshot error:", error);
+      setLoading(false); // Ensure app loads even if settings fail
     });
 
     return () => unsubscribe();

@@ -46,7 +46,10 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     weight: '',
     rating: 0,
     reviewCount: 0,
-    tag: undefined
+    tag: undefined,
+    searchKeywords: [],
+    synonyms: [],
+    tags: []
   });
   const [bulkStockValue, setBulkStockValue] = useState<number>(0);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -527,7 +530,10 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
       weight: '',
       rating: 0,
       reviewCount: 0,
-      tag: undefined
+      tag: undefined,
+      searchKeywords: [],
+      synonyms: [],
+      tags: []
     });
   };
 
@@ -1590,6 +1596,82 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                         className="w-full bg-white border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20"
                         placeholder="Vanilla, Chocolate"
                       />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Smart Search Section */}
+                <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Search className="w-5 h-5 text-blue-600" />
+                      <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest">Smart Search Metadata</h4>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const suggested = await aiService.generateSearchMetadata(editingProduct.name, editingProduct.description || '', editingProduct.category);
+                          setEditingProduct(prev => ({
+                            ...prev,
+                            searchKeywords: [...new Set([...(prev.searchKeywords || []), ...suggested.keywords])],
+                            synonyms: [...new Set([...(prev.synonyms || []), ...suggested.synonyms])],
+                            tags: [...new Set([...(prev.tags || []), ...suggested.tags])]
+                          }));
+                        } catch (e) {
+                          alert("AI Metadata generation failed");
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      AI Generate
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Search Keywords (comma separated)</label>
+                      <input 
+                        type="text" 
+                        value={editingProduct.searchKeywords?.join(', ') || ''}
+                        onChange={(e) => setEditingProduct(prev => ({ 
+                          ...prev, 
+                          searchKeywords: e.target.value.split(',').map(s => s.trim()).filter(s => s) 
+                        }))}
+                        className="w-full bg-white border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-200"
+                        placeholder="e.g. healthy, nutrition, fast delivery"
+                      />
+                      <p className="text-[10px] text-gray-400">Hidden keywords that trigger this product in search results.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Synonyms (comma separated)</label>
+                      <input 
+                        type="text" 
+                        value={editingProduct.synonyms?.join(', ') || ''}
+                        onChange={(e) => setEditingProduct(prev => ({ 
+                          ...prev, 
+                          synonyms: e.target.value.split(',').map(s => s.trim()).filter(s => s) 
+                        }))}
+                        className="w-full bg-white border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-200"
+                        placeholder="e.g. soft drink, cold drink, beverage"
+                      />
+                      <p className="text-[10px] text-gray-400">Related words that users might type instead of the actual name.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Product Tags (comma separated)</label>
+                      <input 
+                        type="text" 
+                        value={editingProduct.tags?.join(', ') || ''}
+                        onChange={(e) => setEditingProduct(prev => ({ 
+                          ...prev, 
+                          tags: e.target.value.split(',').map(s => s.trim()).filter(s => s) 
+                        }))}
+                        className="w-full bg-white border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-200"
+                        placeholder="e.g. Organic, Fresh, Sugar-free"
+                      />
+                      <p className="text-[10px] text-gray-400">Publicly visible tags shown on the search dropdown.</p>
                     </div>
                   </div>
                 </div>

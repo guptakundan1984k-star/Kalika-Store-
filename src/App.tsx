@@ -40,6 +40,7 @@ import { PhotoBillPage } from './pages/PhotoBillPage';
 import Scan from './pages/Scan';
 import CS from './pages/CS';
 import Topup from './pages/Topup';
+import { SearchResults } from './pages/SearchResults';
 import { ProductRequestModal } from './components/ProductRequestModal';
 import { LoginPromptModal } from './components/LoginPromptModal';
 import { StoreStatusBanner } from './components/StoreStatusBanner';
@@ -313,6 +314,7 @@ function AppContent() {
             <Route path="/profile" element={user ? <Profile user={user} orders={orders} /> : <Navigate to="/login" />} />
             <Route path="/orders" element={user ? <MyOrders orders={orders} user={user} /> : <Navigate to="/login" />} />
             <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
+            <Route path="/search" element={<SearchResults products={products} onAddToCart={addToCart} />} />
             <Route path="/admin" element={<Admin products={products} orders={orders} coupons={coupons} banners={banners} user={user} />} />
             <Route path="/cs" element={<CS products={products} orders={orders} user={user} />} />
             <Route path="/topup" element={<Topup user={user} />} />

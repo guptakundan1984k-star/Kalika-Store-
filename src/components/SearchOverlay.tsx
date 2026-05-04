@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search as SearchIcon, X, Mic, ArrowLeft, Heart, Plus, ChevronRight, Sparkles, ShoppingBag, Loader2, ScanBarcode } from 'lucide-react';
+import { Search as SearchIcon, X, Mic, ArrowLeft, Heart, Plus, ChevronRight, Sparkles, ShoppingBag, Loader2, ScanBarcode, History, TrendingUp, Grid, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Product } from '../types';
 import { CATEGORIES } from '../constants';
-
-
 import { aiService } from '../services/aiService';
+import { searchProducts, getMatchingCategories } from '../utils/searchUtils';
 
 interface SearchOverlayProps {
   isOpen: boolean;
@@ -16,6 +15,12 @@ interface SearchOverlayProps {
   setSearchQuery: (val: string) => void;
   onAddToCart: (product: Product, quantity: number, redirectToCheckout?: boolean) => void;
 }
+
+type SearchTab = 'Products' | 'Categories' | 'Popular' | 'Recent';
+
+const TRENDING_KEYWORDS = [
+  'Cold Drinks', 'Chips', 'Detergent', 'Atta', 'Soap', 'Chocolate', 'Biscuits', 'Fresh Fruits', 'Dairy'
+];
 
 export const SearchOverlay: React.FC<SearchOverlayProps> = ({ 
   isOpen, 
@@ -30,7 +35,7 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
   const [pastSearches, setPastSearches] = useState<string[]>([]);
   const [trendingProducts, setTrendingProducts] = useState<Product[]>([]);
   const [isAiSearching, setIsAiSearching] = useState(false);
-  const [aiResultIds, setAiResultIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<SearchTab>('Products');
 
   useEffect(() => {
     const saved = localStorage.getItem('pastSearches');
@@ -49,7 +54,14 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    setAiResultIds([]); // Reset AI results on new type
+    if (!query.trim()) {
+       setActiveTab('Recent');
+    } else {
+       setActiveTab('Products');
+    }
+  };
+
+  const saveSearchTerm = (query: string) => {
     if (query.trim()) {
       const updated = [query, ...pastSearches.filter(s => s !== query)].slice(0, 10);
       setPastSearches(updated);
@@ -57,27 +69,21 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
     }
   };
 
+  const handleProductClick = (product: Product) => {
+    saveSearchTerm(searchQuery || product.name);
+    onClose();
+    navigate(`/product/${product.id}`);
+  };
+
   const handleAiSearch = async () => {
     if (!searchQuery.trim()) return;
     setIsAiSearching(true);
-    setAiResultIds([]); // Clear previous results while searching
     try {
-      // 1. Semantic search with Gemini
       const ids = await aiService.semanticProductSearch(searchQuery, products);
-      
-      // 2. Local fuzzy fallback if AI results are thin
-      const queryTerm = searchQuery.toLowerCase().trim();
-      const localMatches = products
-        .filter(p => !ids.includes(p.id)) // Only those not already picked by AI
-        .filter(p => 
-          p.name.toLowerCase().includes(queryTerm) || 
-          p.category.toLowerCase().includes(queryTerm) ||
-          p.description?.toLowerCase().includes(queryTerm)
-        )
-        .slice(0, 5)
-        .map(p => p.id);
-
-      setAiResultIds([...ids, ...localMatches]);
+      if (ids.length > 0) {
+        // If AI finds results, we could potentially highlight them or auto-select them
+        // For now, the local searchProducts also handles semantic terms via searchUtils
+      }
     } catch (e) {
       console.error("AI Search failed", e);
     } finally {
@@ -85,31 +91,27 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
     }
   };
 
-  const filteredProducts = searchQuery.trim().length === 0 
-    ? [] 
-    : products.filter(p => {
-        const query = searchQuery.toLowerCase().trim();
-        const name = p.name.toLowerCase();
-        const category = p.category.toLowerCase();
-        const description = (p.description || '').toLowerCase();
-        return name.includes(query) || category.includes(query) || description.includes(query);
-      }).slice(0, 15);
-
-  const aiFilteredProducts = aiResultIds.length > 0 
-    ? products.filter(p => aiResultIds.includes(p.id))
-    : [];
-
-  const displayProducts = aiFilteredProducts.length > 0 ? aiFilteredProducts : filteredProducts;
-
-  const popularCategories = CATEGORIES.map(cat => {
-    // Get a representative image from products in this category
-    const product = products.find(p => p.category === cat.name);
-    return { ...cat, image: product?.image || 'https://picsum.photos/seed/cat/200' };
-  });
+  const displayProducts = searchProducts(products, searchQuery);
+  const matchedCategories = getMatchingCategories(products, searchQuery);
 
   const clearPastSearches = () => {
     setPastSearches([]);
     localStorage.removeItem('pastSearches');
+  };
+
+  const highlightText = (text: string, highlight: string) => {
+    if (!highlight.trim()) return text;
+    const regex = new RegExp(`(${highlight})`, 'gi');
+    const parts = text.split(regex);
+    return (
+      <>
+        {parts.map((part, i) => 
+          part.toLowerCase() === highlight.toLowerCase() 
+            ? <span key={i} className="font-black text-primary">{part}</span> 
+            : part
+        )}
+      </>
+    );
   };
 
   return (
@@ -120,175 +122,149 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          drag="x"
-          dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={{ left: 0.1, right: 0.8 }}
-          onDragEnd={(_, info) => {
-            if (info.offset.x > 100) onClose();
-          }}
-          className="fixed inset-0 z-[100] bg-white flex flex-col touch-none"
+          className="fixed inset-0 z-[100] bg-white flex flex-col"
         >
-          {/* Draggable Handle for Visual Hint */}
-          <div className="absolute left-0 top-0 bottom-0 w-1.5 flex items-center justify-center pointer-events-none">
-            <div className="w-1 h-32 bg-gray-200/50 rounded-full" />
-          </div>
           {/* Header */}
-          <div className="px-4 py-3 flex items-center gap-3 border-b border-gray-100">
+          <div className="px-4 py-3 flex items-center gap-3 border-b border-gray-100 shadow-sm relative z-10">
             <button 
               onClick={onClose}
               className="p-2 -ml-2 text-gray-900 hover:bg-gray-50 rounded-full transition-colors"
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
-              <div className="flex-1 relative flex items-center">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                  <SearchIcon className="w-5 h-5 text-gray-400" />
-                </div>
-                <input 
-                  ref={inputRef}
-                  type="text" 
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  placeholder="Search for 'Fruits'"
-                  className="w-full bg-gray-100 border-none rounded-full pl-12 pr-28 py-3 text-sm font-medium focus:ring-2 focus:ring-[#00AEEF]/20 transition-all"
-                />
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                  <button 
-                    onClick={() => navigate('/scan')}
-                    className="p-2 bg-white/80 backdrop-blur-sm rounded-full text-gray-400 hover:text-primary transition-colors shadow-sm border border-gray-100"
-                    title="Scan Barcode"
-                  >
-                    <ScanBarcode className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={handleAiSearch}
-                    disabled={isAiSearching}
-                    className="p-2 bg-white/80 backdrop-blur-sm rounded-full text-gray-400 hover:text-[#00AEEF] transition-colors flex items-center gap-1 shadow-sm border border-gray-200"
-                  >
-                    {isAiSearching ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-[#00AEEF]" />
-                    ) : (
-                      <>
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span className="text-[8px] font-black uppercase tracking-tighter">AI</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+            <div className="flex-1 relative flex items-center">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                <SearchIcon className="w-5 h-5 text-gray-400" />
               </div>
-              <div className="w-10 h-10 flex items-center justify-center">
-                 <img src="https://kalikastore.in/logo.png" alt="Profile" className="w-8 h-8 rounded-full border border-gray-100" />
-              </div>
+              <input 
+                ref={inputRef}
+                type="text" 
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    saveSearchTerm(searchQuery);
+                    onClose();
+                    navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+                  }
+                }}
+                placeholder="Search for 'Milk', 'Bread' or 'Cold Drinks'..."
+                className="w-full bg-gray-100 border-none rounded-2xl pl-12 pr-12 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-gray-400"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => handleSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <button 
+              onClick={() => navigate('/scan')}
+              className="p-2 bg-gray-100 rounded-xl text-gray-900 hover:text-primary transition-colors"
+            >
+              <ScanBarcode className="w-6 h-6" />
+            </button>
           </div>
 
+          {/* Search Tabs */}
+          {searchQuery && (
+            <div className="flex border-b border-gray-100 bg-white">
+              {(['Products', 'Categories'] as SearchTab[]).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest relative transition-all ${
+                    activeTab === tab ? 'text-primary' : 'text-gray-400'
+                  }`}
+                >
+                  {tab}
+                  {activeTab === tab && (
+                    <motion.div 
+                      layoutId="searchTab"
+                      className="absolute bottom-0 left-1/4 right-1/4 h-1 bg-primary rounded-full"
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
 
-
-          <div className="flex-1 overflow-y-auto pb-24">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50/30">
             {!searchQuery ? (
               <div className="space-y-8 py-6">
-                {/* Past Searches */}
+                {/* Recent Searches */}
                 {pastSearches.length > 0 && (
                   <div className="space-y-4">
                     <div className="px-6 flex items-center justify-between">
-                      <h3 className="text-xl font-black text-gray-900 tracking-tight">Past searches</h3>
+                      <div className="flex items-center gap-2">
+                        <History className="w-4 h-4 text-gray-400" />
+                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Recent searches</h3>
+                      </div>
                       <button 
                         onClick={clearPastSearches}
-                        className="text-sm font-black text-primary hover:text-primary-dark transition-colors"
+                        className="text-[10px] font-black text-primary uppercase tracking-widest"
                       >
                         Clear
                       </button>
                     </div>
-                    <div className="flex flex-nowrap overflow-x-auto gap-3 px-6 scrollbar-hide">
+                    <div className="flex flex-wrap gap-2 px-6">
                       {pastSearches.map((term, i) => (
                         <button 
                           key={i}
                           onClick={() => handleSearch(term)}
-                          className="shrink-0 px-6 py-3 bg-white border border-gray-200 rounded-full text-sm font-bold text-gray-600 shadow-sm hover:border-primary/30 transition-all"
+                          className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-sm hover:border-primary/50 flex items-center gap-2"
                         >
-                          {term}
+                          <small className="text-gray-300">#</small> {term}
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Trending today */}
+                {/* Trending Searches */}
                 <div className="space-y-4">
-                  <div className="px-6">
-                    <h3 className="text-xl font-black text-gray-900 tracking-tight">Trending today</h3>
+                  <div className="px-6 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-gray-400" />
+                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Trending now</h3>
                   </div>
-                  <div className="flex flex-nowrap overflow-x-auto gap-4 px-6 scrollbar-hide pb-4">
-                    {trendingProducts.map((product) => (
-                      <div 
-                        key={product.id}
-                        className="shrink-0 w-[180px] bg-white border border-gray-100 rounded-[32px] overflow-hidden group shadow-sm hover:shadow-xl hover:shadow-gray-200/50 transition-all"
+                  <div className="grid grid-cols-2 gap-3 px-6">
+                    {TRENDING_KEYWORDS.map((kw, i) => (
+                      <button 
+                        key={i}
+                        onClick={() => handleSearch(kw)}
+                        className="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-100 shadow-sm group hover:border-primary/30 transition-all text-left"
                       >
-                        <div className="relative aspect-square bg-gray-50 p-4">
-                          <button className="absolute top-3 left-3 p-1.5 bg-white/80 backdrop-blur-sm rounded-xl text-gray-300 hover:text-red-500 transition-colors">
-                            <Heart className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => onAddToCart(product, 1, true)}
-                            className="absolute top-3 right-3 p-1.5 bg-white shadow-lg rounded-xl text-primary hover:bg-primary hover:text-white transition-all active:scale-95"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                          <Link to={`/product/${product.id}`} onClick={onClose}>
-                            <img 
-                              src={product.image} 
-                              alt={product.name} 
-                              className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-500" 
-                              referrerPolicy="no-referrer"
-                            />
-                          </Link>
-                          {/* Unit display like in image */}
-                          {product.weight && (
-                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-gray-100/90 backdrop-blur-sm px-4 py-1.5 rounded-xl text-[10px] font-black text-gray-900 uppercase tracking-widest whitespace-nowrap shadow-sm border border-white/50">
-                              {product.weight}
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-4 space-y-1">
-                          <Link to={`/product/${product.id}`} onClick={onClose}>
-                            <h4 className="text-sm font-bold text-gray-900 line-clamp-2 leading-tight group-hover:text-primary transition-colors">{product.name}</h4>
-                          </Link>
-                          <div className="pt-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg font-black text-gray-900">₹{product.price}</span>
-                              {product.originalPrice && (
-                                <span className="text-xs font-bold text-gray-300 line-through">₹{product.originalPrice}</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                        <span className="text-sm font-bold text-gray-700">{kw}</span>
+                        <ChevronRight className="w-4 h-4 text-gray-200 group-hover:text-primary transition-colors" />
+                      </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Popular Category */}
+                {/* Popular Categories */}
                 <div className="space-y-4">
-                  <div className="px-6">
-                    <h3 className="text-xl font-black text-gray-900 tracking-tight">Popular Category</h3>
+                  <div className="px-6 flex items-center gap-2">
+                    <Grid className="w-4 h-4 text-gray-400" />
+                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Shop By Category</h3>
                   </div>
                   <div className="flex flex-nowrap overflow-x-auto gap-6 px-6 scrollbar-hide pb-4">
-                    {popularCategories.map((cat) => (
+                    {CATEGORIES.map((cat) => (
                       <button 
                         key={cat.id}
-                        onClick={() => {
-                          setSearchQuery(cat.name);
-                        }}
+                        onClick={() => handleSearch(cat.name)}
                         className="shrink-0 flex flex-col items-center gap-3 group"
                       >
-                        <div className="w-20 h-20 rounded-full border-2 border-gray-100 p-1 group-hover:border-primary transition-all overflow-hidden bg-white shadow-sm">
+                        <div className="w-20 h-20 rounded-full bg-white border border-gray-100 p-1 group-hover:scale-110 group-hover:border-primary transition-all shadow-sm overflow-hidden">
                           <img 
-                            src={cat.image || undefined} 
+                            src={products.find(p => p.category === cat.name)?.image || `https://picsum.photos/seed/${cat.name}/200`} 
                             alt={cat.name} 
-                            className="w-full h-full object-cover rounded-full group-hover:scale-110 transition-transform duration-500" 
+                            className="w-full h-full object-contain mix-blend-multiply" 
                           />
                         </div>
-                        <span className="text-xs font-black text-gray-600 uppercase tracking-widest group-hover:text-primary transition-colors text-center max-w-[80px] leading-tight">
-                          {cat.name.split(' ')[0]}
+                        <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest text-center max-w-[80px]">
+                          {cat.name}
                         </span>
                       </button>
                     ))}
@@ -297,79 +273,133 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
               </div>
             ) : (
               /* Search Results */
-              <div className="px-4 py-6 space-y-6">
-                <div className="flex items-center justify-between">
-                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                    {aiFilteredProducts.length > 0 ? 'AI Suggestions' : `Found ${filteredProducts.length} items`} for "{searchQuery}"
-                  </p>
-                  {filteredProducts.length > 0 && aiFilteredProducts.length === 0 && (
-                    <button 
-                      onClick={handleAiSearch}
-                      className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-2 hover:bg-primary/10 px-3 py-1.5 rounded-xl transition-all"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      Get Smart Suggestions
-                    </button>
-                  )}
-                </div>
-
-                {displayProducts.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-4">
-                    {displayProducts.map(product => (
-                      <Link 
-                        key={product.id}
-                        to={`/product/${product.id}`}
-                        onClick={onClose}
-                        className="flex items-center gap-4 p-3 hover:bg-primary/5 rounded-[24px] transition-all group border border-gray-50"
-                      >
-                        <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gray-50 shrink-0">
-                          <img 
-                            src={product.image || undefined} 
-                            alt={product.name} 
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                            referrerPolicy="no-referrer"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[9px] font-black text-primary uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded-full">{product.category}</span>
-                          <h5 className="text-base font-black text-gray-900 truncate group-hover:text-primary mt-1">{product.name}</h5>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-lg font-black text-gray-900">₹{product.price}</span>
-                            {product.weight && (
-                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                {product.weight}
-                              </span>
-                            )}
+              <div className="py-4">
+                {activeTab === 'Products' ? (
+                  <div className="space-y-2">
+                    {displayProducts.length > 0 ? (
+                      <div className="px-4 grid grid-cols-1 gap-3">
+                        {displayProducts.map(product => (
+                          <div 
+                            key={product.id}
+                            className="flex items-center gap-4 p-3 bg-white border border-gray-100 rounded-[28px] shadow-sm hover:shadow-md transition-all group relative overflow-hidden"
+                          >
+                            <Link to={`/product/${product.id}`} onClick={() => handleProductClick(product)} className="w-20 h-20 bg-gray-50 rounded-2xl overflow-hidden shrink-0">
+                              <img 
+                                src={product.image} 
+                                alt={product.name} 
+                                className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-500"
+                                referrerPolicy="no-referrer"
+                              />
+                            </Link>
+                            <div className="flex-1 min-w-0">
+                               <div className="flex flex-wrap gap-1 mb-1">
+                                {product.tags?.slice(0, 2).map(tag => (
+                                  <span key={tag} className="text-[8px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                                    {tag}
+                                  </span>
+                                ))}
+                                <span className="text-[8px] font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full uppercase tracking-tighter">{product.category}</span>
+                               </div>
+                               <Link to={`/product/${product.id}`} onClick={() => handleProductClick(product)}>
+                                 <h5 className="text-sm font-black text-gray-900 line-clamp-1 group-hover:text-primary transition-colors">
+                                   {highlightText(product.name, searchQuery)}
+                                 </h5>
+                               </Link>
+                               <div className="flex items-center gap-3 mt-1">
+                                <span className="text-lg font-black text-gray-900">₹{product.price}</span>
+                                {product.weight && (
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{product.weight}</span>
+                                )}
+                               </div>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                               <button 
+                                 onClick={() => onAddToCart(product, 1)}
+                                 className="w-10 h-10 bg-primary/10 text-primary rounded-2xl flex items-center justify-center hover:bg-primary hover:text-white transition-all active:scale-90"
+                               >
+                                <Plus className="w-5 h-5" />
+                               </button>
+                               <div className="p-2 text-gray-200 group-hover:text-primary transition-colors">
+                                <ChevronRight className="w-5 h-5" />
+                               </div>
+                            </div>
                           </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-20 text-center space-y-6 px-6">
+                        <div className="w-24 h-24 bg-gray-100 rounded-[40px] flex items-center justify-center text-gray-300 mx-auto">
+                          <Package className="w-12 h-12" />
                         </div>
-                        <div className="p-2 text-gray-300 group-hover:text-primary transition-colors">
-                          <ChevronRight className="w-5 h-5" />
+                        <div>
+                          <p className="text-xl font-black text-gray-900">No products found</p>
+                          <p className="text-sm text-gray-400 mt-2">We couldn't find anything matching "{searchQuery}". Try searching for categories like "Snacks" or "Beverages".</p>
                         </div>
-                      </Link>
-                    ))}
+                        <div className="flex flex-col gap-3 max-w-xs mx-auto">
+                          <button 
+                            onClick={() => handleSearch('')}
+                            className="bg-gray-100 text-gray-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest"
+                          >
+                            Browse All Products
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="py-20 text-center space-y-6">
-                    <div className="w-20 h-20 bg-gray-50 rounded-[32px] flex items-center justify-center text-gray-300 mx-auto">
-                      <SearchIcon className="w-10 h-10" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-black text-gray-900">No products found</p>
-                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Try another keyword</p>
-                    </div>
-                    <button 
-                      onClick={() => navigate(`/items?request=${encodeURIComponent(searchQuery)}`)}
-                      className="bg-primary text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-primary/30"
-                    >
-                      Ask owner to add this
-                    </button>
+                  /* Category Results */
+                  <div className="px-6 space-y-4">
+                    {matchedCategories.length > 0 ? (
+                      matchedCategories.map(catName => (
+                        <button 
+                          key={catName}
+                          onClick={() => {
+                            setSearchQuery(catName);
+                            setActiveTab('Products');
+                          }}
+                          className="w-full flex items-center justify-between p-5 bg-white border border-gray-100 rounded-3xl shadow-sm group hover:border-primary/50 transition-all"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                              <Grid className="w-6 h-6" />
+                            </div>
+                            <div className="text-left">
+                              <h4 className="text-base font-black text-gray-900 group-hover:text-primary transition-colors">{catName}</h4>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Global Category</p>
+                            </div>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-gray-200 group-hover:text-primary transition-colors" />
+                        </button>
+                      ))
+                    ) : (
+                      <div className="py-20 text-center">
+                        <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">No matching categories</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
           </div>
+          
+          {/* Bottom Call to Action for No Results */}
+          {!searchQuery && (
+            <div className="p-6 bg-white border-t border-gray-100 flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Can't find an item?</p>
+                <p className="text-sm font-black text-gray-900">Request a new product</p>
+              </div>
+              <button 
+                onClick={() => navigate('/items?request=new')}
+                className="bg-primary text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
+              >
+                Request
+              </button>
+            </div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
   );
 };
+

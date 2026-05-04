@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "node server.ts",
-    "build": "vite build && echo 'Client build complete'",
-    "preview": "vite preview",
+    "build": "vite build",
+    "preview": "tsx server.ts",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit && eslint firestore.rules",
     "lint:rules": "eslint firestore.rules"

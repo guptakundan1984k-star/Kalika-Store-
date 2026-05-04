@@ -1,7 +1,10 @@
 [build]
   command = "npm run build"
   publish = "dist"
-  functions = "functions"
+  functions = "netlify/functions"
+
+[functions]
+  included_files = ["firebase-applet-config.json"]
 
 [[redirects]]
   from = "/api/*"
@@ -15,3 +18,4 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  GENERATE_SOURCEMAP = "false"

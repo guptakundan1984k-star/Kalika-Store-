@@ -16,6 +16,9 @@ export interface Product {
   weight?: string; // e.g., "500g", "1kg"
   tag?: 'Bestseller' | 'Top Rated' | 'New Arrival' | 'Trending';
   barcode?: string;
+  searchKeywords?: string[]; // Hidden keywords for smart search
+  synonyms?: string[]; // Related words
+  tags?: string[]; // Publicly visible tags or labels
   variations?: {
     sizes?: string[];
     colors?: string[];

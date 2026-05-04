@@ -28,7 +28,7 @@ export const Search: React.FC<SearchProps> = ({ value, onChange }) => {
       const productName = await aiService.findProductByImage(base64, file.type);
       if (productName) {
         onChange(productName);
-        navigate(`/items?q=${encodeURIComponent(productName)}`);
+        navigate(`/search?q=${encodeURIComponent(productName)}`);
       }
     } catch (error) {
       console.error("Visual search error:", error);
