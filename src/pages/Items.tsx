@@ -5,14 +5,15 @@ import { Search } from '../components/Search';
 import { Filter, LayoutGrid, List, ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { ReachedEnd } from '../components/ReachedEnd';
 
 
 interface ItemsProps {
   products: Product[];
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
   cart: CartItem[];
-  onUpdateQuantity: (id: string, delta: number) => void;
-  onRemoveFromCart: (id: string) => void;
+  onUpdateQuantity: (id: string, delta: number, selectedUnit?: string) => void;
+  onRemoveFromCart: (id: string, selectedUnit?: string) => void;
   toggleWishlist: (productId: string) => void;
   wishlist: string[];
   storeSettings: any;
@@ -140,6 +141,8 @@ const Items: React.FC<ItemsProps> = ({
             </AnimatePresence>
           </div>
         )}
+        
+        {filteredProducts.length > 0 && <ReachedEnd />}
       </div>
     </div>
   );

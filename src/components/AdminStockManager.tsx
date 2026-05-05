@@ -70,7 +70,7 @@ export const AdminStockManager: React.FC<AdminStockManagerProps> = ({ products, 
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-2xl overflow-hidden bg-gray-50 border border-gray-100">
-                        <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                        <img src={product.image || undefined} alt={product.name} className="w-full h-full object-cover" />
                       </div>
                       <div>
                         <p className="font-black text-gray-900 tracking-tight">{product.name}</p>

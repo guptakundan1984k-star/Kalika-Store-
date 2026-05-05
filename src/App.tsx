@@ -128,7 +128,7 @@ function AppContent() {
     }
   };
 
-  const addToCart = (product: Product, quantity: number = 1, redirectToCheckout: boolean = false) => {
+  const addToCart = (product: Product, quantity: number = 1, redirectToCheckout: boolean = false, selectedUnit?: string) => {
     let finalPrice = product.price;
     if (user && user.customPrices && user.customPrices[product.id]) {
       finalPrice = user.customPrices[product.id];
@@ -136,19 +136,26 @@ function AppContent() {
     
     let isAlreadyInCart = false;
     setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
+      // Find item with same ID AND same Unit
+      const existingIndex = prev.findIndex(item => item.id === product.id && item.selectedUnit === selectedUnit);
+      
+      if (existingIndex !== -1) {
+        const existing = prev[existingIndex];
         isAlreadyInCart = true;
         const newQuantity = existing.quantity + quantity;
-        if (newQuantity <= 0) return prev.filter(item => item.id !== product.id);
-        return prev.map(item => (item.id === product.id) ? { ...item, quantity: newQuantity, price: finalPrice } : item);
+        if (newQuantity <= 0) return prev.filter((_, i) => i !== existingIndex);
+        
+        const newCart = [...prev];
+        newCart[existingIndex] = { ...existing, quantity: newQuantity, price: finalPrice };
+        return newCart;
       }
+      
       if (quantity <= 0) return prev;
-      return [...prev, { ...product, quantity, price: finalPrice }];
+      return [...prev, { ...product, quantity, price: finalPrice, selectedUnit }];
     });
 
     if (isAlreadyInCart && quantity > 0) {
-      alert(`${product.name} is already added in your cart`);
+      // Notification handled below, don't alert to avoid bad UX
     } else if (quantity > 0) {
       setCartNotification({ show: true, productName: product.name });
       setTimeout(() => setCartNotification(null), 3000);
@@ -162,11 +169,11 @@ function AppContent() {
     localStorage.removeItem('cart');
   };
 
-  const updateCartQuantity = (id: string, delta: number) => {
-    setCart(prev => prev.map(item => item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter(item => item.quantity > 0));
+  const updateCartQuantity = (id: string, delta: number, selectedUnit?: string) => {
+    setCart(prev => prev.map(item => (item.id === id && item.selectedUnit === selectedUnit) ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter(item => item.quantity > 0));
   };
 
-  const removeFromCart = (id: string) => setCart(prev => prev.filter(item => item.id !== id));
+  const removeFromCart = (id: string, selectedUnit?: string) => setCart(prev => prev.filter(item => !(item.id === id && item.selectedUnit === selectedUnit)));
 
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null;

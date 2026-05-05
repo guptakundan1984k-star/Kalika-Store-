@@ -391,7 +391,7 @@ export const OrderTracking: React.FC = () => {
             {order.items.map((item, i) => (
               <div key={i} className="flex items-center gap-4">
                 <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gray-50 shrink-0">
-                  <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                  <img src={item.image || undefined} alt={item.name} className="w-full h-full object-cover" />
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-black text-gray-900 text-line-clamp-1">{item.name}</p>

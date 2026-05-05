@@ -43,7 +43,7 @@ export const AdminVariationManager: React.FC<AdminVariationManagerProps> = ({ pr
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl overflow-hidden bg-gray-50">
-                <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                <img src={product.image || undefined} alt={product.name} className="w-full h-full object-cover" />
               </div>
               <div>
                 <h4 className="font-black text-gray-900 tracking-tight">{product.name}</h4>

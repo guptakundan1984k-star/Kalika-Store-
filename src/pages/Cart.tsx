@@ -1,5 +1,6 @@
 import React from 'react';
 import { CartItem, Product, StoreSettings, UserProfile, Order } from '../types';
+import { ProductCard } from '../components/ProductCard';
 import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Truck, ShieldCheck, Clock, Sparkles, AlertCircle, Package, Smartphone, MapPin, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../contexts/StoreContext';
@@ -9,11 +10,11 @@ import { db, collection, addDoc, doc, updateDoc } from '../firebase';
 
 interface CartProps {
   cart: CartItem[];
-  onUpdateQuantity: (id: string, delta: number) => void;
-  onRemove: (id: string) => void;
+  onUpdateQuantity: (id: string, delta: number, selectedUnit?: string) => void;
+  onRemove: (id: string, selectedUnit?: string) => void;
   onClearCart: () => void;
   products: Product[];
-  onAddToCart: (product: Product, quantity?: number) => void;
+  onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
   storeSettings?: StoreSettings | null;
   user: UserProfile | null;
 }
@@ -137,10 +138,10 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
 
           <div className="space-y-4">
             <AnimatePresence mode="popLayout">
-              {cart.map((item) => (
+              {cart.map((item, idx) => (
                 <motion.div 
                   layout
-                  key={item.id}
+                  key={`${item.id}-${item.selectedUnit || 'none'}-${idx}`}
                   ref={el => { itemRefs.current[item.id] = el; }}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -150,7 +151,7 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                   <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gray-50 shrink-0">
                     {item.image ? (
                       <img 
-                        src={item.image} 
+                        src={item.image || undefined} 
                         alt={item.name}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                         referrerPolicy="no-referrer"
@@ -163,27 +164,35 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                   </div>
                   
                   <div className="flex-1 text-center md:text-left space-y-1">
-                    <span className="text-[10px] font-bold text-primary uppercase tracking-widest">{item.category}</span>
                     <h3 className="text-lg font-black text-gray-900 tracking-tight">{item.name}</h3>
-                    {item.weight && (
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <Package className="w-3 h-3 text-gray-400" />
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{item.weight}</span>
-                      </div>
-                    )}
+                    
+                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-1">
+                      {item.selectedUnit && (
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100">
+                          <Package className="w-3 h-3" />
+                          <span className="text-[9px] font-black uppercase tracking-wider">{item.selectedUnit}</span>
+                        </div>
+                      )}
+                      {item.weight && (
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 text-gray-500 rounded-full border border-gray-100">
+                          <Clock className="w-3 h-3" />
+                          <span className="text-[9px] font-bold uppercase tracking-widest">{item.weight}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
                     <div className="flex items-center bg-gray-50 rounded-2xl p-1.5 gap-4 border border-gray-100">
                       <button 
-                        onClick={() => onUpdateQuantity(item.id, -1)}
+                        onClick={() => onUpdateQuantity(item.id, -1, item.selectedUnit)}
                         className="w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow-sm hover:bg-primary hover:text-white transition-all active:scale-90"
                       >
                         <Minus className="w-5 h-5" />
                       </button>
                       <span className="text-lg font-black w-6 text-center">{item.quantity}</span>
                       <button 
-                        onClick={() => onUpdateQuantity(item.id, 1)}
+                        onClick={() => onUpdateQuantity(item.id, 1, item.selectedUnit)}
                         className="w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow-sm hover:bg-primary hover:text-white transition-all active:scale-90"
                       >
                         <Plus className="w-5 h-5" />
@@ -192,11 +201,11 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                     
                     <div className="flex flex-col items-end">
                       <span className="text-xl font-black text-gray-900">₹{item.price * item.quantity}</span>
-                      {item.weight && <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">₹{item.price} / {item.weight}</span>}
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">₹{item.price} per unit</span>
                     </div>
                     
                     <button 
-                      onClick={() => onRemove(item.id)}
+                      onClick={() => onRemove(item.id, item.selectedUnit)}
                       className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
                     >
                       <Trash2 className="w-6 h-6" />
@@ -328,42 +337,13 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
           </div>
         </div>
 
-        <div className="flex px-6">
-          {products.slice(0, 1).map((product) => (
-            <motion.div 
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 px-6 pb-20">
+          {products.slice(0, 4).map((product) => (
+            <ProductCard 
               key={product.id}
-              whileHover={{ y: -5 }}
-              className="w-full max-w-sm bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-xl transition-all group mx-auto"
-            >
-              <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-50 mb-6">
-                {product.image && (
-                  <img 
-                    src={product.image} 
-                    alt={product.name} 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    referrerPolicy="no-referrer"
-                  />
-                )}
-                <div className="absolute top-3 right-3">
-                  <span className="bg-white/90 backdrop-blur-md text-gray-900 text-[10px] font-black px-3 py-1.5 rounded-full shadow-sm uppercase tracking-widest">
-                    ₹{product.price}
-                  </span>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-sm font-black text-gray-900 line-clamp-1">{product.name}</h4>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{product.category}</p>
-                </div>
-                <button 
-                  onClick={() => onAddToCart(product)}
-                  className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-900 font-black py-3 rounded-xl hover:bg-primary hover:text-white transition-all text-[10px] uppercase tracking-widest"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add to Cart
-                </button>
-              </div>
-            </motion.div>
+              product={product}
+              onAddToCart={onAddToCart}
+            />
           ))}
         </div>
       </div>

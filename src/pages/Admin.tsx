@@ -569,9 +569,14 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
               {activeTab === 'coupons' && (
                 <AdminCouponManager 
                   coupons={coupons} 
+                  products={products}
                   onAdd={(coupon) => handleSyncOperation(async () => {
                     await addDoc(collection(db, 'coupons'), { ...coupon, createdAt: Date.now() });
                   })} 
+                  onUpdate={(id, coupon) => handleSyncOperation(async () => {
+                    const { id: _, createdAt, ...updateData } = coupon as any;
+                    await updateDoc(doc(db, 'coupons', id), updateData);
+                  })}
                   onDelete={(id) => handleSyncOperation(async () => {
                     if (window.confirm('Are you sure you want to delete this coupon?')) {
                       await deleteDoc(doc(db, 'coupons', id));

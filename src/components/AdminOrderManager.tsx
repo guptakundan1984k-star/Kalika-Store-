@@ -1068,7 +1068,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
                     {manualOrder.items.map((item, idx) => (
                       <div key={`manual-item-${idx}`} className="flex items-center justify-between gap-4 bg-white p-3 rounded-xl shadow-sm border border-primary/5">
                         <div className="flex items-center gap-3">
-                          <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
+                          <img src={item.image || undefined} alt={item.name} className="w-10 h-10 rounded-lg object-cover" />
                           <div>
                             <p className="text-sm font-black text-gray-900">{item.name}</p>
                             <p className="text-[10px] font-bold text-gray-400">₹{item.price} x {item.quantity}</p>
@@ -1140,7 +1140,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
                         className="bg-white p-4 rounded-3xl border border-gray-100 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 transition-all text-left flex flex-col gap-3 group"
                       >
                         <div className="w-full aspect-square rounded-2xl overflow-hidden bg-gray-50 relative">
-                          <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                          <img src={product.image || undefined} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
                             <Plus className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-all scale-50 group-hover:scale-100" />
                           </div>

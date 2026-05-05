@@ -315,7 +315,7 @@ export const AdminBulkEnquiryManager: React.FC = () => {
                       {selectedEnquiry.photos.map((photoUrl, idx) => (
                         <div key={idx} className="bg-gray-50 p-2 rounded-[32px] border border-gray-100 overflow-hidden group/img">
                           <img 
-                            src={photoUrl} 
+                            src={photoUrl || undefined} 
                             alt={`Bulk Enquiry Photo ${idx + 1}`} 
                             className="w-full aspect-[4/3] object-cover rounded-2xl hover:scale-105 transition-transform duration-500"
                             referrerPolicy="no-referrer"
@@ -342,7 +342,7 @@ export const AdminBulkEnquiryManager: React.FC = () => {
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Paper Bill Attachment</p>
                     <div className="bg-gray-50 p-4 rounded-[40px] border border-gray-100 overflow-hidden">
                       <img 
-                        src={selectedEnquiry.billUrl} 
+                        src={selectedEnquiry.billUrl || undefined} 
                         alt="Bulk Enquiry Bill" 
                         className="w-full h-auto rounded-3xl"
                         referrerPolicy="no-referrer"

@@ -9,7 +9,7 @@ import { GoogleGenAI } from "@google/genai";
 interface PhotoBillPageProps {
   products: Product[];
   user: UserProfile | null;
-  onAddToCart: (product: Product, quantity: number) => void;
+  onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
 }
 
 const PhotoBillPageContent: React.FC<PhotoBillPageProps> = ({ products, user, onAddToCart }) => {
@@ -213,7 +213,7 @@ const PhotoBillPageContent: React.FC<PhotoBillPageProps> = ({ products, user, on
                       className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100"
                     >
                       <div className="flex items-center gap-4">
-                        <img src={item.product.image} className="w-10 h-10 rounded-lg object-cover" />
+                        <img src={item.product.image || undefined} className="w-10 h-10 rounded-lg object-cover" />
                         <div>
                           <p className="font-black text-gray-900 text-sm leading-tight">{item.product.name}</p>
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Qty: {item.quantity}</p>

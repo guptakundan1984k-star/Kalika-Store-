@@ -10,10 +10,12 @@ import { motion, AnimatePresence } from 'motion/react';
 
 import { db, collection, query, where, onSnapshot, addDoc, Timestamp, deleteDoc, doc, getDocs } from '../firebase';
 import { Logo } from '../components/Logo';
+import { aiService } from '../services/aiService';
+import { ChevronDown, Check } from 'lucide-react';
 
 interface ProductDetailProps {
   products: Product[];
-  onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean) => void;
+  onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
   toggleWishlist: (productId: string) => void;
   wishlist: string[];
   user: UserProfile | null;
@@ -39,6 +41,29 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
     flavor?: string;
   }>({});
   const [quantity, setQuantity] = useState(1);
+  const [selectedUnit, setSelectedUnit] = useState<string>('');
+  const [showUnitSelector, setShowUnitSelector] = useState(false);
+  const [isAiPredicting, setIsAiPredicting] = useState(false);
+
+  const UNITS = ['Kilogram', 'Gram', 'Litre', 'Millilitre', 'Piece', 'Box', 'Pack', 'Dozen'];
+
+  // AI Prediction for Unit
+  useEffect(() => {
+    if (!product) return;
+    const predict = async () => {
+      setIsAiPredicting(true);
+      try {
+        const result = await aiService.predictProductUnit(product.name, product.description || '');
+        setSelectedUnit(result.unit);
+        setQuantity(result.quantity);
+      } catch (error) {
+        setSelectedUnit('Piece');
+      } finally {
+        setIsAiPredicting(false);
+      }
+    };
+    predict();
+  }, [product?.id]);
 
   const avgRating = reviews.length > 0 
     ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
@@ -230,10 +255,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
           >
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-full">
-                  {product.category}
-                </span>
-
                 {/* Status and Low Stock Tag */}
                 {product.stock > 0 ? (
                   <span className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full ${
@@ -312,18 +333,28 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
 
             {/* Variations Selectors */}
             <div className="space-y-8">
-              {/* Quantity Selection */}
+              {/* Quantity and Unit Selection */}
               <div className="space-y-4">
-                <label className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Quantity</label>
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center bg-white border-2 border-gray-100 rounded-2xl p-1 shadow-sm">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Quantity & Unit</label>
+                <div className="flex flex-col sm:flex-row items-stretch gap-4">
+                  <div className="flex items-center bg-white border-2 border-gray-100 rounded-2xl p-1 shadow-sm flex-1">
                     <button 
                       onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
                       className="p-3 hover:bg-gray-50 rounded-xl transition-colors text-gray-400 hover:text-primary"
                     >
                       <Minus className="w-5 h-5" />
                     </button>
-                    <span className="w-12 text-center text-lg font-black text-gray-900">{quantity}</span>
+                    <input 
+                      type="text"
+                      inputMode="decimal"
+                      value={quantity}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val)) setQuantity(val);
+                        else if (e.target.value === '') setQuantity(0);
+                      }}
+                      className="w-full text-center text-lg font-black text-gray-900 focus:outline-none"
+                    />
                     <button 
                       onClick={() => setQuantity(prev => Math.min(product.stock, prev + 1))}
                       disabled={quantity >= product.stock}
@@ -332,10 +363,59 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                       <Plus className="w-5 h-5" />
                     </button>
                   </div>
-                  {quantity >= product.stock && (
-                    <span className="text-xs font-bold text-orange-500 uppercase tracking-widest animate-pulse">Max Stock Reached</span>
-                  )}
+
+                  <div className="relative flex-1">
+                    <button 
+                      onClick={() => setShowUnitSelector(!showUnitSelector)}
+                      className={`w-full h-full py-4 px-6 flex items-center justify-between rounded-2xl font-black text-sm uppercase tracking-wider transition-all border-2 ${
+                        selectedUnit 
+                          ? 'bg-blue-50 border-blue-100 text-blue-600' 
+                          : 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200'
+                      }`}
+                    >
+                      {selectedUnit || 'Select Unit'}
+                      <ChevronDown className={`w-5 h-5 transition-transform ${showUnitSelector ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    <AnimatePresence>
+                      {showUnitSelector && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-40" 
+                            onClick={() => setShowUnitSelector(false)} 
+                          />
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute bottom-full left-0 right-0 mb-4 z-50 bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden"
+                          >
+                            <div className="max-h-64 overflow-y-auto py-2">
+                              {UNITS.map(unit => (
+                                <button
+                                  key={unit}
+                                  onClick={() => {
+                                    setSelectedUnit(unit);
+                                    setShowUnitSelector(false);
+                                  }}
+                                  className={`w-full px-6 py-4 text-left text-xs font-black uppercase tracking-tight hover:bg-gray-50 transition-colors flex items-center justify-between ${
+                                    selectedUnit === unit ? 'text-blue-600 bg-blue-50' : 'text-gray-600'
+                                  }`}
+                                >
+                                  {unit}
+                                  {selectedUnit === unit && <Check className="w-4 h-4" />}
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
+                {quantity >= product.stock && (
+                  <span className="text-xs font-bold text-orange-500 uppercase tracking-widest animate-pulse">Max Stock Reached</span>
+                )}
               </div>
 
               {product.variations && (
@@ -430,10 +510,15 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <button 
                 onClick={() => {
+                  if (!selectedUnit) {
+                    alert('Please select a unit');
+                    setShowUnitSelector(true);
+                    return;
+                  }
                   onAddToCart({ 
                     ...product, 
                     selectedVariations
-                  } as any, quantity, true);
+                  } as any, quantity, false, selectedUnit);
                 }}
                 disabled={product.stock <= 0}
                 className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-primary text-white shadow-primary/30 hover:bg-primary-dark"
@@ -444,10 +529,15 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
 
               <button 
                 onClick={() => {
+                  if (!selectedUnit) {
+                    alert('Please select a unit');
+                    setShowUnitSelector(true);
+                    return;
+                  }
                   onAddToCart({ 
                     ...product, 
                     selectedVariations
-                  } as any, quantity, true);
+                  } as any, quantity, true, selectedUnit);
                 }}
                 disabled={product.stock <= 0}
                 className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-gray-900 text-white shadow-xl shadow-gray-200 hover:bg-black"
@@ -491,7 +581,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                     <div className="flex flex-wrap gap-4">
                       {newReview.photos.map((photo, index) => (
                         <div key={index} className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-lg group">
-                          <img src={photo} alt="" className="w-full h-full object-cover" />
+                          <img src={photo || undefined} alt="" className="w-full h-full object-cover" />
                           <button 
                             type="button"
                             onClick={() => removePhoto(index)}
@@ -614,7 +704,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                           onClick={() => window.open(photo, '_blank')}
                         >
                           <img 
-                            src={photo} 
+                            src={photo || undefined} 
                             alt={`Review photo ${index + 1}`} 
                             className="w-full h-full object-cover"
                             referrerPolicy="no-referrer"

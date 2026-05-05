@@ -204,7 +204,7 @@ export const PaperBillUploader: React.FC<PaperBillUploaderProps> = ({ products, 
         ) : (
           <div className="space-y-6">
             <div className="relative aspect-[3/4] max-w-sm mx-auto rounded-[40px] overflow-hidden shadow-2xl border-8 border-white">
-              <img src={previewUrl} alt="Bill Preview" className="w-full h-full object-cover" />
+              <img src={previewUrl || undefined} alt="Bill Preview" className="w-full h-full object-cover" />
               {loading && (
                 <div className="absolute inset-0 bg-black flex flex-col items-center justify-center text-white space-y-4">
                   <Loader2 className="w-12 h-12 animate-spin" />

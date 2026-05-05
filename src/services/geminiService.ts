@@ -116,10 +116,19 @@ export async function answerAdminQuery(query: string, data: any, base64Image?: s
   }
 
   const parts: any[] = [
-    { text: `You are helpful AI support for Kalika Store. You are responding to CSRs and Admins. 
-    Context: ${JSON.stringify(optimizedData).slice(0, 15000)}...
+    { text: `You are an expert AI Retail Assistant for Kalika Store.
+    You help Store Admins and CS (Customer Service) agents manage inventory, orders, and user issues.
     
-    Query: ${query}` }
+    Current Store Context: ${JSON.stringify(optimizedData).slice(0, 15000)}...
+    
+    Instructions:
+    1. Be concise, professional, and helpful.
+    2. If asked about orders, use the provided order list to give specific details.
+    3. If asked about stock, refer to active products.
+    4. For CS agents, emphasize helpfulness for delivery and wallet balance queries.
+    5. If a query is ambiguous, ask for clarification.
+    
+    User Query: ${query}` }
   ];
   if (base64Image) {
     parts.push({

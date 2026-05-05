@@ -32,6 +32,7 @@ import {
   Timestamp, 
   getDocFromServer, 
   addDoc, 
+  increment,
   arrayUnion,
   deleteField,
   writeBatch,
@@ -215,6 +216,7 @@ export {
   arrayUnion,
   deleteField,
   writeBatch,
+  increment,
   ref,
   uploadBytes,
   getDownloadURL

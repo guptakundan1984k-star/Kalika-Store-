@@ -575,7 +575,7 @@ export const AdminWalletRequests: React.FC = () => {
                             onClick={() => setSelectedScreenshot((request as any).screenshot)}
                             className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white shadow-xl rotate-3 hover:rotate-0 transition-all cursor-zoom-in"
                           >
-                            <img src={(request as any).screenshot} alt="Proof" className="w-full h-full object-cover" />
+                            <img src={(request as any).screenshot || undefined} alt="Proof" className="w-full h-full object-cover" />
                           </div>
                         )}
                         <div className="text-right">
@@ -736,7 +736,7 @@ export const AdminWalletRequests: React.FC = () => {
                 </div>
                 <div className="p-4 max-h-[70vh] overflow-y-auto bg-gray-50">
                   <img 
-                    src={selectedScreenshot} 
+                    src={selectedScreenshot || undefined} 
                     alt="Payment Screenshot" 
                     className="w-full h-auto rounded-3xl shadow-lg border-4 border-white"
                   />

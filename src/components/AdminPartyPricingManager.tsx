@@ -158,7 +158,7 @@ export const AdminPartyPricingManager: React.FC<{ products: Product[] }> = ({ pr
                     return (
                       <div key={product.id} className="bg-gray-50 p-4 rounded-3xl border border-gray-50 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <img src={product.image} className="w-10 h-10 rounded-xl object-cover" alt="" />
+                          <img src={product.image || undefined} className="w-10 h-10 rounded-xl object-cover" alt="" />
                           <div>
                             <p className="text-xs font-black text-gray-900">{product.name}</p>
                             <p className="text-[9px] font-bold text-gray-400 italic">MRP: ₹{product.price}</p>
@@ -210,7 +210,7 @@ export const AdminPartyPricingManager: React.FC<{ products: Product[] }> = ({ pr
                     return (
                       <div key={pid} className="bg-indigo-600 p-4 rounded-3xl text-white flex items-center justify-between shadow-lg shadow-indigo-600/20">
                         <div className="flex items-center gap-3">
-                          <img src={product.image} className="w-10 h-10 rounded-xl object-cover bg-white/20" alt="" />
+                          <img src={product.image || undefined} className="w-10 h-10 rounded-xl object-cover bg-white/20" alt="" />
                           <div>
                             <p className="text-xs font-black tracking-tight">{product.name}</p>
                             <p className="text-[8px] font-bold text-indigo-200 uppercase tracking-widest">Regular Price: ₹{product.price}</p>

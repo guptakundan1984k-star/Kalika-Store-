@@ -1,14 +1,15 @@
 import React from 'react';
 import { Product } from '../types';
-import { Heart, ShoppingCart, Trash2, ArrowRight, ShoppingBag } from 'lucide-react';
+import { ShoppingBag, ArrowRight, Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, Link } from 'react-router-dom';
+import { ProductCard } from '../components/ProductCard';
 
 
 interface WishlistProps {
   products: Product[];
   wishlist: string[];
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
   toggleWishlist: (productId: string) => void;
 }
 
@@ -45,73 +46,28 @@ const Wishlist: React.FC<WishlistProps> = ({ products, wishlist, onAddToCart, to
 
         {wishlistedProducts.length > 0 ? (
           <div className="space-y-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-            <AnimatePresence mode="popLayout">
-              {wishlistedProducts.map((product) => (
-                <motion.div
-                  key={product.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="bg-white rounded-[40px] overflow-hidden border border-gray-100 shadow-xl shadow-gray-200/50 group relative flex flex-col"
-                >
-                  <div className="aspect-square overflow-hidden relative">
-                    {product.image && (
-                      <img 
-                        src={product.image || undefined} 
-                        alt={product.name}
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                        referrerPolicy="no-referrer"
-                      />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    
-                    <button 
-                      onClick={() => toggleWishlist(product.id)}
-                      className="absolute top-4 right-4 p-3 bg-red-500 text-white rounded-2xl shadow-xl transition-all active:scale-90"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                    
-                    <div className="absolute top-4 left-4">
-                      <span className="px-3 py-1 bg-white/80 backdrop-blur-md text-gray-900 text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg">
-                        {product.category}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-6 flex flex-col flex-1 gap-4">
-                    <div className="flex-1">
-                      <h3 className="text-xl font-black text-gray-900 mb-2 line-clamp-1 group-hover:text-primary transition-colors">
-                        {product.name}
-                      </h3>
-                      <p className="text-sm text-gray-500 font-medium line-clamp-2 leading-relaxed">
-                        {product.description}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-                      <div className="flex flex-col">
-                        <span className="text-2xl font-black text-primary tracking-tighter">₹{product.price}</span>
-                        {product.weight && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{product.weight}</span>}
-                      </div>
-                      
-                      <button 
-                        onClick={() => onAddToCart(product)}
-                        disabled={product.stock <= 0}
-                        className="p-4 bg-primary text-white rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-90 disabled:opacity-50"
-                      >
-                        <ShoppingCart className="w-6 h-6" />
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+              <AnimatePresence mode="popLayout">
+                {wishlistedProducts.map((product) => (
+                  <motion.div
+                    key={product.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                  >
+                    <ProductCard 
+                      product={product} 
+                      onAddToCart={onAddToCart} 
+                      toggleWishlist={toggleWishlist}
+                      isWishlisted={true}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
           </div>
-        </div>
-      ) : (
+        ) : (
           <div className="text-center py-32 bg-white rounded-[60px] border border-dashed border-gray-200 shadow-2xl shadow-gray-200/20">
             <div className="w-24 h-24 bg-gray-50 rounded-[40px] flex items-center justify-center text-gray-200 mx-auto mb-8 shadow-inner">
               <ShoppingBag className="w-12 h-12" />

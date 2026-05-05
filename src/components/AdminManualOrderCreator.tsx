@@ -199,7 +199,7 @@ export const AdminManualOrderCreator: React.FC<AdminManualOrderCreatorProps> = (
             </div>
             <div className="flex-1 w-full relative group">
               <img 
-                src={enquiry.billUrl} 
+                src={enquiry.billUrl || undefined} 
                 alt="Bill" 
                 className="w-full h-full object-contain rounded-2xl"
                 referrerPolicy="no-referrer"
@@ -252,7 +252,7 @@ export const AdminManualOrderCreator: React.FC<AdminManualOrderCreatorProps> = (
                  {filteredProducts.map(product => (
                    <div key={product.id} className="bg-white p-4 rounded-[28px] border border-gray-100 flex items-center justify-between group hover:border-primary/30 transition-all shadow-sm">
                      <div className="flex items-center gap-4">
-                       <img src={product.image} className="w-12 h-12 rounded-xl object-cover" alt="" />
+                       <img src={product.image || undefined} className="w-12 h-12 rounded-xl object-cover" alt="" />
                        <div>
                          <p className="text-sm font-black text-gray-900 tracking-tight">{product.name}</p>
                          <div className="flex items-center gap-2">

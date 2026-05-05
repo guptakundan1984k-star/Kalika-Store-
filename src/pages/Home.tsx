@@ -5,10 +5,11 @@ import { Product, Banner, StoreSettings, CartItem } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, MapPin, Clock, AlertCircle, ShoppingBag, Package } from 'lucide-react';
 import { Logo } from '../components/Logo';
+import { ReachedEnd } from '../components/ReachedEnd';
 
 interface HomeProps {
   products: Product[];
-  onAddToCart: (product: Product, quantity?: number) => void;
+  onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
   banners: Banner[];
   storeSettings?: StoreSettings | null;
   cart: CartItem[];
@@ -101,6 +102,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
       </div>
       
       {/* Horizontal Scroll Sections removed as per request */}
+      <ReachedEnd />
     </motion.div>
   );
 };

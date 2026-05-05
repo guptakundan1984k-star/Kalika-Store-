@@ -212,9 +212,13 @@
         "type": { "type": "string", "enum": ["percentage", "fixed"] },
         "minOrder": { "type": "number" },
         "expiryDate": { "type": "number" },
-        "usageLimitPerCustomer": { "type": "number" }
+        "usageLimit": { "type": "number" },
+        "usageLimitPerCustomer": { "type": "number" },
+        "usedCount": { "type": "number" },
+        "eligibleProducts": { "type": "array", "items": { "type": "string" }, "description": "Array of Product IDs this coupon is valid for" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
       },
-      "required": ["code", "discount", "type"]
+      "required": ["code", "discount", "type", "status"]
     },
     "Banner": {
       "title": "Banner",

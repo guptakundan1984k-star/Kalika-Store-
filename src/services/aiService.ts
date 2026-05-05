@@ -8,6 +8,10 @@ export const aiService = {
    * Analyzes an image of a bill/receipt and extracts structured data.
    */
   async analyzeBill(imageBase64: string, mimeType: string): Promise<Partial<Expense>> {
+    if (!process.env.GEMINI_API_KEY) {
+      console.warn("GEMINI_API_KEY missing");
+      return {};
+    }
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: {
@@ -45,6 +49,10 @@ export const aiService = {
    * Converts voice/text input (Hindi/Hinglish/English) to structured expense data.
    */
   async analyzeVoiceExpense(text: string): Promise<Partial<Expense>> {
+    if (!process.env.GEMINI_API_KEY) {
+      console.warn("GEMINI_API_KEY missing");
+      return {};
+    }
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Extract expense details from this text (Hindi/English/Hinglish): "${text}". Return JSON.`,
@@ -76,6 +84,10 @@ export const aiService = {
    * Analyzes an image of a bill from a URL and extracts products.
    */
   async analyzeBillImage(url: string): Promise<{name: string, quantity: number}[]> {
+    if (!process.env.GEMINI_API_KEY) {
+      console.warn("GEMINI_API_KEY missing");
+      return [];
+    }
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Look at this bill image: ${url}. 
@@ -245,6 +257,10 @@ export const aiService = {
    * Generates smart search metadata (keywords, synonyms, tags) for a product.
    */
   async generateSearchMetadata(name: string, description: string, category: string): Promise<{keywords: string[], synonyms: string[], tags: string[]}> {
+    if (!process.env.GEMINI_API_KEY) {
+      console.warn("GEMINI_API_KEY is missing. AI features are disabled.");
+      return { keywords: [], synonyms: [], tags: [] };
+    }
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `You are a search engine optimization expert for a grocery e-commerce app.
@@ -272,6 +288,47 @@ export const aiService = {
     } catch (e) {
       console.error("Failed to generate metadata", e);
       return { keywords: [], synonyms: [], tags: [] };
+    }
+  },
+
+  /**
+   * Predicts the most likely unit and quantity for a product given its name and description.
+   */
+  async predictProductUnit(name: string, description: string): Promise<{unit: string, quantity: number}> {
+    if (!process.env.GEMINI_API_KEY) {
+      return { unit: 'Piece', quantity: 1 };
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `You are an inventory assistant for a grocery store.
+      Given the product name and description, predict the most likely unit of measurement and a standard default quantity a customer might buy (as a number).
+      
+      Units: Kilogram, Gram, Litre, Millilitre, Piece, Box, Pack, Dozen.
+      
+      Product Name: ${name}
+      Description: ${description}
+      
+      Return ONLY a JSON object: {"unit": "Kilogram", "quantity": 1}
+      If unsure, default to {"unit": "Piece", "quantity": 1}.
+      For liquids (milk, oil, soda), prefer Litre or Millilitre.
+      For heavy staples (atta, rice), prefer Kilogram.
+      For individual items (soap, chocolate, biscuits), prefer Piece or Pack.`,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    try {
+      const text = response.text || "{}";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const data = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      return {
+        unit: data.unit || 'Piece',
+        quantity: typeof data.quantity === 'number' ? data.quantity : 1
+      };
+    } catch (e) {
+      return { unit: 'Piece', quantity: 1 };
     }
   }
 };

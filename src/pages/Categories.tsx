@@ -4,10 +4,11 @@ import { Product, CartItem } from '../types';
 import { motion } from 'motion/react';
 import { Search, ArrowLeft, LayoutGrid, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { ReachedEnd } from '../components/ReachedEnd';
 
 interface CategoriesProps {
   products: Product[];
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
   cart: CartItem[];
   onRemoveFromCart?: (id: string) => void;
   toggleWishlist?: (productId: string) => void;
@@ -151,6 +152,8 @@ const Categories: React.FC<CategoriesProps> = ({ products, onAddToCart, cart, on
             <p className="text-sm text-gray-500 font-medium">Try adjusting your search or category filter.</p>
           </div>
         )}
+
+        {filteredProducts.length > 0 && <ReachedEnd />}
       </div>
     </div>
   );

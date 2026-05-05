@@ -244,7 +244,11 @@ export interface Coupon {
   minOrder?: number;
   maxDiscount?: number;
   expiryDate?: number;
+  usageLimit?: number; // Total limit
   usageLimitPerCustomer?: number;
+  usedCount?: number;
+  eligibleProducts?: string[]; // Array of Product IDs
+  status: 'active' | 'inactive';
 }
 
 export interface StoreSettings {

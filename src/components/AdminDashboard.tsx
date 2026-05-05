@@ -492,7 +492,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
                    <div key={p.id} className="bg-gray-50 p-4 rounded-3xl border border-gray-100 flex items-center justify-between group">
                      <div className="flex items-center gap-4">
                        <div className="w-12 h-12 bg-white rounded-xl overflow-hidden border border-gray-100">
-                         <img src={p.image} className="w-full h-full object-cover" alt="" />
+                         <img src={p.image || undefined} className="w-full h-full object-cover" alt="" />
                        </div>
                        <div>
                          <p className="text-sm font-black text-gray-900">{p.name}</p>
@@ -646,7 +646,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
                             className={`group relative bg-white rounded-3xl border-2 shadow-lg overflow-hidden flex flex-col transition-all ${item.matchedId ? (hasExistingPhoto ? 'border-orange-400' : 'border-green-400') : 'border-white'}`}
                           >
                             <div className="aspect-square relative overflow-hidden bg-gray-100">
-                              <img src={item.preview} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="" />
+                              <img src={item.preview || undefined} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="" />
                               <button 
                                 onClick={() => setContinuousPhotos(prev => prev.filter((_, i) => i !== idx))}
                                 className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-xl shadow-lg hover:scale-110 transition-all z-20"
@@ -712,7 +712,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
                     className="group bg-gray-50 rounded-[32px] p-4 border border-gray-100 hover:border-[#00AEEF]/50 transition-all shadow-sm hover:shadow-lg"
                   >
                     <div className="aspect-square rounded-2xl overflow-hidden mb-4 bg-white relative border border-gray-100">
-                      <img src={product.image} className="w-full h-full object-cover grayscale opacity-50" />
+                      <img src={product.image || undefined} className="w-full h-full object-cover grayscale opacity-50" />
                       <div className="absolute inset-0 flex items-center justify-center">
                         <Camera className="w-10 h-10 text-gray-200" />
                       </div>

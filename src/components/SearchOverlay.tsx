@@ -285,21 +285,20 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
                           >
                             <Link to={`/product/${product.id}`} onClick={() => handleProductClick(product)} className="w-20 h-20 bg-gray-50 rounded-2xl overflow-hidden shrink-0">
                               <img 
-                                src={product.image} 
+                                src={product.image || undefined} 
                                 alt={product.name} 
                                 className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-500"
                                 referrerPolicy="no-referrer"
                               />
                             </Link>
-                            <div className="flex-1 min-w-0">
-                               <div className="flex flex-wrap gap-1 mb-1">
-                                {product.tags?.slice(0, 2).map(tag => (
-                                  <span key={tag} className="text-[8px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                                    {tag}
-                                  </span>
-                                ))}
-                                <span className="text-[8px] font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full uppercase tracking-tighter">{product.category}</span>
-                               </div>
+                                <div className="flex min-w-0 flex-1 flex-col">
+                                 <div className="mb-1 flex flex-wrap gap-1">
+                                  {product.tags?.slice(0, 2).map(tag => (
+                                    <span key={tag} className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-tighter">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                 </div>
                                <Link to={`/product/${product.id}`} onClick={() => handleProductClick(product)}>
                                  <h5 className="text-sm font-black text-gray-900 line-clamp-1 group-hover:text-primary transition-colors">
                                    {highlightText(product.name, searchQuery)}

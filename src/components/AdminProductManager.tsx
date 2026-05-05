@@ -578,7 +578,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
               <div key={`alert-${p.id}`} className="min-w-[200px] bg-white p-4 rounded-2xl border border-blue-100 flex flex-col gap-3 shadow-sm">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gray-50 rounded-lg overflow-hidden border border-gray-100">
-                    <img src={p.image} alt="" className="w-full h-full object-cover grayscale opacity-50" referrerPolicy="no-referrer" />
+                    <img src={p.image || undefined} alt="" className="w-full h-full object-cover grayscale opacity-50" referrerPolicy="no-referrer" />
                   </div>
                   <p className="text-xs font-black text-gray-900 line-clamp-1">{p.name}</p>
                 </div>
@@ -1253,7 +1253,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
                 <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 flex items-center gap-4 text-left">
                   <img 
-                    src={duplicateProduct.image} 
+                    src={duplicateProduct.image || undefined} 
                     alt={duplicateProduct.name} 
                     className="w-20 h-20 object-cover rounded-2xl shadow-lg"
                     referrerPolicy="no-referrer"
@@ -1327,7 +1327,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       {editingProduct.images?.map((img, i) => (
                         <div key={i} className={`relative group aspect-square rounded-2xl overflow-hidden border-2 transition-all ${editingProduct.image === img ? 'border-primary shadow-lg shadow-primary/10' : 'border-gray-50'}`}>
-                          <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          <img src={img || undefined} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 px-2">
                             <button 
                               onClick={() => setEditingProduct(prev => ({ ...prev, image: img }))}
@@ -1609,6 +1609,10 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                     </div>
                     <button
                       onClick={async () => {
+                        if (!process.env.GEMINI_API_KEY) {
+                          alert("AI Features not configured. Please add GEMINI_API_KEY to your environment variables on Netlify.");
+                          return;
+                        }
                         try {
                           const suggested = await aiService.generateSearchMetadata(editingProduct.name, editingProduct.description || '', editingProduct.category);
                           setEditingProduct(prev => ({

@@ -162,7 +162,7 @@ const BulkEnquiryPageContent: React.FC<BulkEnquiryPageProps> = ({ user }) => {
                       key={index}
                       className="relative rounded-2xl overflow-hidden border border-gray-100 shadow-sm aspect-square bg-gray-100 group"
                     >
-                      <img src={photo.preview} alt={`Preview ${index}`} className="w-full h-full object-cover" />
+                      <img src={photo.preview || undefined} alt={`Preview ${index}`} className="w-full h-full object-cover" />
                       <button 
                         type="button"
                         onClick={() => removePhoto(index)}

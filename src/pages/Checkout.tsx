@@ -4,7 +4,7 @@ import { useStore } from '../contexts/StoreContext';
 import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, ShieldCheck, Clock, XCircle, Navigation, Smartphone, Wallet, Banknote, Sparkles, AlertCircle, IndianRupee, FileText, ArrowLeft, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
-import { doc, updateDoc, db, addDoc, collection, getDoc, onSnapshot, handleFirestoreError, OperationType } from '../firebase';
+import { doc, updateDoc, db, addDoc, collection, getDoc, onSnapshot, handleFirestoreError, OperationType, increment } from '../firebase';
 import { InvoiceGenerator } from '../components/InvoiceGenerator';
 import { ProductImage } from '../components/ProductImage';
 
@@ -43,41 +43,74 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   const [inWalletStep, setInWalletStep] = useState(false); // To handle back button in payment
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  // Auto-apply or suggest coupons (Premium feature)
+  const suggestedCoupon = React.useMemo(() => {
+    if (appliedCoupon) return null;
+    
+    // Find active, non-expired coupons that match cart eligibility and minOrder
+    const viable = coupons.filter(c => {
+      if (c.status !== 'active') return false;
+      if (c.expiryDate && c.expiryDate < Date.now()) return false;
+      if (c.minOrder && subtotal < c.minOrder) return false;
+      return cart.some(item => c.eligibleProducts?.includes(item.id));
+    });
+
+    // Sort to suggest best discount (approximate)
+    return viable.sort((a, b) => b.discount - a.discount)[0] || null;
+  }, [coupons, cart, subtotal, appliedCoupon]);
+
   const addressRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement>(null);
   const paymentRef = useRef<HTMLDivElement>(null);
 
   const { deliveryFee: configDeliveryFee, freeDeliveryThreshold: configThreshold } = useStore();
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
   const walletBalance = user?.walletBalance || 0;
   const walletDue = walletBalance < 0 ? Math.abs(walletBalance) : 0;
-  const walletCredit = walletBalance > 0 ? Math.min(walletBalance, subtotal) : 0;
-
+  
   const calculateDiscount = () => {
     if (!appliedCoupon) return 0;
+    
+    // User requested: "Discount should calculate only on subtotal of eligible matched products."
+    const eligibleSubtotal = cart.reduce((sum, item) => {
+      const isEligible = appliedCoupon.eligibleProducts?.includes(item.id);
+      return isEligible ? sum + (item.price * item.quantity) : sum;
+    }, 0);
+
+    if (eligibleSubtotal === 0) return 0;
+
     let discount = 0;
     if (appliedCoupon.type === 'percentage') {
-      discount = (subtotal * appliedCoupon.discount) / 100;
+      discount = (eligibleSubtotal * appliedCoupon.discount) / 100;
       if (appliedCoupon.maxDiscount && discount > appliedCoupon.maxDiscount) {
         discount = appliedCoupon.maxDiscount;
       }
     } else {
-      discount = appliedCoupon.discount;
+      discount = Math.min(appliedCoupon.discount, eligibleSubtotal);
     }
     return discount;
   };
 
   const couponDiscount = calculateDiscount();
   const deliveryFee = deliveryType === 'Delivery' ? (subtotal >= configThreshold ? 0 : configDeliveryFee) : 0;
+  const walletCredit = walletBalance > 0 ? Math.min(walletBalance, subtotal + deliveryFee - couponDiscount) : 0;
+
   const total = Math.max(0, subtotal + deliveryFee - couponDiscount - walletCredit);
 
   const handleApplyCoupon = () => {
     setCouponError('');
-    const found = coupons.find(c => c.code === couponCode.toUpperCase());
+    const found = coupons.find(c => c.code === couponCode.trim().toUpperCase());
     
     if (!found) {
       setCouponError('Invalid coupon code');
+      setAppliedCoupon(null);
+      return;
+    }
+
+    if (found.status === 'inactive') {
+      setCouponError('This coupon is currently inactive.');
       setAppliedCoupon(null);
       return;
     }
@@ -94,8 +127,20 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       return;
     }
 
-    // Usage limit check would ideally be done here, but requires querying orders
-    // For now, we'll apply it and check again during order placement
+    if (found.usageLimit && found.usedCount && found.usedCount >= found.usageLimit) {
+      setCouponError('This coupon usage limit has been reached.');
+      setAppliedCoupon(null);
+      return;
+    }
+
+    // STRICT CUSTOMER VALIDATION RULE: cart contains at least one eligible linked product
+    const hasEligibleItem = cart.some(item => found.eligibleProducts?.includes(item.id));
+    if (!hasEligibleItem) {
+      setCouponError("This item isn't eligible for this coupon.");
+      setAppliedCoupon(null);
+      return;
+    }
+
     setAppliedCoupon(found);
     setCouponError('');
   };
@@ -363,9 +408,10 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       return;
     }
 
-    if (paymentMethod === 'WALLET' && walletBalance < total) {
-      alert("Insufficient wallet balance.");
-      return;
+    if (paymentMethod === 'WALLET' && walletBalance < total && total > 0) {
+      if (!window.confirm(`Your wallet balance is low. ₹${walletBalance} will be used from wallet, and rest ₹${total} will be collected during delivery. Proceed?`)) {
+        return;
+      }
     }
 
     setIsProcessing(true);
@@ -409,6 +455,13 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       // 1. SAVE TO FIRESTORE
       const docRef = await addDoc(collection(db, 'orders'), finalOrder);
       setOrderId(docRef.id);
+
+      // increment coupon usage
+      if (appliedCoupon) {
+        await updateDoc(doc(db, 'coupons', appliedCoupon.id), {
+          usedCount: increment(1)
+        }).catch(e => console.error("Coupon increment failed", e));
+      }
 
       // 2. CLEAR CART
       onOrderPlaced(newOrder); 
@@ -1093,13 +1146,44 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
               )}
               
               <div className="space-y-3">
+                {suggestedCoupon && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-primary/5 p-4 rounded-2xl border border-dashed border-primary/20 flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+                        <Sparkles className="w-4 h-4 animate-pulse" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-primary uppercase tracking-widest">Recommended Coupon</p>
+                        <p className="text-sm font-black text-gray-900 tracking-tight">Use Code: {suggestedCoupon.code}</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        setCouponCode(suggestedCoupon.code);
+                        // Small delay to show code in input then apply
+                        setTimeout(() => {
+                          const found = coupons.find(c => c.code === suggestedCoupon.code);
+                          if (found) setAppliedCoupon(found);
+                        }, 300);
+                      }}
+                      className="bg-primary text-white text-[10px] font-black px-4 py-2 rounded-xl hover:bg-primary-dark shadow-lg shadow-primary/20 transition-all active:scale-95"
+                    >
+                      APPLY NOW
+                    </button>
+                  </motion.div>
+                )}
+
                 <div className="relative group">
                   <input 
                     type="text" 
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                     placeholder="Apply Coupon"
-                    className={`w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-black tracking-widest focus:ring-4 transition-all ${couponError ? 'focus:ring-red-100' : 'focus:ring-primary/10'}`}
+                    className={`w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-black tracking-widest focus:ring-4 transition-all ${couponError ? 'ring-2 ring-red-500 focus:ring-red-100' : appliedCoupon ? 'ring-2 ring-green-500 focus:ring-green-100' : 'focus:ring-primary/10'}`}
                   />
                   <button 
                     onClick={handleApplyCoupon}
@@ -1108,12 +1192,15 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                     APPLY
                   </button>
                 </div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2">
+                  Coupon applicable only on selected items.
+                </p>
                 {couponError && <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest px-2">{couponError}</p>}
                 {appliedCoupon && (
                   <div className="flex items-center justify-between bg-green-50 p-3 rounded-xl border border-green-100">
                     <div className="flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span className="text-[10px] font-black text-green-700 uppercase tracking-widest">Coupon Applied: {appliedCoupon.code}</span>
+                      <span className="text-[10px] font-black text-green-700 uppercase tracking-widest">Coupon applied successfully.</span>
                     </div>
                     <button onClick={() => setAppliedCoupon(null)} className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline">Remove</button>
                   </div>

@@ -169,7 +169,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ order, nextStatus, nextLabe
           <div key={i} className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-white overflow-hidden shadow-sm shrink-0">
-                <img src={item.image} alt="" className="w-full h-full object-cover" />
+                <img src={item.image || undefined} alt="" className="w-full h-full object-cover" />
               </div>
               <span className="text-xs font-bold text-gray-700">{item.name}</span>
             </div>

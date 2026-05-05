@@ -9,6 +9,10 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Staples",
     image: "https://www.bigbasket.com/media/uploads/p/l/126906_8-aashirvaad-atta-whole-wheat.jpg",
+    images: [
+      "https://www.bigbasket.com/media/uploads/p/l/126906_8-aashirvaad-atta-whole-wheat.jpg",
+      "https://www.bigbasket.com/media/uploads/p/l/126906_8-aashirvaad-atta-whole-wheat.jpg"
+    ],
     stock: 19,
     weight: "10kg",
     createdAt: Date.now()
@@ -20,6 +24,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Household",
     image: "https://www.bigbasket.com/media/uploads/p/l/266986_24-active-wheel-lemon-jasmine-detergent-powder.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/266986_24-active-wheel-lemon-jasmine-detergent-powder.jpg"],
     stock: 121,
     weight: "1kg",
     createdAt: Date.now()
@@ -105,6 +110,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Dairy",
     image: "https://www.bigbasket.com/media/uploads/p/l/40012975_5-amul-kool-badam-milk-beverage.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40012975_5-amul-kool-badam-milk-beverage.jpg"],
     stock: 99,
     createdAt: Date.now()
   },
@@ -115,6 +121,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Dairy",
     image: "https://www.bigbasket.com/media/uploads/p/l/40192801_3-amul-lassi-rose-flavor.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40192801_3-amul-lassi-rose-flavor.jpg"],
     stock: 114,
     createdAt: Date.now()
   },
@@ -124,7 +131,8 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 15,
     purchasePrice: 0,
     category: "Dairy",
-    image: "https://picsum.photos/seed/Amul-Masti-Chaach/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40012981_3-amul-masti-spiced-buttermilk.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40012981_3-amul-masti-spiced-buttermilk.jpg"],
     stock: 109,
     createdAt: Date.now()
   },
@@ -135,6 +143,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Dairy",
     image: "https://www.bigbasket.com/media/uploads/p/l/306326_1-amul-taaza-fresh-toned-milk.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/306326_1-amul-taaza-fresh-toned-milk.jpg"],
     stock: 100,
     weight: "500ml",
     createdAt: Date.now()
@@ -146,6 +155,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 84.8,
     category: "Dairy",
     image: "https://www.bigbasket.com/media/uploads/p/l/241688_6-amul-fresh-paneer.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/241688_6-amul-fresh-paneer.jpg"],
     stock: 28,
     createdAt: Date.now()
   },
@@ -176,7 +186,8 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 120,
     purchasePrice: 0,
     category: "Staples",
-    image: "https://picsum.photos/seed/Arhar-dal/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/10000438_13-bb-popular-arhar-dal-tur-dal.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/10000438_13-bb-popular-arhar-dal-tur-dal.jpg"],
     stock: 96,
     weight: "1kg",
     createdAt: Date.now()
@@ -232,6 +243,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Snacks",
     image: "https://www.bigbasket.com/media/uploads/p/l/1213470_1-bisleri-mineral-water.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/1213470_1-bisleri-mineral-water.jpg"],
     stock: 100,
     weight: "1L",
     createdAt: Date.now()
@@ -254,6 +266,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Snacks",
     image: "https://www.bigbasket.com/media/uploads/p/l/40003057_10-cadbury-celebrations-rich-memories.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40003057_10-cadbury-celebrations-rich-memories.jpg"],
     stock: 100,
     weight: "139g",
     createdAt: Date.now()
@@ -276,6 +289,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 102,
     category: "Personal Care",
     image: "https://www.bigbasket.com/media/uploads/p/l/40126742_5-cinthol-original-soap.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40126742_5-cinthol-original-soap.jpg"],
     stock: 100,
     createdAt: Date.now()
   },
@@ -286,6 +300,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Personal Care",
     image: "https://www.bigbasket.com/media/uploads/p/l/40156711_5-clinic-plus-shampoo-strong-long-with-milk-protein.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40156711_5-clinic-plus-shampoo-strong-long-with-milk-protein.jpg"],
     stock: 99,
     createdAt: Date.now()
   },
@@ -296,6 +311,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 175,
     category: "Personal Care",
     image: "https://www.bigbasket.com/media/uploads/p/l/40061245_3-dettol-bathing-soap-bar-original.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40061245_3-dettol-bathing-soap-bar-original.jpg"],
     stock: 50,
     createdAt: Date.now()
   },
@@ -317,6 +333,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Staples",
     image: "https://www.bigbasket.com/media/uploads/p/l/274145_14-fortune-soyabean-refined-oil.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/274145_14-fortune-soyabean-refined-oil.jpg"],
     stock: 98,
     weight: "1L",
     createdAt: Date.now()
@@ -328,6 +345,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Household",
     image: "https://www.bigbasket.com/media/uploads/p/l/40127598_11-ghadi-detergent-powder.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40127598_11-ghadi-detergent-powder.jpg"],
     stock: 99,
     weight: "1kg",
     createdAt: Date.now()
@@ -338,7 +356,8 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 10,
     purchasePrice: 0,
     category: "Snacks",
-    image: "https://picsum.photos/seed/Good-day-biscuit/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/102146_14-britannia-good-day-cashew-cookies.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/102146_14-britannia-good-day-cashew-cookies.jpg"],
     stock: 94,
     createdAt: Date.now()
   },
@@ -348,7 +367,8 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 200,
     purchasePrice: 183,
     category: "Snacks",
-    image: "https://picsum.photos/seed/Horlicks-12kg-Pouch/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/121543_11-horlicks-health-nutrition-drink-classic-malt.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/121543_11-horlicks-health-nutrition-drink-classic-malt.jpg"],
     stock: 100,
     weight: "500g",
     createdAt: Date.now()
@@ -359,7 +379,8 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 130,
     purchasePrice: 0,
     category: "Staples",
-    image: "https://picsum.photos/seed/India-gate-basmati-rice-1kg/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/121330_5-india-gate-basmati-rice-dubbi.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/121330_5-india-gate-basmati-rice-dubbi.jpg"],
     stock: 99,
     weight: "1kg",
     createdAt: Date.now()
@@ -382,6 +403,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Snacks",
     image: "https://www.bigbasket.com/media/uploads/p/l/141300_13-kurkure-namkeen-masala-munch.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/141300_13-kurkure-namkeen-masala-munch.jpg"],
     stock: 1000,
     createdAt: Date.now()
   },
@@ -392,6 +414,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Snacks",
     image: "https://www.bigbasket.com/media/uploads/p/l/102579_10-lays-potato-chips-classic-salted.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/102579_10-lays-potato-chips-classic-salted.jpg"],
     stock: 1000,
     createdAt: Date.now()
   },
@@ -402,6 +425,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Snacks",
     image: "https://www.bigbasket.com/media/uploads/p/l/266109_15-maggi-2-minute-instant-noodles-masala.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/266109_15-maggi-2-minute-instant-noodles-masala.jpg"],
     stock: 1000,
     createdAt: Date.now()
   },
@@ -423,6 +447,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Snacks",
     image: "https://www.bigbasket.com/media/uploads/p/l/102102_4-parle-g-biscuits.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/102102_4-parle-g-biscuits.jpg"],
     stock: 99,
     createdAt: Date.now()
   },
@@ -444,6 +469,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Snacks",
     image: "https://www.bigbasket.com/media/uploads/p/l/40191836_2-sting-energy-drink.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40191836_2-sting-energy-drink.jpg"],
     stock: 100,
     weight: "250ml",
     createdAt: Date.now()
@@ -454,7 +480,8 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 31,
     purchasePrice: 0,
     category: "Dairy",
-    image: "https://picsum.photos/seed/Sudha-Milk-500ml/400/400",
+    image: "https://www.sudha.coop/images/Sudha-Special-Milk.png",
+    images: ["https://www.sudha.coop/images/Sudha-Special-Milk.png"],
     stock: 4997,
     weight: "500ml",
     createdAt: Date.now()
@@ -466,19 +493,21 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Staples",
     image: "https://www.bigbasket.com/media/uploads/p/l/241600_5-tata-salt-iodized.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/241600_5-tata-salt-iodized.jpg"],
     stock: 99,
     weight: "1kg",
     createdAt: Date.now()
   },
   {
-    name: "Thums Up 2 Ltr",
+    name: "Thums Up 1L",
     description: "Extra large bottle of strong and fizzy cola drink.",
     price: 95,
     purchasePrice: 85,
     category: "Snacks",
-    image: "https://www.bigbasket.com/media/uploads/p/l/251023_11-thums-up-soft-drink.jpg",
+    image: "https://www.bigbasket.com/media/uploads/p/l/100010_13-thums-up-soft-drink.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/100010_13-thums-up-soft-drink.jpg"],
     stock: 500,
-    weight: "2 Ltr",
+    weight: "1 Ltr",
     createdAt: Date.now()
   },
   {
@@ -510,6 +539,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 8,
     category: "Household",
     image: "https://www.bigbasket.com/media/uploads/p/l/10000000_1-vim-dishwash-bar.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/10000000_1-vim-dishwash-bar.jpg"],
     stock: 89,
     createdAt: Date.now()
   },
@@ -520,6 +550,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 90,
     category: "Household",
     image: "https://www.bigbasket.com/media/uploads/p/l/40156381_6-vim-dishwash-gel-lemon.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40156381_6-vim-dishwash-gel-lemon.jpg"],
     stock: 150,
     weight: "500ml",
     createdAt: Date.now()
@@ -530,7 +561,8 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 120,
     purchasePrice: 100,
     category: "Household",
-    image: "https://picsum.photos/seed/Vim-Anti-Bacterial/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40127503_8-vim-anti-bac-dishwash-gel-with-neem-extracts.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40127503_8-vim-anti-bac-dishwash-gel-with-neem-extracts.jpg"],
     stock: 75,
     createdAt: Date.now()
   },
@@ -540,7 +572,8 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 10,
     purchasePrice: 8,
     category: "Snacks",
-    image: "https://picsum.photos/seed/Swiss-Roll/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40126788_2-britannia-treat-swiss-roll-chocolate.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40126788_2-britannia-treat-swiss-roll-chocolate.jpg"],
     stock: 1015,
     createdAt: Date.now()
   },
@@ -551,6 +584,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Staples",
     image: "https://www.bigbasket.com/media/uploads/p/l/40157973_5-taaza-leaf-tea.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40157973_5-taaza-leaf-tea.jpg"],
     stock: 99,
     createdAt: Date.now()
   },
@@ -561,6 +595,7 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     purchasePrice: 0,
     category: "Staples",
     image: "https://www.bigbasket.com/media/uploads/p/l/266579_25-tata-tea-gold.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/266579_25-tata-tea-gold.jpg"],
     stock: 50,
     createdAt: Date.now()
   },
@@ -600,7 +635,8 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 20,
     purchasePrice: 0,
     category: "Dairy",
-    image: "https://picsum.photos/seed/Amul-lassi-20/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40192801_3-amul-lassi-rose-flavor.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40192801_3-amul-lassi-rose-flavor.jpg"],
     stock: 114,
     createdAt: Date.now()
   },
@@ -610,7 +646,8 @@ export const INITIAL_PRODUCTS: Omit<Product, 'id'>[] = [
     price: 15,
     purchasePrice: 0,
     category: "Dairy",
-    image: "https://picsum.photos/seed/Amul-Masti-Chaach/400/400",
+    image: "https://www.bigbasket.com/media/uploads/p/l/40012981_3-amul-masti-spiced-buttermilk.jpg",
+    images: ["https://www.bigbasket.com/media/uploads/p/l/40012981_3-amul-masti-spiced-buttermilk.jpg"],
     stock: 109,
     createdAt: Date.now()
   },

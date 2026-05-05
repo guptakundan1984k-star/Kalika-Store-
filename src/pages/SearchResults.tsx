@@ -5,10 +5,11 @@ import { ProductCard } from '../components/ProductCard';
 import { searchProducts } from '../utils/searchUtils';
 import { Search, Filter, ArrowLeft, Package, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
+import { ReachedEnd } from '../components/ReachedEnd';
 
 interface SearchResultsProps {
   products: Product[];
-  onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean) => void;
+  onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
 }
 
 export const SearchResults: React.FC<SearchResultsProps> = ({ products, onAddToCart }) => {
@@ -134,6 +135,8 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ products, onAddToC
             </div>
           </div>
         )}
+        
+        {results.length > 0 && <ReachedEnd />}
       </div>
     </div>
   );

@@ -14,8 +14,8 @@ interface CartDrawerProps {
   items: CartItem[];
   products: Product[];
   user?: UserProfile | null;
-  onUpdateQuantity: (id: string, delta: number) => void;
-  onRemove: (id: string) => void;
+  onUpdateQuantity: (id: string, delta: number, selectedUnit?: string) => void;
+  onRemove: (id: string, selectedUnit?: string) => void;
   onClear: () => void;
   onCheckout: () => void;
   onAddItems: (items: { product: Product, quantity: number }[]) => void;
@@ -132,10 +132,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </button>
                 </div>
               ) : (
-                items.map((item) => (
+                items.map((item, idx) => (
                   <motion.div 
                     layout
-                    key={item.id}
+                    key={`${item.id}-${item.selectedUnit}-${idx}`}
                     className="flex items-center gap-4 bg-white p-4 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-xl transition-all group"
                   >
                     <div className="w-20 h-20 rounded-[24px] overflow-hidden bg-gray-50 shrink-0 border border-gray-100 shadow-inner">
@@ -150,6 +150,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         <h4 className="font-black text-gray-900 text-xs sm:text-sm line-clamp-2 leading-tight tracking-tight">{item.name}</h4>
                       </div>
 
+                      {item.selectedUnit && (
+                        <div className="mb-2">
+                          <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full uppercase tracking-tighter">
+                            {item.selectedUnit}
+                          </span>
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-3">
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2">
@@ -162,14 +170,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         
                         <div className="flex items-center bg-gray-100 rounded-full p-1 border border-gray-200 ml-auto">
                           <button 
-                            onClick={() => onUpdateQuantity(item.id, -1)}
+                            onClick={() => onUpdateQuantity(item.id, -1, item.selectedUnit)}
                             className="w-7 h-7 flex items-center justify-center bg-white rounded-full shadow-sm hover:bg-primary hover:text-white transition-all active:scale-90"
                           >
                             <Minus className="w-3 h-3" />
                           </button>
                           <span className="w-8 text-center text-xs font-black text-gray-900">{item.quantity}</span>
                           <button 
-                            onClick={() => onUpdateQuantity(item.id, 1)}
+                            onClick={() => onUpdateQuantity(item.id, 1, item.selectedUnit)}
                             className="w-7 h-7 flex items-center justify-center bg-white rounded-full shadow-sm hover:bg-primary hover:text-white transition-all active:scale-90"
                           >
                             <Plus className="w-3 h-3" />
@@ -178,7 +186,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </div>
                     </div>
                     <button 
-                      onClick={() => onRemove(item.id)}
+                      onClick={() => onRemove(item.id, item.selectedUnit)}
                       className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
                     >
                       <Trash2 className="w-5 h-5" />

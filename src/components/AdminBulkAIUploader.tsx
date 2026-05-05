@@ -234,7 +234,7 @@ export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulk
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
                   {previews.map((preview, i) => (
                     <div key={i} className="relative group aspect-square rounded-2xl overflow-hidden shadow-sm border border-gray-100">
-                      <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                      <img src={preview || undefined} alt="Preview" className="w-full h-full object-cover" />
                       <button 
                         onClick={() => removeFile(i)}
                         className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-md"
@@ -258,7 +258,7 @@ export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulk
               className="bg-white rounded-[40px] border border-gray-100 shadow-lg overflow-hidden group hover:border-primary/30 transition-all"
             >
               <div className="aspect-video relative overflow-hidden bg-gray-50">
-                <img src={p.image} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                <img src={p.image || undefined} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                 <div className="absolute top-4 left-4">
                   <span className="bg-primary/95 text-white px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-sm">
                     AI Detected
