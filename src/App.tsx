@@ -67,8 +67,13 @@ function AppContent() {
   const location = useLocation();
 
   const [cart, setCart] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem('cart');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.warn('LocalStorage not available for cart persistence');
+      return [];
+    }
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -113,7 +118,11 @@ function AppContent() {
     };
   }, []);
 
-  useEffect(() => { localStorage.setItem('cart', JSON.stringify(cart)); }, [cart]);
+  useEffect(() => { 
+    try {
+      localStorage.setItem('cart', JSON.stringify(cart)); 
+    } catch (e) { /* ignore */ }
+  }, [cart]);
 
   const toggleWishlist = async (productId: string) => {
     if (!user) return;

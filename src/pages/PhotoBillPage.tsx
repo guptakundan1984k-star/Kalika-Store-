@@ -35,7 +35,15 @@ const PhotoBillPageContent: React.FC<PhotoBillPageProps> = ({ products, user, on
     setIsAnalyzing(true);
     setErrorNote(null);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+      const getApiKey = () => {
+  try {
+    return (import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : ''));
+  } catch (e) {
+    return '';
+  }
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() || '' });
 
       const base64Data = selectedImage.split(',')[1];
       const result = await ai.models.generateContent({

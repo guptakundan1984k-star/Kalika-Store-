@@ -1,14 +1,23 @@
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { Product, Expense } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+const getApiKey = () => {
+  try {
+    return (import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : ''));
+  } catch (e) {
+    return '';
+  }
+};
+
+const GEMINI_API_KEY = getApiKey();
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY || '' });
 
 export const aiService = {
   /**
    * Analyzes an image of a bill/receipt and extracts structured data.
    */
   async analyzeBill(imageBase64: string, mimeType: string): Promise<Partial<Expense>> {
-    if (!process.env.GEMINI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       console.warn("GEMINI_API_KEY missing");
       return {};
     }
@@ -49,7 +58,7 @@ export const aiService = {
    * Converts voice/text input (Hindi/Hinglish/English) to structured expense data.
    */
   async analyzeVoiceExpense(text: string): Promise<Partial<Expense>> {
-    if (!process.env.GEMINI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       console.warn("GEMINI_API_KEY missing");
       return {};
     }
@@ -84,7 +93,7 @@ export const aiService = {
    * Analyzes an image of a bill from a URL and extracts products.
    */
   async analyzeBillImage(url: string): Promise<{name: string, quantity: number}[]> {
-    if (!process.env.GEMINI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       console.warn("GEMINI_API_KEY missing");
       return [];
     }
@@ -167,7 +176,7 @@ export const aiService = {
     multiplier?: number,
     searchQuery?: string
   }> {
-    if (!process.env.GEMINI_API_KEY) return { intent: 'unknown' };
+    if (!GEMINI_API_KEY) return { intent: 'unknown' };
 
     const productContext = products.map(p => ({ 
       id: p.id, 
@@ -329,7 +338,7 @@ export const aiService = {
    * Generates smart search metadata (keywords, synonyms, tags) for a product.
    */
   async generateSearchMetadata(name: string, description: string, category: string): Promise<{keywords: string[], synonyms: string[], tags: string[]}> {
-    if (!process.env.GEMINI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       console.warn("GEMINI_API_KEY is missing. AI features are disabled.");
       return { keywords: [], synonyms: [], tags: [] };
     }
@@ -367,7 +376,7 @@ export const aiService = {
    * Predicts the most likely unit and quantity for a product given its name and description.
    */
   async predictProductUnit(name: string, description: string): Promise<{unit: string, quantity: number}> {
-    if (!process.env.GEMINI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       return { unit: 'Piece', quantity: 1 };
     }
 

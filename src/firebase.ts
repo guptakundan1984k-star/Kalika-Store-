@@ -44,15 +44,28 @@ import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messagi
 
 import firebaseAppletConfig from '../firebase-applet-config.json';
 
+const getSafeEnv = (key: string, fallback: string = '') => {
+  try {
+    // Check various ways the env might be provided
+    return (
+      (import.meta.env && import.meta.env[`VITE_${key}`]) || 
+      (typeof process !== 'undefined' && process.env && process.env[key]) || 
+      fallback
+    );
+  } catch (e) {
+    return fallback;
+  }
+};
+
 // Safe config merging
 const config = {
-  apiKey: process.env.FIREBASE_API_KEY || firebaseAppletConfig.apiKey,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain,
-  projectId: process.env.FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId,
-  appId: process.env.FIREBASE_APP_ID || firebaseAppletConfig.appId,
-  firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID || firebaseAppletConfig.firestoreDatabaseId
+  apiKey: getSafeEnv('FIREBASE_API_KEY', firebaseAppletConfig.apiKey),
+  authDomain: getSafeEnv('FIREBASE_AUTH_DOMAIN', firebaseAppletConfig.authDomain),
+  projectId: getSafeEnv('FIREBASE_PROJECT_ID', firebaseAppletConfig.projectId),
+  storageBucket: getSafeEnv('FIREBASE_STORAGE_BUCKET', firebaseAppletConfig.storageBucket),
+  messagingSenderId: getSafeEnv('FIREBASE_MESSAGING_SENDER_ID', firebaseAppletConfig.messagingSenderId),
+  appId: getSafeEnv('FIREBASE_APP_ID', firebaseAppletConfig.appId),
+  firestoreDatabaseId: getSafeEnv('FIREBASE_DATABASE_ID', firebaseAppletConfig.firestoreDatabaseId)
 };
 
 // Initialize Firebase SDK
@@ -128,7 +141,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       emailVerified: auth.currentUser?.emailVerified,
       isAnonymous: auth.currentUser?.isAnonymous,
       tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
         providerId: provider.providerId,
         displayName: provider.displayName,
         email: provider.email,

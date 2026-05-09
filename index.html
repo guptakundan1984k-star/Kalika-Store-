@@ -8,7 +8,17 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Polyfill for process.env in browser to prevent crashes in some libraries
+      window.process = {
+        env: {
+          NODE_ENV: 'production'
+        },
+        cwd: () => '/',
+        browser: true
+      };
+    </script>
+    <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>
 

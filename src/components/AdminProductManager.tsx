@@ -1635,8 +1635,9 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                     </div>
                     <button
                       onClick={async () => {
-                        if (!process.env.GEMINI_API_KEY) {
-                          alert("AI Features not configured. Please add GEMINI_API_KEY to your environment variables on Netlify.");
+                        const hasKey = !!(import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : ''));
+                        if (!hasKey) {
+                          alert("AI Features not configured. Please add GEMINI_API_KEY to your hosting environment variables (e.g. Netlify Environment Variables).");
                           return;
                         }
                         try {

@@ -14,21 +14,34 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<Language>(() => {
-    const saved = localStorage.getItem('app_language');
-    return (saved as Language) || 'en';
+    try {
+      const saved = localStorage.getItem('app_language');
+      return (saved as Language) || 'en';
+    } catch (e) {
+      console.warn('LocalStorage not available for language preference');
+      return 'en';
+    }
   });
 
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(() => {
-    const saved = localStorage.getItem('app_voice_enabled');
-    return saved === null ? true : saved === 'true';
+    try {
+      const saved = localStorage.getItem('app_voice_enabled');
+      return saved === null ? true : saved === 'true';
+    } catch (e) {
+      return true;
+    }
   });
 
   useEffect(() => {
-    localStorage.setItem('app_language', language);
+    try {
+      localStorage.setItem('app_language', language);
+    } catch (e) { /* ignore */ }
   }, [language]);
 
   useEffect(() => {
-    localStorage.setItem('app_voice_enabled', isVoiceEnabled.toString());
+    try {
+      localStorage.setItem('app_voice_enabled', isVoiceEnabled.toString());
+    } catch (e) { /* ignore */ }
   }, [isVoiceEnabled]);
 
   const t = (key: TranslationKey): string => {

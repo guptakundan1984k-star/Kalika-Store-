@@ -4,13 +4,16 @@ import App from './App.tsx';
 import './index.css';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { StoreProvider } from './contexts/StoreContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <LanguageProvider>
-      <StoreProvider>
-        <App />
-      </StoreProvider>
-    </LanguageProvider>
+    <ErrorBoundary>
+      <LanguageProvider>
+        <StoreProvider>
+          <App />
+        </StoreProvider>
+      </LanguageProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );
