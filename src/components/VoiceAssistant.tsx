@@ -1,23 +1,24 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mic, MicOff, Volume2, VolumeX, Loader2, Sparkles, RefreshCw } from 'lucide-react';
+import { Mic, MicOff, RefreshCw, ShoppingBag, MapPin, CreditCard, Wallet, Banknote, Smartphone, Clock, ArrowRight, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Product, UserProfile } from '../types';
 import { answerAdminQuery } from '../services/geminiService';
+import { aiService } from '../services/aiService';
 import { db, doc, setDoc, updateDoc, arrayUnion } from '../firebase';
 
 interface VoiceAssistantProps {
-  onAddToCart: (productName: string) => boolean;
+  onAddToCart: (productName: string, quantity?: number, productId?: string) => boolean;
   onPlaceOrder: () => void;
   onSearch: (query: string) => void;
   onLogout?: () => void;
   user?: UserProfile;
   cart: any[];
+  products: Product[];
 }
 
-export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onPlaceOrder, onSearch, onLogout, user, cart }) => {
+export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onPlaceOrder, onSearch, onLogout, user, cart, products }) => {
   const navigate = useNavigate();
   const { language, t, isVoiceEnabled, setIsVoiceEnabled } = useLanguage();
   const [isListening, setIsListening] = useState(false);
@@ -40,247 +41,160 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
 
     const isHindi = language === 'hi';
 
-    // Command: Search
-    if (
-      lowerText.includes('search') || lowerText.includes('find') || lowerText.includes('खोजें') || lowerText.includes('ढूँढें') || lowerText.includes('दिखाओ')
-    ) {
-      const query = lowerText
-        .replace(/search for|search|find|please|show me|खोजें|ढूँढें|दिखाओ|कृपया|मुझे|दिखाएं|सर्च/g, '')
-        .trim();
-      
-      onSearch(query);
-      const msg = isHindi ? `${query} खोज रहा हूँ` : `Searching for ${query}`;
-      speak(msg);
-      setFeedback(msg);
-      return;
-    }
-    
-    // Command: Add to Cart
-    if (
-      (lowerText.includes('add') || lowerText.includes('put') || lowerText.includes('डालें') || lowerText.includes('जोड़ें') || lowerText.includes('लेना है')) &&
-      (lowerText.includes('cart') || lowerText.includes('basket') || lowerText.includes('कार्ट') || lowerText.includes('टोकरी'))
-    ) {
-      const productName = lowerText
-        .replace(/add|put|to my cart|to cart|in my cart|in cart|this|please|जोड़ें|डालें|कार्ट में|कार्ट|में|इसे|कृपया|टोकरी|आड|एक|दें/g, '')
-        .trim();
-      
-      const success = onAddToCart(productName);
-      if (success) {
-        setTimeout(() => {
-          const msg = isHindi ? "कार्ट में जोड़ दिया गया है" : t('addedToCart');
-          speak(msg);
-          setFeedback(msg);
-        }, 500);
-      } else {
-        const msg = isHindi ? "मुझे वह उत्पाद नहीं मिला।" : "I couldn't find that product.";
-        speak(msg);
-        setFeedback(msg);
-      }
-      return;
-    }
-
-    // Command: Wishlist
+    // NAVIGATIONAL QUICK MATCHES
     if (lowerText.includes('wishlist') || lowerText.includes('पसंद') || lowerText.includes('लिस्ट')) {
-      window.location.href = '/wishlist';
+      navigate('/wishlist');
       speak(isHindi ? "विशलिस्ट खोल रहा हूँ" : "Opening wishlist");
       return;
     }
-
-    // Command: Checkout / Place Order
-    if (lowerText.includes('order') || lowerText.includes('checkout') || lowerText.includes('खरीदें') || lowerText.includes('आर्डर')) {
-      if (cart.length === 0) {
-        const msg = isHindi ? "आपका कार्ट खाली है।" : "Your cart is empty. Please add items first.";
-        speak(msg);
-        setFeedback(msg);
-        return;
-      }
-      onPlaceOrder();
-      const msg = isHindi ? "कृपया चेकआउट पूरा करें" : "Opening checkout";
-      speak(msg);
-      setFeedback(msg);
-      return;
-    }
-
-    // Command: Mapping/Help Navigation
     if (lowerText.includes('support') || lowerText.includes('help') || lowerText.includes('मदद')) {
-      window.location.href = '/support';
+      navigate('/help');
       speak(isHindi ? "सपोर्ट पेज पर जा रहे हैं" : "Opening support page");
       return;
     }
-
-    // Command: Address
     if (lowerText.includes('address') || lowerText.includes('पता')) {
-      window.location.href = '/addresses';
+      navigate('/addresses');
       speak(isHindi ? "आपका पता दिखा रहा हूँ" : "Showing your addresses");
       return;
     }
-
-    // Command: Navigation
     if (lowerText.includes('home') || lowerText.includes('घर') || lowerText.includes('शुरुआत')) {
-      window.location.href = '/';
+      navigate('/');
       speak(isHindi ? "होम पेज" : "Going home");
       return;
     }
-
     if (lowerText.includes('profile') || lowerText.includes('प्रोफाइल') || lowerText.includes('खाता')) {
-      window.location.href = '/profile';
+      navigate('/profile');
       speak(isHindi ? "आपकी प्रोफाइल" : "Opening profile");
       return;
     }
-
     if (lowerText.includes('orders') || lowerText.includes('इतिहास') || lowerText.includes('history')) {
-      window.location.href = '/profile?tab=orders';
+      navigate('/orders');
       speak(isHindi ? "आर्डर इतिहास" : "Showing your orders history");
       return;
     }
-
     if (lowerText.includes('categories') || lowerText.includes('कैटेगरी')) {
-      window.location.href = '/items';
+      navigate('/categories');
       speak(isHindi ? "सभी कैटेगरी" : "Showing all categories");
       return;
     }
 
-    // Default: AI Knowledge Support
+    // AI POWERED PROCESSING
     setIsAiProcessing(true);
-    setFeedback("Processing with Kalika AI...");
+    setFeedback("Processing...");
+    
     try {
-      if (lowerText.includes('refresh') || lowerText.includes('reload')) {
-        window.location.reload();
-        return;
-      }
-      if (lowerText.includes('go back') || lowerText.includes('पिछला')) {
-        window.history.back();
-        return;
-      }
-      if (lowerText.includes('locate me') || lowerText.includes('कहाँ हूँ')) {
-        const locateBtn = document.querySelector('[onClick*="handleFetchLocation"]') as HTMLElement;
-        if (locateBtn) locateBtn.click();
-        speak("Attempting to find your location");
-        return;
-      }
-      if (lowerText.includes('cart') || lowerText.includes('टोकरी')) {
-        navigate('/cart');
-        speak(isHindi ? "आपका कार्ट खोल रहा हूँ" : "Opening your cart");
-        return;
-      }
-      if (lowerText.includes('logout') || lowerText.includes('लॉग आउट')) {
-        speak(isHindi ? "लॉग आउट कर रहा हूँ" : "Logging you out");
-        onLogout?.();
-        return;
-      }
-      if (lowerText.includes('admin') || lowerText.includes('पैनल')) {
-        navigate('/admin');
-        speak(isHindi ? "एडमिन पैनल खोल रहा हूँ" : "Opening admin panel");
-        return;
+      const aiResult = await aiService.parseVoiceCommand(text, cart, products);
+      console.log("AI Parsed Result:", aiResult);
+
+      let responseText = "";
+
+      if (aiResult.intent === 'add_to_cart') {
+        const qty = aiResult.multiplier || aiResult.quantity || 1;
+        const success = onAddToCart(aiResult.productName || '', qty, aiResult.productId);
+        
+        if (success) {
+          const product = products.find(p => p.id === aiResult.productId || p.name === aiResult.productName);
+          responseText = isHindi 
+            ? `${product?.name || 'उत्पाद'} के ${qty} पीस जोड़ दिए गए हैं। क्या आप कार्ट में जाना चाहते हैं?` 
+            : `Added ${qty} of ${product?.name || 'the product'} to your cart. Go to cart?`;
+          
+          setFeedback(isHindi ? `${product?.name} जोड़ा गया` : `Added ${product?.name}`);
+        } else {
+          responseText = isHindi ? "क्षमा करें, मुझे वह उत्पाद नहीं मिला।" : "Sorry, I couldn't find that product in our store.";
+        }
+      } else if (aiResult.intent === 'search') {
+        const query = aiResult.searchQuery || aiResult.productName || text;
+        onSearch(query);
+        responseText = isHindi ? `${query} खोज रहा हूँ` : `Searching for ${query}`;
+      } else if (aiResult.intent === 'checkout') {
+        if (cart.length === 0) {
+          responseText = isHindi ? "आपका कार्ट खाली है।" : "Your cart is empty. Please add items first.";
+        } else {
+          onPlaceOrder();
+          responseText = isHindi ? "चेकआउट खोल रहा हूँ" : "Opening checkout";
+        }
+      } else {
+        // Fallback to Knowledge Query
+        responseText = await answerAdminQuery(text, { user, language });
       }
 
-      const resp = await answerAdminQuery(text, { user, language });
-      setFeedback(null);
-      // Speak the AI response
-      speak(resp);
-      setFeedback(resp);
+      speak(responseText);
+      setFeedback(responseText);
 
       // Sync to admin support if logged in
-      if (user?.uid) {
-        const timestamp = Date.now();
-        await setDoc(doc(db, 'support_queries', user.uid), {
-          userId: user.uid,
-          userName: user.name,
-          userEmail: user.email,
-          userPhone: user.phone || 'Not provided',
-          status: 'pending',
-          updatedAt: timestamp,
-          createdAt: timestamp
-        }, { merge: true });
+      if (user?.uid && responseText) {
+        try {
+          const timestamp = Date.now();
+          const qRef = doc(db, 'support_queries', user.uid);
+          await setDoc(qRef, {
+            userId: user.uid,
+            userName: user.name,
+            userEmail: user.email,
+            status: 'pending',
+            updatedAt: timestamp
+          }, { merge: true });
 
-        await updateDoc(doc(db, 'support_queries', user.uid), {
-          chatHistory: arrayUnion(
-            { role: 'user', content: `[Voice] ${text}` },
-            { role: 'ai', content: resp }
-          )
-        });
+          await updateDoc(qRef, {
+            chatHistory: arrayUnion(
+              { role: 'user', content: `[Voice] ${text}`, timestamp },
+              { role: 'ai', content: responseText, timestamp }
+            ),
+            updatedAt: timestamp
+          });
+        } catch (syncError) {
+          console.warn("Failed to sync voice chat:", syncError);
+        }
       }
+
     } catch (e) {
       console.error("AI Assistant error:", e);
       setFeedback(t('voiceError'));
     } finally {
       setIsAiProcessing(false);
     }
-  }, [cart, language, onAddToCart, onPlaceOrder, speak, t, user]);
+  }, [cart, language, onAddToCart, onPlaceOrder, onSearch, products, speak, t, user, navigate]);
 
   useEffect(() => {
     if (!isListening) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.error("Speech recognition not supported in this browser.");
-      setFeedback("Speech recognition not supported in this browser.");
+      setFeedback("Speech recognition not supported.");
       setIsListening(false);
       return;
     }
 
-    console.log("Starting speech recognition...");
     const recognition = new SpeechRecognition();
     recognition.lang = language === 'hi' ? 'hi-IN' : 'en-US';
     recognition.continuous = false;
     recognition.interimResults = false;
 
-    recognition.onstart = () => {
-      console.log("Speech recognition started");
-      setFeedback(t('voiceListening'));
-    };
-
+    recognition.onstart = () => setFeedback(t('voiceListening'));
     recognition.onresult = (event: any) => {
       const result = event.results[0][0].transcript;
-      console.log("Speech recognition result:", result);
       setTranscript(result);
       processCommand(result);
       setIsListening(false);
     };
 
-    recognition.onerror = (event: any) => {
-      console.error("Speech recognition error:", event.error);
+    recognition.onerror = () => {
       setIsListening(false);
-      if (event.error === 'not-allowed') {
-        setFeedback("Microphone access denied. Please allow it in settings.");
-      } else if (event.error === 'no-speech') {
-        setFeedback("No speech detected. Try again.");
-      } else if (event.error === 'aborted') {
-        console.log("Speech recognition aborted.");
-        // Usually happens when stopped requested or browser interrupts. No need for error feedback.
-      } else {
-        setFeedback(t('voiceError'));
-      }
+      setFeedback(t('voiceError'));
     };
 
-    recognition.onend = () => {
-      console.log("Speech recognition ended");
-      setIsListening(false);
-    };
+    recognition.onend = () => setIsListening(false);
 
     try {
-      // Small timeout to ensure previous instances are fully cleaned up
-      const startTimer = setTimeout(() => {
-        try {
-          recognition.start();
-        } catch (e) {
-          console.error("Failed to start recognition:", e);
-          setIsListening(false);
-        }
-      }, 50);
-      return () => {
-        clearTimeout(startTimer);
-        recognition.stop();
-      };
+      recognition.start();
+      return () => recognition.stop();
     } catch (e) {
-      console.error("Failed to setup recognition start:", e);
       setIsListening(false);
     }
   }, [isListening, language, processCommand, t]);
 
   useEffect(() => {
     if (feedback) {
-      const timer = setTimeout(() => setFeedback(null), 3000);
+      const timer = setTimeout(() => setFeedback(null), 5000);
       return () => clearTimeout(timer);
     }
   }, [feedback]);
@@ -288,57 +202,68 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
   if (!isVoiceEnabled) return null;
 
   return (
-    <div className="floating-container !left-auto">
+    <div className="fixed bottom-24 right-6 z-[100] flex flex-col items-end gap-4 pointer-events-none">
       <AnimatePresence>
-        {isVoiceEnabled && !isListening && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.8, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 20 }}
-            className="bg-white/80 backdrop-blur-md p-4 rounded-3xl shadow-xl border border-gray-100 max-w-[200px] space-y-2 mr-0"
+        {(feedback || isAiProcessing) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="bg-gray-900/95 backdrop-blur-xl text-white px-6 py-4 rounded-[28px] shadow-2xl border border-white/10 max-w-[280px] pointer-events-auto"
           >
-            <div className="flex items-center gap-2 text-primary">
-              <Sparkles className="w-4 h-4" />
-              <span className="text-[10px] font-black uppercase tracking-widest">{t('voiceSupport')}</span>
+            <div className="flex items-start gap-3">
+              {isAiProcessing ? (
+                <RefreshCw className="w-4 h-4 text-primary animate-spin mt-1 shrink-0" />
+              ) : (
+                <div className="w-2 h-2 rounded-full bg-primary mt-2 shrink-0 animate-pulse" />
+              )}
+              <div className="space-y-1">
+                <p className="text-[10px] font-black text-primary uppercase tracking-widest leading-none">
+                  AI Assistant
+                </p>
+                <p className="text-sm font-bold tracking-tight leading-relaxed">
+                  {feedback}
+                </p>
+              </div>
             </div>
-            <p className="text-[10px] font-bold text-gray-500 leading-tight">
-              {t('voiceCommandHint')}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {feedback && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-primary text-white px-4 py-2 rounded-2xl shadow-xl text-xs font-bold mr-0"
-          >
-            {feedback}
           </motion.div>
         )}
       </AnimatePresence>
 
       <div className="relative pointer-events-auto">
-        {isListening && (
-          <motion.div 
-            initial={{ scale: 0 }}
-            animate={{ scale: 1.5 }}
-            className="absolute inset-0 bg-red-500/20 rounded-full -z-10"
-            transition={{ repeat: Infinity, duration: 1.5 }}
-          />
-        )}
-        <button 
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={() => setIsListening(!isListening)}
-          className={`floating-btn ${
-            isListening ? 'bg-red-500 text-white' : 'bg-primary text-white hover:bg-primary-dark'
+          className={`w-16 h-16 rounded-[24px] flex items-center justify-center shadow-2xl relative z-10 transition-all duration-500 ${
+            isListening 
+              ? 'bg-red-500 text-white' 
+              : 'bg-primary text-white'
           }`}
-          aria-label={isListening ? "Stop listening" : "Start listening"}
         >
-          {isListening ? <Loader2 className="w-6 h-6 animate-spin" /> : <Mic className="w-6 h-6" />}
-        </button>
+          {isListening ? (
+            <MicOff className="w-8 h-8" />
+          ) : (
+            <Mic className="w-8 h-8" />
+          )}
+          
+          {isListening && (
+            <>
+              <motion.div
+                initial={{ scale: 1, opacity: 0.5 }}
+                animate={{ scale: 2, opacity: 0 }}
+                transition={{ repeat: Infinity, duration: 1.5 }}
+                className="absolute inset-0 bg-red-400 rounded-[24px] -z-10"
+              />
+              <motion.div
+                initial={{ scale: 1, opacity: 0.3 }}
+                animate={{ scale: 1.5, opacity: 0 }}
+                transition={{ repeat: Infinity, duration: 2, delay: 0.5 }}
+                className="absolute inset-0 bg-red-400 rounded-[24px] -z-10"
+              />
+            </>
+          )}
+        </motion.button>
       </div>
     </div>
   );

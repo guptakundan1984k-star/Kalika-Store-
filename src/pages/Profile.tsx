@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { UserProfile, Order, Address, BulkEnquiry, FeatureRequest } from '../types';
 import { SUPPORT_EMAIL } from '../constants';
-import { 
-  User, Mail, Phone, MapPin, Package, LogOut, 
+import { Bell, BellOff, User, Mail, Phone, MapPin, Package, LogOut, 
   ChevronRight, ShoppingBag, Heart, Plus, Minus, Trash2, 
   Home, Briefcase, Map as MapIcon, Clock, CheckCircle, Truck, Package as PackageIcon, ArrowRight, LayoutDashboard, Play,
   HelpCircle, MessageSquare, Shield, Lock, Sparkles, FileText, Eye, EyeOff,
-  Image as ImageIcon, X, Languages, Volume2, VolumeX, Smartphone, Loader2, Save
+  Image as ImageIcon, X, Languages, Volume2, VolumeX, Smartphone, Loader2, Save, AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -16,6 +15,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { answerAdminQuery } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import { useLanguage } from '../contexts/LanguageContext';
+import { notificationService } from '../services/notificationService';
 
 import { WalletManager } from '../components/WalletManager';
 
@@ -27,7 +27,14 @@ interface ProfileProps {
 const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
   const navigate = useNavigate();
   const { language, setLanguage, t, isVoiceEnabled, setIsVoiceEnabled } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'orders' | 'addresses' | 'help' | 'wishlist' | 'bulk'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'addresses' | 'help' | 'wishlist' | 'bulk' | 'settings'>('orders');
+  
+  const [notificationsEnabled, setNotificationsEnabled] = useState(!!user.fcmTokens?.length);
+  const [notifPrefs, setNotifPrefs] = useState(user.notificationPreferences || {
+    orderUpdates: true,
+    promotions: true,
+    deliveryAlerts: true
+  });
   const [bulkEnquiries, setBulkEnquiries] = useState<BulkEnquiry[]>([]);
   const [isSubmittingBulk, setIsSubmittingBulk] = useState(false);
   const [bulkFormData, setBulkFormData] = useState({
@@ -54,6 +61,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
     if (tab === 'bulk') setActiveTab('bulk');
     if (tab === 'addresses') setActiveTab('addresses');
     if (tab === 'wishlist') setActiveTab('wishlist');
+    if (tab === 'settings') setActiveTab('settings');
     if (edit === 'true') setIsEditingProfile(true);
   }, []);
 
@@ -310,6 +318,27 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
       alert("Failed to submit request. Please try again.");
     } finally {
       setIsSubmittingFeature(false);
+    }
+  };
+
+  const handleUpdateNotifPrefs = async (newPrefs: any) => {
+    setNotifPrefs(newPrefs);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        notificationPreferences: newPrefs
+      });
+    } catch (e) {
+      console.error("Failed to update notification preferences", e);
+    }
+  };
+
+  const handleEnableNotifications = async () => {
+    const token = await notificationService.requestPermission(user.uid);
+    if (token) {
+      setNotificationsEnabled(true);
+      alert("Push notifications enabled!");
+    } else {
+      alert("Please allow notifications in your browser settings to receive updates.");
     }
   };
 
@@ -604,6 +633,16 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                 <ChevronRight className="w-4 h-4" />
               </button>
               <button 
+                onClick={() => setActiveTab('settings')}
+                className={`w-full flex items-center justify-between p-4 rounded-2xl font-black transition-all active:scale-95 ${activeTab === 'settings' ? 'bg-primary/10 text-primary' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <Bell className="w-5 h-5" />
+                  Notifications
+                </div>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button 
                 onClick={() => navigate('/photo-bill')}
                 className="w-full flex items-center justify-between p-4 rounded-2xl font-black text-primary bg-primary/5 hover:bg-primary/10 transition-all border border-primary/10 active:scale-95"
               >
@@ -634,7 +673,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
         {activeTab === 'orders' ? 'Order History' : 
          activeTab === 'addresses' ? 'My Addresses' : 
          activeTab === 'help' ? 'Help & Support' : 
-         activeTab === 'wishlist' ? 'My Wishlist' : 'Bulk Enquiry'}
+         activeTab === 'wishlist' ? 'My Wishlist' : 
+         activeTab === 'settings' ? 'Notifications' : 'Bulk Enquiry'}
       </h3>
               <button 
                 onClick={() => setIsRequestingFeature(true)}
@@ -878,6 +918,76 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
                     </div>
                   )}
 
+                </motion.div>
+              ) : activeTab === 'settings' ? (
+                <motion.div
+                  key="notifications-settings"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-xl shadow-gray-200/50 space-y-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${notificationsEnabled ? 'bg-green-50 text-green-600 shadow-green-100' : 'bg-gray-50 text-gray-400 shadow-gray-100'}`}>
+                          {notificationsEnabled ? <Bell className="w-7 h-7" /> : <BellOff className="w-7 h-7" />}
+                        </div>
+                        <div>
+                          <h4 className="text-xl font-black text-gray-900 leading-tight">Push Notifications</h4>
+                          <p className="text-sm text-gray-500 font-medium">
+                            {notificationsEnabled ? 'Successfully active on this device' : 'Get real-time updates for your orders'}
+                          </p>
+                        </div>
+                      </div>
+                      {!notificationsEnabled && (
+                        <button 
+                          onClick={handleEnableNotifications}
+                          className="bg-primary text-white font-black px-8 py-4 rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 text-xs uppercase tracking-widest"
+                        >
+                          Enable Now
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-4 pt-8 border-t border-gray-50">
+                      <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Notification Preferences</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {[
+                          { key: 'orderUpdates', label: 'Order Status updates', icon: PackageIcon, desc: 'Packed, Dispatch, Delivery alerts' },
+                          { key: 'promotions', label: 'Promotions & Offers', icon: Sparkles, desc: 'Coupons, flash sales and rewards' },
+                          { key: 'deliveryAlerts', label: 'Delivery Reminders', icon: Truck, desc: 'Slot reminders and arrival alerts' }
+                        ].map((pref) => (
+                          <div key={pref.key} className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100 hover:bg-gray-100/50 transition-all">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-gray-400 shadow-sm">
+                                <pref.icon className="w-6 h-6" />
+                              </div>
+                              <div className="text-left">
+                                <p className="text-sm font-black text-gray-900 leading-none mb-1">{pref.label}</p>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tight">{pref.desc}</p>
+                              </div>
+                            </div>
+                            <button 
+                              onClick={() => handleUpdateNotifPrefs({ ...notifPrefs, [pref.key]: !notifPrefs[pref.key as keyof typeof notifPrefs] })}
+                              className={`w-12 h-6 rounded-full transition-all relative ${notifPrefs[pref.key as keyof typeof notifPrefs] ? 'bg-primary shadow-lg shadow-primary/20' : 'bg-gray-300'}`}
+                            >
+                              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${notifPrefs[pref.key as keyof typeof notifPrefs] ? 'right-1' : 'left-1'}`} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50/50 p-6 rounded-[32px] border border-blue-100/50 flex gap-4">
+                      <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500 shrink-0">
+                        <AlertCircle className="w-5 h-5" />
+                      </div>
+                      <p className="text-[11px] text-blue-600 font-bold leading-relaxed">
+                        We respect your focus. You will only receive essential updates. You can manage these settings anytime from this page. Note that browser-level permission is required for push notifications to work.
+                      </p>
+                    </div>
+                  </div>
                 </motion.div>
               ) : activeTab === 'bulk' ? (
                 <motion.div 

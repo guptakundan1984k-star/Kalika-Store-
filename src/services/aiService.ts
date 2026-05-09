@@ -155,20 +155,92 @@ export const aiService = {
   },
 
   /**
+   * Complex voice command parser that understands units and quantities.
+   * Handles conversions like "Add 1L" when availability is "500ml".
+   */
+  async parseVoiceCommand(text: string, currentCart: any[], products: Product[]): Promise<{
+    intent: 'add_to_cart' | 'search' | 'remove' | 'checkout' | 'unknown',
+    productName?: string,
+    quantity?: number,
+    unit?: string,
+    productId?: string,
+    multiplier?: number,
+    searchQuery?: string
+  }> {
+    if (!process.env.GEMINI_API_KEY) return { intent: 'unknown' };
+
+    const productContext = products.map(p => ({ 
+      id: p.id, 
+      name: p.name, 
+      weight: p.weight, 
+      category: p.category,
+      synonyms: p.synonyms || []
+    })).slice(0, 100); // Filtered context for token limits
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `You are an intelligent shopping assistant for Kalika Store.
+      Customer says: "${text}"
+      
+      Available Product Samples:
+      ${JSON.stringify(productContext)}
+      
+      Goal: 
+      1. Identify intent (add_to_cart, search, remove, checkout).
+      2. If intent is add_to_cart, find the matching product from the context.
+      3. CRITICAL: Handle unit conversions based on the product's "weight" property. 
+         - Logic: multiplier = (requested volume/weight) / (product availability weight).
+         - Example: User wants 1L, product weight is "500ml" -> multiplier is 2.
+         - Example: User wants 1kg, product weight is "200g" -> multiplier is 5.
+         - Example: User wants 2 dozen, product weight is "6pc" -> multiplier is 4.
+         - Example: User says "Give me 1L of milk" -> Find milk, if weight is 500ml, set multiplier to 2.
+      
+      Return JSON:
+      {
+        "intent": "add_to_cart" | "search" | "remove" | "checkout" | "unknown",
+        "productName": "string",
+        "productId": "string",
+        "quantity": number (requested count),
+        "unit": "string",
+        "multiplier": number (how many pieces to add to meet requested volume/weight),
+        "searchQuery": "string" (if search intent)
+      }`,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    try {
+      return JSON.parse(response.text || "{}");
+    } catch (e) {
+      return { intent: 'unknown' };
+    }
+  },
+
+  /**
    * Semantic product search using AI.
    */
   async semanticProductSearch(query: string, products: Product[]): Promise<string[]> {
     if (!query.trim()) return [];
 
-    const productList = products.map(p => `${p.id}: ${p.name} (${p.category})`).join('\n');
+    // Use full metadata context for search
+    const productList = products.map(p => ({
+      id: p.id,
+      name: p.name,
+      category: p.category,
+      tags: p.tags || [],
+      synonyms: p.synonyms || []
+    }));
     
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `You are a smart shopping assistant for Kalika Store. A customer is looking for: "${query}". 
-      Here is our product catalog:
-      ${productList}
+      Analyze the query for intent (e.g. "breakfast", "cleaning", "masala").
       
-      Identify the top 5 most relevant products that match the customer's intent (e.g. if they ask for "breakfast items", suggest eggs, milk, bread). 
+      Our product catalog metadata:
+      ${JSON.stringify(productList)}
+      
+      Identify the top 10 most relevant products using name, category, tags, and synonyms. 
       Return ONLY a raw JSON array of product IDs. Schema: ["id1", "id2", ...]`,
       config: {
         responseMimeType: "application/json"

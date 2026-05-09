@@ -69,7 +69,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       const result = await signInWithPopup(auth, googleProvider);
       const userDoc = await getDoc(doc(db, 'users', result.user.uid));
       
-      const adminEmails = ['customercare@kalikastore.in', 'kalikastore.info@gmail.com', 'guptakundan1984k@gmail.com', 'anshgupta4525@gmail.com'];
+      const adminEmails = ['kalikastore.info@gmail.com', 'guptakundan1984k@gmail.com', 'anshgupta4525@gmail.com'];
       if (adminEmails.includes(result.user.email || '')) {
         if (userDoc.exists()) {
           onLogin(userDoc.data() as UserProfile);

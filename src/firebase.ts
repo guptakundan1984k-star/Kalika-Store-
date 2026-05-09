@@ -40,6 +40,7 @@ import {
   terminate 
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 
 import firebaseAppletConfig from '../firebase-applet-config.json';
 
@@ -63,27 +64,31 @@ export const auth = initializeAuth(app, {
   popupRedirectResolver: browserPopupRedirectResolver,
 });
 
-// Initialize Firestore with long polling to prevent the 10-second timeout in restricted environments
-// NOTE: If you are deploying to kalikastore.netlify.app, ensure you add this domain 
-// to your Authorized Domains in the Firebase Console (Auth > Settings > Authorized Domains)
+// Initialize Firestore with long polling for better environment compatibility (e.g. iframes/sandboxes)
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-}, config.firestoreDatabaseId);
+}, config.firestoreDatabaseId || undefined);
 
-// Enable persistence for better resilience in sandboxed/iframe environments
-if (typeof window !== 'undefined') {
+// Enable persistence with a retry and safe check
+if (typeof window !== 'undefined' && 'indexedDB' in window) {
   enableMultiTabIndexedDbPersistence(db).catch((err) => {
     if (err.code === 'failed-precondition') {
-      // Multiple tabs open, persistence can only be enabled in one tab at a a time.
       console.warn('Firestore persistence failed: Multiple tabs open');
     } else if (err.code === 'unimplemented') {
-      // The current browser does not support all of the features required to enable persistence
       console.warn('Firestore persistence is not supported by this browser');
+    } else {
+      console.error('Firestore persistence error:', err);
     }
   });
 }
 
 export const storage = getStorage(app);
+export let messaging: any = null;
+if (typeof window !== 'undefined') {
+  isSupported().then(supported => {
+    if (supported) messaging = getMessaging(app);
+  });
+}
 export const googleProvider = new GoogleAuthProvider();
 
 export enum OperationType {
@@ -219,5 +224,7 @@ export {
   increment,
   ref,
   uploadBytes,
-  getDownloadURL
+  getDownloadURL,
+  getToken,
+  onMessage
 };

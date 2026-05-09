@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db, doc, onSnapshot } from '../firebase';
-import { StoreSettings, UserProfile } from '../types';
+import { StoreSettings, UserProfile, EnvStatus } from '../types';
+import { checkEnvironmentStatus } from '../services/geminiService';
 
 interface StoreContextType {
   settings: StoreSettings | null;
@@ -9,6 +10,7 @@ interface StoreContextType {
   freeDeliveryThreshold: number;
   user: UserProfile | null;
   setUser: (user: UserProfile | null) => void;
+  envStatus: EnvStatus | null;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -17,6 +19,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [envStatus, setEnvStatus] = useState<EnvStatus | null>(null);
+
+  useEffect(() => {
+    const fetchEnvStatus = async () => {
+      try {
+        const status = await checkEnvironmentStatus();
+        setEnvStatus(status);
+      } catch (e) {
+        console.error("Failed to check environment status:", e);
+      }
+    };
+
+    fetchEnvStatus();
+    // Check every hour
+    const interval = setInterval(fetchEnvStatus, 3600000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'settings', 'store'), (docSnap) => {
@@ -66,7 +85,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const freeDeliveryThreshold = settings?.freeDeliveryThreshold ?? 499;
 
   return (
-    <StoreContext.Provider value={{ settings, loading, deliveryFee, freeDeliveryThreshold, user, setUser }}>
+    <StoreContext.Provider value={{ settings, loading, deliveryFee, freeDeliveryThreshold, user, setUser, envStatus }}>
       {children}
     </StoreContext.Provider>
   );

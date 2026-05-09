@@ -149,3 +149,34 @@ export async function generateSupportReply(history: any[]) {
   );
   return result.text;
 }
+
+export async function checkEnvironmentStatus() {
+  try {
+    const result = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          text: `Check the following for Ranchi, Jharkhand, India:
+          1. Tomorrow's public holidays or major occasions.
+          2. Current and forecasted weather conditions (specifically rain, flood, or extreme heat).
+          
+          Based on this, determine if a grocery delivery service should be:
+          - "closed" (if there's a major occasion tomorrow)
+          - "delayed" (if there's a natural disaster or extreme weather like rain/flood/extreme heat)
+          - "open" (standard operations)
+          
+          Provide a short reason in English.
+          Return ONLY raw JSON: {"status": "open" | "delayed" | "closed", "reason": "...", "weather": "...", "holiday": "..."}`
+        }
+      ],
+      config: {
+        tools: [{ googleSearch: {} }]
+      }
+    });
+
+    const jsonStr = result.text?.match(/{.*}/s)?.[0] || '{"status": "open", "reason": ""}';
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    return { status: 'open', reason: '' };
+  }
+}

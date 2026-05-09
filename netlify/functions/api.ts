@@ -12,11 +12,25 @@ dotenv.config();
 
 // Load firebase config from file or environment variables
 const getFirebaseConfig = () => {
-  const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(firebaseConfigPath)) {
-    return JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
+  // In Netlify, the file is included and should be at the base of the function artifact or root
+  const paths = [
+    path.join(process.cwd(), 'firebase-applet-config.json'),
+    path.join(__dirname, 'firebase-applet-config.json'),
+    path.join(__dirname, '..', 'firebase-applet-config.json'), // Fallback if bundled differently
+    path.join(__dirname, '..', '..', 'firebase-applet-config.json')
+  ];
+
+  for (const p of paths) {
+    if (fs.existsSync(p)) {
+      try {
+        return JSON.parse(fs.readFileSync(p, 'utf8'));
+      } catch (e) {
+        console.error(`Failed to parse config at ${p}:`, e);
+      }
+    }
   }
   
+  console.warn("No firebase-applet-config.json found, falling back to environment variables");
   // Fallback to environment variables
   return {
     projectId: process.env.FIREBASE_PROJECT_ID,

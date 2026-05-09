@@ -35,6 +35,7 @@ export interface Review {
   comment: string;
   photos?: string[];
   createdAt: number;
+  isCSReview?: boolean;
 }
 
 export interface Address {
@@ -87,6 +88,8 @@ export interface Order {
   prescriptionImage?: string;
   receivedAmount?: number;
   walletAdjusted?: boolean;
+  walletRedeemed?: number;
+  walletDebtSettle?: number;
   estimatedDelivery?: number;
   isPreOrder?: boolean;
   cancellationReason?: string;
@@ -137,6 +140,12 @@ export interface UserProfile {
   totalAdEarnings?: number;
   customPrices?: Record<string, number>; // productId -> custom price
   introSeen?: boolean;
+  fcmTokens?: string[]; // Multiple devices
+  notificationPreferences?: {
+    orderUpdates: boolean;
+    promotions: boolean;
+    deliveryAlerts: boolean;
+  };
   pendingBonus?: {
     id: string;
     amount: number;
@@ -231,6 +240,7 @@ export interface Banner {
   id: string;
   image: string; // Also holds video URL
   title: string;
+  subtitle?: string;
   link?: string;
   active: boolean;
   type?: 'image' | 'video';
@@ -249,6 +259,13 @@ export interface Coupon {
   usedCount?: number;
   eligibleProducts?: string[]; // Array of Product IDs
   status: 'active' | 'inactive';
+}
+
+export interface EnvStatus {
+  status: 'open' | 'delayed' | 'closed';
+  reason: string;
+  weather?: string;
+  holiday?: string;
 }
 
 export interface StoreSettings {
@@ -271,5 +288,6 @@ export interface StoreSettings {
   isAiAssistantEnabled?: boolean;
   isDeliveryEnabled?: boolean;
   adminWhatsAppNumbers?: string[];
+  adminNotificationNumbers?: string[]; // Phone numbers for orders
   updatedAt: number;
 }

@@ -5,6 +5,7 @@
 
 [functions]
   included_files = ["firebase-applet-config.json"]
+  node_bundler = "esbuild"
 
 [[redirects]]
   from = "/api/*"

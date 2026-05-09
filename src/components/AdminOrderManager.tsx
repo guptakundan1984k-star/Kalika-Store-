@@ -3,7 +3,8 @@ import {
   Search, Filter, Eye, CheckCircle, Truck, Package, Clock, 
   ShieldCheck, XCircle, MoreVertical, ArrowUpRight, ArrowDownRight, Calendar,
   Trash2, FileText, Download, CheckSquare, Square, Bluetooth, Printer, Sparkles, Edit2, Save,
-  MapPin, CheckCircle2, ShoppingBag, Navigation, Plus, Minus, AlertCircle, IndianRupee
+  MapPin, CheckCircle2, ShoppingBag, Navigation, Plus, Minus, AlertCircle, IndianRupee, Star,
+  User, ArrowRight
 } from 'lucide-react';
 import { Order, Product } from '../types';
 import { ProductImage } from './ProductImage';
@@ -18,9 +19,16 @@ interface AdminOrderManagerProps {
   products: Product[];
   onUpdateStatus: (id: string, status: Order['status']) => void;
   onDeliveredWithPayment?: (id: string, receivedAmount: number) => void;
+  defaultView?: 'table' | 'workflow';
 }
 
-export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, products, onUpdateStatus, onDeliveredWithPayment }) => {
+export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ 
+  orders, 
+  products, 
+  onUpdateStatus, 
+  onDeliveredWithPayment,
+  defaultView = 'table'
+}) => {
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [pinInput, setPinInput] = useState('');
@@ -33,6 +41,11 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
   const [printerConnected, setPrinterConnected] = useState(() => printerService.isConnected());
   const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
   const [receivedAmount, setReceivedAmount] = useState<number>(0);
+  const [isRating, setIsRating] = useState(false);
+  const [ratingOrder, setRatingOrder] = useState<Order | null>(null);
+  const [itemRatings, setItemRatings] = useState<Record<string, number>>({});
+  const [viewMode, setViewMode] = useState<'table' | 'workflow'>(defaultView);
+  const [csComment, setCsComment] = useState('');
 
   // Manual Order State
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
@@ -144,7 +157,9 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
         setReceivedAmount(selectedOrder.total);
         setIsCollectingPayment(true);
       } else {
-        onUpdateStatus(selectedOrder.id, 'Delivered');
+        // For CS marked delivery without direct payment collection handler
+        setRatingOrder(selectedOrder);
+        setIsRating(true);
       }
       setSelectedOrder(null);
       setPinInput('');
@@ -157,9 +172,54 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
 
   const handleConfirmDelivery = () => {
     if (!paymentOrder || !onDeliveredWithPayment) return;
+    
+    const balanceAdjustment = receivedAmount - paymentOrder.total;
+    if (balanceAdjustment < 0) {
+      if (!window.confirm(`Warning: You received ₹${receivedAmount} for a ₹${paymentOrder.total} order. ₹${Math.abs(balanceAdjustment)} will be recorded as CUSTOMER DEBT. Continue?`)) return;
+    }
+
     onDeliveredWithPayment(paymentOrder.id, receivedAmount);
     setIsCollectingPayment(false);
+    
+    // After payment, show rating modal
+    setRatingOrder(paymentOrder);
+    setIsRating(true);
     setPaymentOrder(null);
+  };
+
+  const handleSubmitCSRatings = async () => {
+    if (!ratingOrder) return;
+    try {
+      // Save reviews for each item
+      const reviewPromises = ratingOrder.items.map(item => {
+        const rating = itemRatings[item.id] || 5;
+        return addDoc(collection(db, 'reviews'), {
+          productId: item.id,
+          userId: 'cs-staff',
+          userName: 'CS Verified Staff',
+          rating,
+          comment: csComment || 'Delivered successfully with verified quality.',
+          createdAt: Date.now(),
+          isCSReview: true
+        });
+      });
+
+      await Promise.all(reviewPromises);
+      
+      // Update order status if not already done
+      if (ratingOrder.status !== 'Delivered') {
+        onUpdateStatus(ratingOrder.id, 'Delivered');
+      }
+
+      setIsRating(false);
+      setRatingOrder(null);
+      setItemRatings({});
+      setCsComment('');
+      alert('Delivery ratings submitted and items updated!');
+    } catch (e) {
+      console.error("CS Rating failed", e);
+      alert('Failed to save ratings.');
+    }
   };
 
   const toggleSelectAll = () => {
@@ -400,6 +460,19 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <div className="flex gap-1 bg-gray-100 p-1 rounded-full border border-gray-200">
+            {['table', 'workflow'].map((m) => (
+              <button
+                key={m}
+                onClick={() => setViewMode(m as any)}
+                className={`px-3 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest transition-all ${
+                  viewMode === m ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-full border border-gray-200">
             {['all', 'today', 'week', 'month'].map((df) => (
               <button
                 key={df}
@@ -484,111 +557,189 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
         </AnimatePresence>
       </div>
 
-      {/* Orders Table */}
-      <div className="bg-white rounded-[48px] border border-gray-100 shadow-xl shadow-gray-200/20 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-6 py-4 w-10">
-                  <button onClick={toggleSelectAll} className="p-1 text-gray-400 hover:text-primary transition-colors">
-                    {selectedIds.length === filteredOrders.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
-                  </button>
-                </th>
-                <th className="px-6 py-4 text-[8px] font-black text-gray-400 uppercase tracking-widest">Order Info</th>
-                <th className="px-6 py-4 text-[8px] font-black text-gray-400 uppercase tracking-widest">Customer</th>
-                <th className="px-6 py-4 text-[8px] font-black text-gray-400 uppercase tracking-widest">Status</th>
-                <th className="px-6 py-4 text-[8px] font-black text-gray-400 uppercase tracking-widest">Total</th>
-                <th className="px-6 py-4 text-[8px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {(() => {
-                const uniqueOrders = filteredOrders.filter((o, i, self) => i === self.findIndex(t => t.id === o.id));
-                return uniqueOrders.map((order) => {
-                  const StatusIcon = getStatusIcon(order.status);
-                  const isSelected = selectedIds.includes(order.id);
-                  return (
-                    <tr key={`order-row-${order.id}`} className={`hover:bg-gray-50 transition-colors group ${isSelected ? 'bg-primary/5' : ''}`}>
-                      <td className="px-6 py-4">
-                        <button onClick={() => toggleSelect(order.id)} className={`p-1 transition-colors ${isSelected ? 'text-primary' : 'text-gray-200'}`}>
-                          {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-                        </button>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 relative shrink-0">
-                            <Package className="w-4 h-4" />
-                            {order.inBag && (
-                              <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-primary text-white rounded-full flex items-center justify-center border border-white">
-                                <ShoppingBag className="w-2 h-2" />
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-xs font-black text-gray-900 leading-none">#{order.id.slice(-8).toUpperCase()}</p>
-                            <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                              {new Date(order.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-xs font-bold text-gray-900 truncate max-w-[120px]">{order.userName || 'Guest'}</p>
-                        <div className="flex items-center gap-1">
-                          <p className="text-[9px] text-gray-400 font-medium uppercase tracking-tighter">{order.deliveryType}</p>
-                          {order.address?.verified && (
-                            <CheckCircle2 className="w-2.5 h-2.5 text-green-500" />
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1.5">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border w-fit ${getStatusColor(order.status)}`}>
-                            <StatusIcon className="w-3 h-3" />
-                            {order.status}
-                          </span>
-                          {/* Action Shortcuts */}
-                          <div className="flex gap-1">
-                            {order.status === 'Pending' && (
-                              <button onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'Order Received'); }} className="text-[7px] font-black bg-cyan-50 text-cyan-600 px-1.5 py-0.5 rounded border border-cyan-100 hover:bg-cyan-600 hover:text-white transition-all uppercase">Receive</button>
-                            )}
-                            {(order.status === 'Out for Delivery' || order.status === 'Ready to Pick Up') && (
-                              <button onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); }} className="text-[7px] font-black bg-green-50 text-green-600 px-1.5 py-0.5 rounded border border-green-100 hover:bg-green-600 hover:text-white transition-all uppercase">Verify PIN</button>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm font-black text-primary tracking-tighter leading-none">₹{order.total}</p>
-                        <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mt-1">{order.items.length} Items</p>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); printerService.isConnected() ? printerService.printOrder(order) : handlePrintInvoice(order); }}
-                            className="p-1.5 text-gray-300 hover:text-primary hover:bg-primary/5 rounded-full transition-all active:scale-95"
-                            title="Print"
-                          >
-                            <Printer className="w-4 h-4" />
+      {/* Orders View */}
+      {viewMode === 'table' ? (
+        <div className="bg-white rounded-[48px] border border-gray-100 shadow-xl shadow-gray-200/20 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="px-6 py-4 w-10">
+                    <button onClick={toggleSelectAll} className="p-1 text-gray-400 hover:text-primary transition-colors">
+                      {selectedIds.length === filteredOrders.length ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                    </button>
+                  </th>
+                  <th className="px-6 py-4 text-[8px] font-black text-gray-400 uppercase tracking-widest">Order Info</th>
+                  <th className="px-6 py-4 text-[8px] font-black text-gray-400 uppercase tracking-widest">Customer</th>
+                  <th className="px-6 py-4 text-[8px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-4 text-[8px] font-black text-gray-400 uppercase tracking-widest">Total</th>
+                  <th className="px-6 py-4 text-[8px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {(() => {
+                  const uniqueOrders = filteredOrders.filter((o, i, self) => i === self.findIndex(t => t.id === o.id));
+                  return uniqueOrders.map((order) => {
+                    const StatusIcon = getStatusIcon(order.status);
+                    const isSelected = selectedIds.includes(order.id);
+                    return (
+                      <tr key={`order-row-${order.id}`} className={`hover:bg-gray-50 transition-colors group ${isSelected ? 'bg-primary/5' : ''}`}>
+                        <td className="px-6 py-4">
+                          <button onClick={() => toggleSelect(order.id)} className={`p-1 transition-colors ${isSelected ? 'text-primary' : 'text-gray-200'}`}>
+                            {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                           </button>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); }}
-                            className="p-1.5 text-gray-300 hover:text-gray-900 hover:bg-gray-50 rounded-full transition-all active:scale-95"
-                            title="View"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                });
-              })()}
-            </tbody>
-          </table>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 relative shrink-0">
+                              <Package className="w-4 h-4" />
+                              {order.inBag && (
+                                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-primary text-white rounded-full flex items-center justify-center border border-white">
+                                  <ShoppingBag className="w-2 h-2" />
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-gray-900 leading-none">#{order.id.slice(-8).toUpperCase()}</p>
+                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                                {new Date(order.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-xs font-bold text-gray-900 truncate max-w-[120px]">{order.userName || 'Guest'}</p>
+                          <div className="flex items-center gap-1">
+                            <p className="text-[9px] text-gray-400 font-medium uppercase tracking-tighter">{order.deliveryType}</p>
+                            {order.address?.verified && (
+                              <CheckCircle2 className="w-2.5 h-2.5 text-green-500" />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col gap-1.5">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border w-fit ${getStatusColor(order.status)}`}>
+                              <StatusIcon className="w-3 h-3" />
+                              {order.status}
+                            </span>
+                            {/* Action Shortcuts */}
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {order.status === 'Pending' && (
+                                <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'Order Received'); }} className="text-[7px] font-black bg-cyan-50 text-cyan-600 px-1.5 py-0.5 rounded border border-cyan-100 hover:bg-cyan-600 hover:text-white transition-all uppercase">Receive</motion.button>
+                              )}
+                              {order.status === 'Order Received' && (
+                                <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'Packed'); }} className="text-[7px] font-black bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all uppercase">Pack</motion.button>
+                              )}
+                              {order.status === 'Packed' && (
+                                <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, order.deliveryType === 'Delivery' ? 'Out for Delivery' : 'Ready to Pick Up'); }} className="text-[7px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 hover:bg-blue-600 hover:text-white transition-all uppercase">{order.deliveryType === 'Delivery' ? 'Ship' : 'Ready'}</motion.button>
+                              )}
+                              {(order.status === 'Out for Delivery' || order.status === 'Ready to Pick Up') && (
+                                <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); }} className="text-[7px] font-black bg-green-50 text-green-600 px-1.5 py-0.5 rounded border border-green-100 hover:bg-green-600 hover:text-white transition-all uppercase">Verify PIN</motion.button>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-black text-primary tracking-tighter leading-none">₹{order.total}</p>
+                          <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mt-1">{order.items.length} Items</p>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); printerService.isConnected() ? printerService.printOrder(order) : handlePrintInvoice(order); }}
+                              className="p-1.5 text-gray-300 hover:text-primary hover:bg-primary/5 rounded-full transition-all active:scale-95"
+                              title="Print"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); }}
+                              className="p-1.5 text-gray-300 hover:text-gray-900 hover:bg-gray-50 rounded-full transition-all active:scale-95"
+                              title="View"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { title: 'New', status: 'Pending', icon: Clock, color: 'orange' },
+            { title: 'Packing', status: 'Order Received', icon: Package, color: 'cyan' },
+            { title: 'Dispatch', status: 'Packed', icon: Truck, color: 'blue' },
+            { title: 'Delivery', status: 'Out for Delivery', icon: MapPin, color: 'green' }
+          ].map(col => {
+            const colOrders = filteredOrders.filter(o => o.status === col.status);
+            return (
+              <div key={col.status} className="space-y-4">
+                <div className="flex items-center justify-between px-4">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 bg-${col.color}-50 rounded-lg flex items-center justify-center text-${col.color}-500`}>
+                      <col.icon className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">{col.title} ({colOrders.length})</h3>
+                  </div>
+                </div>
+                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
+                  {colOrders.map(order => (
+                    <motion.div 
+                      layout
+                      key={order.id}
+                      onClick={() => setSelectedOrder(order)}
+                      className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <p className="text-xs font-black text-gray-900 leading-none">#{order.id.slice(-6).toUpperCase()}</p>
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-1">{new Date(order.createdAt).toLocaleTimeString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-black text-primary leading-none">₹{order.total}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <User className="w-3 h-3 text-gray-300" />
+                        <p className="text-[10px] font-bold text-gray-600 truncate">{order.userName || 'Guest'}</p>
+                      </div>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (order.status === 'Pending') onUpdateStatus(order.id, 'Order Received');
+                          else if (order.status === 'Order Received') onUpdateStatus(order.id, 'Packed');
+                          else if (order.status === 'Packed') onUpdateStatus(order.id, order.deliveryType === 'Delivery' ? 'Out for Delivery' : 'Ready to Pick Up');
+                          else if (order.status === 'Out for Delivery') setSelectedOrder(order);
+                        }}
+                        className={`w-full py-3 rounded-2xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                          order.status === 'Out for Delivery' ? 'bg-green-600 text-white shadow-lg shadow-green-600/20' : 'bg-gray-900 text-white shadow-lg shadow-gray-900/20'
+                        }`}
+                      >
+                        {order.status === 'Pending' ? 'Receive' : 
+                         order.status === 'Order Received' ? 'Pack' : 
+                         order.status === 'Packed' ? 'Dispatch' : 'Deliver'}
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </motion.div>
+                  ))}
+                  {colOrders.length === 0 && (
+                    <div className="py-12 flex flex-col items-center justify-center text-gray-300 grayscale opacity-40">
+                      <col.icon className="w-8 h-8 mb-2" />
+                      <p className="text-[8px] font-black uppercase tracking-widest">No {col.title} Orders</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Suggestions Section */}
       <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm space-y-6">
@@ -1158,7 +1309,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
         )}
       </AnimatePresence>
 
-      {/* Payment Collection Modal */}
+      {/* Payment and Rating Modals */}
       <AnimatePresence>
         {isCollectingPayment && paymentOrder && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
@@ -1191,13 +1342,13 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
                     <div className={`p-4 rounded-2xl flex items-center gap-3 border ${
                       receivedAmount < paymentOrder.total ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'
                     }`}>
-                      {receivedAmount < paymentOrder.total ? <AlertCircle className="w-5 h-5 text-red-500" /> : <CheckCircle2 className="w-5 h-5 text-green-500" />}
+                      {receivedAmount < paymentOrder.total ? <AlertCircle className="w-5 h-5 text-red-500" /> : <CheckCircle className="w-5 h-5 text-green-500" />}
                       <div>
                         <p className={`text-xs font-black ${receivedAmount < paymentOrder.total ? 'text-red-900' : 'text-green-900'}`}>
-                          {receivedAmount < paymentOrder.total ? 'Reduced Payment (Dues)' : 'Extra Payment (Wallet Credit)'}
+                          {receivedAmount < paymentOrder.total ? 'Balance Due' : 'Balance Credit'}
                         </p>
-                        <p className={`text-[10px] font-bold uppercase tracking-widest ${receivedAmount < paymentOrder.total ? 'text-red-700' : 'text-green-700'}`}>
-                          Balance Adjustment: <span className="text-sm font-black text-red-600">{receivedAmount - paymentOrder.total}</span>
+                        <p className={`text-lg font-black ${receivedAmount < paymentOrder.total ? 'text-red-600' : 'text-green-600'}`}>
+                          {receivedAmount < paymentOrder.total ? `- ₹${(paymentOrder.total - receivedAmount).toFixed(2)}` : `+ ₹${(receivedAmount - paymentOrder.total).toFixed(2)}`}
                         </p>
                       </div>
                     </div>
@@ -1209,7 +1360,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
                     onClick={handleConfirmDelivery}
                     className="w-full bg-primary text-white font-black py-5 rounded-3xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 uppercase tracking-widest text-xs"
                   >
-                    Confirm Delivery & Payment
+                    Confirm Delivery & Rate
                   </button>
                   <button 
                     onClick={() => {
@@ -1221,6 +1372,80 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ orders, pr
                     Cancel
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isRating && ratingOrder && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[40px] shadow-2xl p-8 space-y-6 flex flex-col max-h-[90vh]"
+            >
+              <div className="text-center space-y-2">
+                <div className="w-16 h-16 bg-blue-50 rounded-[28px] flex items-center justify-center text-blue-500 mx-auto">
+                  <Star className="w-8 h-8 fill-current" />
+                </div>
+                <h3 className="text-2xl font-black text-gray-900 tracking-tight">Staff Delivery Rating</h3>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Rate item quality for order #{ratingOrder.id.slice(-6).toUpperCase()}</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                {ratingOrder.items.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-3xl border border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-white overflow-hidden shadow-sm border border-gray-100 flex-shrink-0">
+                        <ProductImage src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-gray-900 truncate max-w-[150px]">{item.name}</p>
+                        <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{item.quantity} × {item.selectedUnit || 'unit'}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <motion.button
+                          key={star}
+                          whileTap={{ scale: 1.25 }}
+                          onClick={() => setItemRatings(prev => ({ ...prev, [item.id]: star }))}
+                          className={`p-1 transition-all ${
+                            (itemRatings[item.id] || 5) >= star ? 'text-yellow-400' : 'text-gray-200'
+                          }`}
+                        >
+                          <Star className={`w-5 h-5 ${(itemRatings[item.id] || 5) >= star ? 'fill-current' : ''}`} />
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">CS Internal Comment</label>
+                  <textarea 
+                    value={csComment}
+                    onChange={(e) => setCsComment(e.target.value)}
+                    placeholder="E.g. Quality verified, delivered by hand..."
+                    className="w-full bg-gray-50 border-none rounded-3xl p-4 text-sm font-bold focus:ring-4 focus:ring-primary/10 min-h-[100px] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4 border-t border-gray-50">
+                <button 
+                  onClick={() => { setIsRating(false); setRatingOrder(null); onUpdateStatus(ratingOrder.id, 'Delivered'); }}
+                  className="flex-1 py-5 bg-gray-100 text-gray-400 rounded-3xl font-black uppercase text-xs tracking-widest hover:bg-gray-200 transition-all"
+                >
+                  Skip
+                </button>
+                <button 
+                  onClick={handleSubmitCSRatings}
+                  className="flex-[2] py-5 bg-primary text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95"
+                >
+                  Submit Feedback
+                </button>
               </div>
             </motion.div>
           </div>

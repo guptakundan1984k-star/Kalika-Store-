@@ -72,6 +72,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     <motion.div 
       initial={{ opacity: 0, scale: 0.95 }}
       whileInView={{ opacity: 1, scale: 1 }}
+      whileTap={{ scale: 0.98 }}
       viewport={{ once: true }}
       className="bg-white rounded-[32px] overflow-hidden group relative flex flex-col h-full transition-all duration-300 border border-gray-100 hover:shadow-xl hover:shadow-gray-200/50"
     >

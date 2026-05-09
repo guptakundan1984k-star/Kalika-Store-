@@ -4,9 +4,10 @@ import { useStore } from '../contexts/StoreContext';
 import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, ShieldCheck, Clock, XCircle, Navigation, Smartphone, Wallet, Banknote, Sparkles, AlertCircle, IndianRupee, FileText, ArrowLeft, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
-import { doc, updateDoc, db, addDoc, collection, getDoc, onSnapshot, handleFirestoreError, OperationType, increment } from '../firebase';
+import { doc, updateDoc, db, addDoc, collection, getDoc, getDocs, query, where, onSnapshot, handleFirestoreError, OperationType, increment } from '../firebase';
 import { InvoiceGenerator } from '../components/InvoiceGenerator';
 import { ProductImage } from '../components/ProductImage';
+import { notificationService } from '../services/notificationService';
 
 
 interface CheckoutProps {
@@ -65,7 +66,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   const slotRef = useRef<HTMLDivElement>(null);
   const paymentRef = useRef<HTMLDivElement>(null);
 
-  const { deliveryFee: configDeliveryFee, freeDeliveryThreshold: configThreshold } = useStore();
+  const { deliveryFee: configDeliveryFee, freeDeliveryThreshold: configThreshold, envStatus } = useStore();
   
   const walletBalance = user?.walletBalance || 0;
   const walletDue = walletBalance < 0 ? Math.abs(walletBalance) : 0;
@@ -97,7 +98,11 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   const deliveryFee = deliveryType === 'Delivery' ? (subtotal >= configThreshold ? 0 : configDeliveryFee) : 0;
   const walletCredit = walletBalance > 0 ? Math.min(walletBalance, subtotal + deliveryFee - couponDiscount) : 0;
 
-  const total = Math.max(0, subtotal + deliveryFee - couponDiscount - walletCredit);
+  // Total should include any outstanding debt (walletDue)
+  const total = Math.max(0, subtotal + deliveryFee - couponDiscount - walletCredit + walletDue);
+
+  const isEnvironmentClosed = envStatus?.status === 'closed';
+  const isEnvironmentDelayed = envStatus?.status === 'delayed';
 
   const handleApplyCoupon = () => {
     setCouponError('');
@@ -269,16 +274,30 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
             return;
           }
 
+          setLiveLocation({ lat: latitude, lng: longitude });
+
           try {
-            // Reverse geocoding using OpenStreetMap (Nominatim) - Free and no key required
+            // Priority: Google Maps Reverse Geocoding if API key exists
+            const googleKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+            if (googleKey) {
+              const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${googleKey}`);
+              const data = await response.json();
+              if (data.status === 'OK' && data.results.length > 0) {
+                const address = data.results[0].formatted_address;
+                setManualAddress(address);
+                setIsLocating(false);
+                return;
+              }
+            }
+
+            // Fallback to OpenStreetMap (Nominatim)
             const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
             const data = await response.json();
             const address = data.display_name || `Jharkhand, Ranchi (Live Location: ${latitude}, ${longitude})`;
             setManualAddress(address);
-            setLiveLocation({ lat: latitude, lng: longitude });
           } catch (e) {
-            setManualAddress(prev => `Jharkhand, Ranchi\nLive Location: https://www.google.com/maps?q=${latitude},${longitude}`.trim());
-            setLiveLocation({ lat: latitude, lng: longitude });
+            const fallbackAddr = `Live Location: https://www.google.com/maps?q=${latitude},${longitude}`;
+            setManualAddress(prev => prev ? `${prev}\n${fallbackAddr}` : fallbackAddr);
           }
           setIsLocating(false);
         },
@@ -332,6 +351,17 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   };
 
   const handlePlaceOrder = async () => {
+    // Environmental Check
+    if (isEnvironmentClosed) {
+      alert(`Sorry, the store is closed for tomorrow's delivery due to: ${envStatus?.reason || 'Holiday'}. Please try again later.`);
+      return;
+    }
+
+    if (isEnvironmentDelayed) {
+      const confirmDelay = window.confirm(`Important: Delivery may be delayed due to ${envStatus?.reason || 'Current Weather'}. \n\nDo you want to proceed with the order?`);
+      if (!confirmDelay) return;
+    }
+
     // Check if it's a pre-order (Tomorrow or beyond)
     const isPreOrder = selectedDate > 0;
 
@@ -414,6 +444,13 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       }
     }
 
+    // Validation: Check for zero quantities
+    const hasZeroQty = cart.some(item => (item.quantity || 0) <= 0);
+    if (hasZeroQty) {
+      alert("Some items in your cart have 0 quantity. Please adjust them before ordering.");
+      return;
+    }
+
     setIsProcessing(true);
 
     const pin = Math.floor(1000 + Math.random() * 9000).toString();
@@ -447,8 +484,10 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       ...newOrder,
       isPreOrder: preorderFlag,
       discount: couponDiscount,
-      walletAdjusted: walletCredit > 0,
-      walletRedeemed: walletCredit
+      walletAdjusted: (walletCredit > 0 || walletDue > 0),
+      walletRedeemed: walletCredit,
+      walletDebtSettle: walletDue,
+      total: total // Explicitly save the total including debt
     };
 
     try {
@@ -465,7 +504,6 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
 
       // 2. CLEAR CART
       onOrderPlaced(newOrder); 
-      
       // 3. UPDATE USER WALLET
       if (user) {
         const updates: any = {};
@@ -504,8 +542,48 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       setOrderPin(pin);
       setIsPlaced(true);
 
+      // Auto-redirect to My Orders after 10 seconds
+      setTimeout(() => {
+        navigate('/orders');
+      }, 10000);
+
+      // --- PUSH NOTIFICATIONS ---
+      try {
+        // Notify User
+        await notificationService.sendNotification({
+          userIds: [user?.uid || ''],
+          title: "Order Placed! 🛍️",
+          body: `Your order #${newOrder.id.slice(-6).toUpperCase()} has been placed successfully. Thank you!`,
+          type: 'order'
+        });
+
+        // Notify Admins
+        const adminsQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
+        const adminsSnap = await getDocs(adminsQuery);
+        const adminIds = adminsSnap.docs.map(d => d.id);
+        
+        // Also specifically target the requested phone numbers if they are registered users
+        const targetNumbers = ['6205284423', '9608123427'];
+        const numAdminsQuery = query(collection(db, 'users'), where('phone', 'in', targetNumbers));
+        const numAdminsSnap = await getDocs(numAdminsQuery);
+        const extraAdminIds = numAdminsSnap.docs.map(d => d.id);
+
+        const allTargetAdminIds = [...new Set([...adminIds, ...extraAdminIds])];
+
+        if (allTargetAdminIds.length > 0) {
+          await notificationService.sendNotification({
+            userIds: allTargetAdminIds,
+            title: "New Order Alert! 🚨",
+            body: `Order #${newOrder.id.slice(-6).toUpperCase()} received from ${user?.name || 'Guest'}. Amount: ₹${total.toFixed(2)}`,
+            type: 'order'
+          });
+        }
+      } catch (notifErr) {
+        console.error("Failed to send push notifications:", notifErr);
+      }
+
       // Speak & Sound
-      const speech = new SpeechSynthesisUtterance("Order Placed Successfully. Thank you for shopping with Kalika Store.");
+      const speech = new SpeechSynthesisUtterance(`Order Placed Successfully. Your delivery PIN is ${pin}. Thank you for shopping with Kalika Store.`);
       window.speechSynthesis.speak(speech);
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       audio.play().catch(e => console.log("Audio play failed:", e));
@@ -513,18 +591,23 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       // Notification
       const adminNumbers = settings?.adminWhatsAppNumbers && settings.adminWhatsAppNumbers.length > 0
         ? settings.adminWhatsAppNumbers 
-        : ['918002914323', '916205284423', '919608123427', '919905516803'];
+        : ['916205284423', '919608123427', '919905516803'];
         
       const mapsLink = liveLocation ? `https://www.google.com/maps?q=${liveLocation.lat},${liveLocation.lng}` : '';
       const shopLink = 'https://maps.app.goo.gl/ejW8MKHT5Y2V1DW2A?g_st=aw';
       const addressText = deliveryType === 'Delivery' 
-        ? `${manualAddress}${mapsLink ? `%0ALocation: ${mapsLink}` : ''}`
+        ? `${manualAddress}${mapsLink ? `%20Localización:%20${mapsLink}` : ''}`
         : `Self Pickup (Takeaway)%0AShop: ${shopLink}`;
       
-      const message = `*NEW ORDER RECEIVED!*%0A--------------------------%0A*Order ID:* ${newOrder.id}%0A*Customer:* ${user?.name}%0A*Phone:* ${user?.phone}%0A*Total:* ₹${total.toFixed(2)}%0A*Method:* ${paymentMethod}%0A*Delivery:* ${deliveryType}%0A*Slot:* ${deliverySlot}%0A*Address:* ${addressText}%0A--------------------------%0A_Powered by Kalika Store_`;
+      const message = `*NEW ORDER RECEIVED!*%0A--------------------------%0A*Order ID:* ${newOrder.id}%0A*Delivery PIN:* ${pin}%0A*Customer:* ${user?.name}%0A*Phone:* ${user?.phone}%0A*Total:* ₹${total.toFixed(2)}%0A*Method:* ${paymentMethod}%0A*Delivery:* ${deliveryType}%0A*Slot:* ${deliverySlot}%0A*Address:* ${addressText}%0A--------------------------%0A_Powered by Kalika Store_`;
       
-      // Notify all admins sequentially or just open one for the coordinator
-      window.open(`https://wa.me/${adminNumbers[0]}?text=${message}`, '_blank');
+      // Notify all admins via the first number
+      const whatsappUrl = `https://wa.me/${adminNumbers[0]}?text=${message}`;
+      
+      // Auto-open WhatsApp after a short delay to ensure UI updates
+      setTimeout(() => {
+        window.open(whatsappUrl, '_blank');
+      }, 1500);
 
     } catch (error) {
       console.error("Error placing order:", error);
@@ -548,7 +631,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
         
         <div className="space-y-4">
           <h1 className="text-4xl font-black text-gray-900 tracking-tight">Order Placed Successfully!</h1>
-          <p className="text-gray-500 font-medium max-w-sm mx-auto">Thank you for shopping with Kalika Store. Your order #{orderId} is being processed.</p>
+          <p className="text-gray-500 font-medium max-w-sm mx-auto">Redirecting to your orders in a few seconds...</p>
           <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 max-w-sm mx-auto space-y-3">
             <p className="text-sm font-black text-primary">Customer, you will receive a verification call soon or call by your own to 9608123427</p>
             <a 
@@ -561,29 +644,49 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
           </div>
         </div>
 
-        {/* Store Map */}
-        <div className="w-full max-w-md space-y-4">
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-              <MapPin className="w-5 h-5" />
-            </div>
-            <div className="text-left">
-              <h4 className="text-sm font-black text-gray-900 tracking-tight">Store Location</h4>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ranchi, Jharkhand</p>
-            </div>
+        <div className="bg-primary/5 p-8 rounded-[40px] border border-primary/10 max-w-md w-full space-y-6">
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Verification PIN</span>
+            <span className="text-5xl font-black text-primary tracking-[0.5em]">{orderPin}</span>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Show this to the delivery partner</p>
           </div>
-          <div className="h-[200px] rounded-[32px] overflow-hidden border border-gray-100 shadow-inner relative group">
-            <iframe 
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3662.334460453303!2d85.2795441!3d23.3884631!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMjPCsDIzJzE4LjUiTiA4NcKwMTYnNDYuNCJF!5e0!3m2!1sen!2sin!4v1620000000000!5m2!1sen!2sin" 
-              width="100%" 
-              height="100%" 
-              style={{ border: 0 }} 
-              allowFullScreen 
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            ></iframe>
+        </div>
+        
+        <div className="flex flex-wrap justify-center gap-4">
+          <Link 
+            to="/orders"
+            className="bg-gray-900 text-white font-bold px-12 py-5 rounded-3xl shadow-2xl shadow-gray-900/30 hover:bg-black transition-all active:scale-95"
+          >
+            Go to My Orders
+          </Link>
+        </div>
+        
+        <div className="w-full max-w-md space-y-6">
+          <h4 className="text-sm font-black text-gray-900 tracking-tight text-center">Store Location</h4>
+          <div className="h-[250px] rounded-[32px] overflow-hidden border border-gray-100 shadow-inner relative group">
+            {import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? (
+              <iframe 
+                src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${liveLocation ? `${liveLocation.lat},${liveLocation.lng}` : '23.3884631,85.2795441'}`}
+                width="100%" 
+                height="100%" 
+                style={{ border: 0 }} 
+                allowFullScreen 
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              ></iframe>
+            ) : (
+              <iframe 
+                src={`https://maps.google.com/maps?q=${liveLocation ? `${liveLocation.lat},${liveLocation.lng}` : '23.3884631,85.2795441'}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                width="100%" 
+                height="100%" 
+                style={{ border: 0 }} 
+                allowFullScreen 
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              ></iframe>
+            )}
             <a 
-              href="https://www.google.com/maps/search/?api=1&query=23.3884631,85.2795441"
+              href={liveLocation ? `https://www.google.com/maps/search/?api=1&query=${liveLocation.lat},${liveLocation.lng}` : "https://www.google.com/maps/search/?api=1&query=23.3884631,85.2795441"}
               target="_blank"
               rel="noopener noreferrer"
               className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
@@ -593,100 +696,6 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
               </div>
             </a>
           </div>
-          {deliveryType === 'Takeaway' && (
-            <motion.a
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              href="https://maps.app.goo.gl/ejW8MKHT5Y2V1DW2A?g_st=aw"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-3 bg-primary text-white p-6 rounded-[32px] font-black text-sm uppercase tracking-widest shadow-xl shadow-primary/30 hover:bg-primary-dark transition-all"
-            >
-              <Navigation className="w-6 h-6" />
-              Navigate to Store
-            </motion.a>
-          )}
-        </div>
-        
-        <div className="bg-primary/5 p-8 rounded-[40px] border border-primary/10 max-w-md w-full space-y-6">
-          <div className="flex flex-col items-center gap-2">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Verification PIN</span>
-            <span className="text-5xl font-black text-primary tracking-[0.5em]">{orderPin}</span>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Show this to the delivery partner</p>
-          </div>
-          
-          <div className="pt-6 border-t border-primary/10 grid grid-cols-2 gap-4">
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-10 h-10 flex items-center justify-center text-primary">
-                <Clock className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Est. Delivery</span>
-              <span className="text-sm font-black text-gray-900">1-2 Hours</span>
-            </div>
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-primary shadow-sm">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Secure Order</span>
-              <span className="text-sm font-black text-gray-900">Verified</span>
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-primary/10">
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex items-center gap-2 text-primary">
-                <FileText className="w-5 h-5" />
-                <span className="text-sm font-black uppercase tracking-tight">Order Invoice</span>
-              </div>
-              <InvoiceGenerator order={{
-                id: orderId,
-                userId: user?.uid || '',
-                userName: user?.name || '',
-                userPhone: user?.phone || '',
-                items: cart,
-                total: total,
-                status: 'Pending',
-                deliveryType,
-                deliverySlot,
-                paymentMethod,
-                pin: orderPin,
-                createdAt: Date.now(),
-                address: manualAddress ? { manual: manualAddress } : undefined
-              }} />
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex flex-wrap justify-center gap-4">
-          <div className="flex flex-col gap-2">
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Notify Admins</span>
-            <div className="flex gap-2">
-              {['6205284423', '9608123427', '9905516803'].map(num => (
-                <button 
-                  key={num}
-                  onClick={() => {
-                    const msg = `New Order Received!%0AOrder ID: ${orderId}%0ATotal: ₹${total}`;
-                    window.open(`https://wa.me/91${num}?text=${msg}`, '_blank');
-                  }}
-                  className="bg-green-600 text-white text-[10px] font-bold px-4 py-2 rounded-xl shadow-lg shadow-green-600/20 hover:bg-green-700 transition-all"
-                >
-                  {num.slice(-4)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <Link 
-            to="/profile"
-            className="bg-gray-900 text-white font-bold px-12 py-5 rounded-3xl shadow-2xl shadow-gray-900/30 hover:bg-black transition-all active:scale-95"
-          >
-            Track Order
-          </Link>
-          <Link 
-            to="/"
-            className="bg-primary text-white font-bold px-12 py-5 rounded-3xl shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95"
-          >
-            Back to Home
-          </Link>
         </div>
       </div>
     );
@@ -838,6 +847,27 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                           placeholder="Enter your full address, building name, and landmark..."
                           className={`w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-4 transition-all resize-none ${errors.address ? 'ring-2 ring-red-500 focus:ring-red-100' : 'focus:ring-primary/10'}`}
                         />
+                        
+                        {liveLocation && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="rounded-3xl overflow-hidden border border-gray-100 shadow-inner relative group h-[150px]"
+                          >
+                            <iframe 
+                              src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${liveLocation.lat},${liveLocation.lng}&zoom=16`}
+                              width="100%" 
+                              height="100%" 
+                              style={{ border: 0 }} 
+                              loading="lazy"
+                              referrerPolicy="no-referrer-when-downgrade"
+                            ></iframe>
+                            <div className="absolute top-2 right-2 flex gap-2">
+                               <div className="bg-primary text-white text-[8px] font-black uppercase px-2 py-1 rounded-lg shadow-lg">Exact Location Active</div>
+                            </div>
+                          </motion.div>
+                        )}
+
                         {errors.address && <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest px-2">{errors.address}</p>}
                       </div>
 
@@ -946,7 +976,12 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                     </button>
 
                     <button 
+                      type="button"
+                      disabled={walletBalance < 0}
                       onClick={() => {
+                        if (walletBalance < 0) {
+                          return;
+                        }
                         if (walletBalance < total) {
                           alert("Low Balance! Please top up your wallet.");
                           return;
@@ -955,15 +990,18 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                       }}
                       className={`p-6 rounded-3xl border-2 transition-all flex items-center gap-4 text-left relative overflow-hidden ${
                         paymentMethod === 'WALLET' ? 'bg-primary/5 border-primary text-primary' : 'bg-white border-gray-100 text-gray-400'
-                      } ${walletBalance < total ? 'opacity-80 bg-red-50/10' : ''}`}
+                      } ${walletBalance < total ? 'opacity-80 bg-red-50/10' : ''} ${walletBalance < 0 ? 'cursor-not-allowed grayscale-[0.5]' : ''}`}
                     >
                       <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
                         <Wallet className="w-6 h-6" />
                       </div>
                       <div>
-                        <p className="text-sm font-black uppercase tracking-widest">Wallet Payment</p>
+                        <p className="text-sm font-black uppercase tracking-widest">{walletBalance < 0 ? 'Debt Recovery' : 'Wallet Payment'}</p>
                         <p className="text-[10px] font-bold opacity-60">Balance: ₹{walletBalance.toFixed(2)}</p>
-                        {walletBalance < total && (
+                        {walletBalance < 0 && (
+                          <span className="text-[8px] font-black text-red-500 uppercase tracking-tighter mt-1 block">Payable Debt: ₹{walletDue}</span>
+                        )}
+                        {walletBalance >= 0 && walletBalance < total && (
                           <span className="text-[8px] font-black text-red-500 uppercase tracking-tighter mt-1 block">Low Balance</span>
                         )}
                       </div>
@@ -1119,17 +1157,26 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
               ))}
             </div>
 
-            <div className="pt-8 border-t border-gray-100 space-y-4">
-              <div className="flex justify-between text-sm font-bold text-gray-500">
-                <span>Subtotal</span>
-                <span className="text-gray-900">₹{subtotal}</span>
-              </div>
-              <div className="flex justify-between text-sm font-bold text-gray-500">
-                <span>Delivery Fee</span>
-                <span className={deliveryFee === 0 ? 'text-green-600 font-black' : 'text-gray-900'}>
-                  {deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}
-                </span>
-              </div>
+                  <div className="pt-6 border-t border-gray-100 space-y-4">
+                    <div className="flex justify-between text-sm font-bold text-gray-500">
+                      <span>Subtotal</span>
+                      <span className="text-gray-900">₹{subtotal}</span>
+                    </div>
+                    {walletDue > 0 && (
+                      <div className="flex justify-between text-sm font-black text-red-600 bg-red-50 p-2 rounded-lg border border-red-100">
+                        <span className="flex items-center gap-2">
+                           <AlertCircle className="w-4 h-4" />
+                           Outstanding Debt
+                        </span>
+                        <span>+₹{walletDue}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm font-bold text-gray-500">
+                      <span>Delivery Fee</span>
+                      <span className={deliveryFee === 0 ? 'text-green-600 font-black' : 'text-gray-900'}>
+                        {deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}
+                      </span>
+                    </div>
               
               {couponDiscount > 0 && (
                 <div className="flex justify-between text-sm font-bold text-green-600">

@@ -67,6 +67,10 @@ export const AdminExpenseManager: React.FC = () => {
 
     recognition.onstart = () => setIsRecording(true);
     recognition.onend = () => setIsRecording(false);
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error);
+      setIsRecording(false);
+    };
     
     recognition.onresult = async (event: any) => {
       const text = event.results[0][0].transcript;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { CartDrawer } from './components/CartDrawer';
@@ -181,7 +181,7 @@ function AppContent() {
       if (unsubscribeProfile) { unsubscribeProfile(); unsubscribeProfile = null; }
       if (firebaseUser) {
         unsubscribeProfile = onSnapshot(doc(db, 'users', firebaseUser.uid), async (userDoc) => {
-          const isAdmin = ['customercare@kalikastore.in', 'kalikastore.info@gmail.com', 'guptakundan1984k@gmail.com', 'anshgupta4525@gmail.com'].includes(firebaseUser.email || '') ||
+          const isAdmin = ['kalikastore.info@gmail.com', 'guptakundan1984k@gmail.com', 'anshgupta4525@gmail.com'].includes(firebaseUser.email || '') ||
                          ['u0wqoiZcqsVrIbCjwI2osKeRLZo1', 'yaOovg7opUSgrQbsJ6abztHuOV03'].includes(firebaseUser.uid) ||
                          ['+919608123427', '+916205284423', '+919905516803'].includes(firebaseUser.phoneNumber || '');
           if (userDoc.exists()) {
@@ -266,11 +266,18 @@ function AppContent() {
     return () => unsubscribe();
   }, [isAuthReady, user]);
 
-  const handleVoiceAddToCart = (productName: string) => {
-    if (!productName) return false;
-    const product = products.find(p => p.name.toLowerCase().includes(productName.toLowerCase()));
+  const handleVoiceAddToCart = (productName: string, quantity: number = 1, productId?: string) => {
+    if (!productName && !productId) return false;
+    
+    let product: Product | undefined;
+    if (productId) {
+      product = products.find(p => p.id === productId);
+    } else {
+      product = products.find(p => p.name.toLowerCase().includes(productName.toLowerCase()));
+    }
+
     if (product) {
-      addToCart(product);
+      addToCart(product, quantity);
       return true;
     }
     return false;
@@ -342,7 +349,15 @@ function AppContent() {
           </motion.div>
         )}
       </AnimatePresence>
-      <VoiceAssistant onAddToCart={handleVoiceAddToCart} onPlaceOrder={handleVoicePlaceOrder} onSearch={handleVoiceSearch} onLogout={async () => { try { await auth.signOut(); navigate('/login'); } catch (e) { console.error(e); } }} user={user || undefined} cart={cart} />
+      <VoiceAssistant 
+        onAddToCart={handleVoiceAddToCart} 
+        onPlaceOrder={handleVoicePlaceOrder} 
+        onSearch={handleVoiceSearch} 
+        onLogout={async () => { try { await auth.signOut(); navigate('/login'); } catch (e) { console.error(e); } }} 
+        user={user || undefined} 
+        cart={cart} 
+        products={products}
+      />
       <LoginPromptModal isOpen={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} />
       <LanguagePromptModal />
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} items={cart} products={products} user={user} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClear={handleClearCart} onAddItems={(items) => { items.forEach(({ product, quantity }) => addToCart(product, quantity)); }} onCheckout={() => { setIsCartOpen(false); navigate('/checkout'); }} />

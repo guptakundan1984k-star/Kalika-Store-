@@ -193,7 +193,15 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
                           </div>
                           <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                             <FileText className="w-4 h-4 text-primary" />
-                            <span>kalikastore@support.com</span>
+                            <span>kalikastore.info@gmail.com</span>
+                          </div>
+                          <div className="flex flex-col gap-2 pl-7">
+                            <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                              <span>+91 9608123427</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                              <span>+91 9905516803</span>
+                            </div>
                           </div>
                           {storeSettings?.contactPhone && (
                             <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, SlidersHorizontal, ChevronRight, Star, ShoppingBag, Clock, Package, Truck, CheckCircle, XCircle, AlertTriangle, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, SlidersHorizontal, ChevronRight, Star, ShoppingBag, Clock, Package, Truck, CheckCircle, XCircle, AlertTriangle, Sparkles } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Order, UserProfile } from '../types';
 
@@ -97,6 +97,9 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
     return 'text-gray-900 font-black';
   };
 
+  const sortedOrders = [...orders].sort((a, b) => b.createdAt - a.createdAt);
+  const mostRecentOrder = sortedOrders.find(o => o.status !== 'Delivered' && o.status !== 'Cancelled');
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pt-20 pb-24 md:pt-24 lg:pt-28">
       {/* Header */}
@@ -145,6 +148,30 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
 
       {/* Orders List */}
       <div className="flex-1 px-6 space-y-6 overflow-y-auto max-w-4xl mx-auto w-full">
+        {mostRecentOrder && (
+          <motion.button 
+            whileTap={{ scale: 0.95 }}
+            onClick={() => navigate(`/track/${mostRecentOrder.id}`)}
+            className="w-full p-6 bg-primary rounded-[32px] shadow-2xl shadow-primary/20 relative overflow-hidden group mb-4 mt-2"
+          >
+            <div className="absolute top-0 right-0 p-4 opacity-10 transform translate-x-4 -translate-y-4 group-hover:rotate-12 transition-transform">
+              <Truck className="w-24 h-24 text-white" />
+            </div>
+            <div className="relative z-10 flex items-center justify-between">
+              <div className="text-left space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                  <span className="text-[10px] font-black text-white/80 uppercase tracking-widest">Ongoing Order</span>
+                </div>
+                <h3 className="text-xl font-black text-white tracking-tight leading-tight">Proceed with recent order</h3>
+                <p className="text-xs font-bold text-white/60">#{mostRecentOrder.id.slice(-6).toUpperCase()} • {mostRecentOrder.items.length} items</p>
+              </div>
+              <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white border border-white/30">
+                <ArrowRight className="w-5 h-5" />
+              </div>
+            </div>
+          </motion.button>
+        )}
         {filteredOrders.length > 0 ? (
           filteredOrders.map((order) => (
             <motion.div
@@ -165,30 +192,40 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
               </div>
 
               {/* Product Thumbnails Row */}
-              <div className="flex flex-wrap gap-4">
-                {order.items.slice(0, 4).map((item, idx) => (
-                  <div key={idx} className="relative w-20 h-20 bg-gray-50 rounded-2xl p-1 border border-gray-100 shadow-sm">
-                    {item.image ? (
-                      <img 
-                        src={item.image || undefined} 
-                        alt={item.name} 
-                        className="w-full h-full object-contain mix-blend-multiply" 
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-200">
-                        <ShoppingBag className="w-8 h-8" />
+              <div className="flex flex-wrap gap-4 items-end justify-between">
+                <div className="flex flex-wrap gap-4">
+                  {order.items.slice(0, 4).map((item, idx) => (
+                    <div key={idx} className="relative w-20 h-20 bg-gray-50 rounded-2xl p-1 border border-gray-100 shadow-sm">
+                      {item.image ? (
+                        <img 
+                          src={item.image || undefined} 
+                          alt={item.name} 
+                          className="w-full h-full object-contain mix-blend-multiply" 
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-200">
+                          <ShoppingBag className="w-8 h-8" />
+                        </div>
+                      )}
+                      {/* Quantity Badge */}
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center border border-gray-100 shadow-lg">
+                        <span className="text-[10px] font-black text-gray-900">{item.quantity}</span>
                       </div>
-                    )}
-                    {/* Quantity Badge */}
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center border border-gray-100 shadow-lg">
-                      <span className="text-[10px] font-black text-gray-900">{item.quantity}</span>
                     </div>
-                  </div>
-                ))}
-                {order.items.length > 4 && (
-                  <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center border border-gray-100 border-dashed">
-                    <span className="text-xs font-black text-gray-400">+{order.items.length - 4}</span>
+                  ))}
+                  {order.items.length > 4 && (
+                    <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center border border-gray-100 border-dashed">
+                      <span className="text-xs font-black text-gray-400">+{order.items.length - 4}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Delivery PIN Badge */}
+                {['Pending', 'Order Received', 'Packed', 'Out for Delivery'].includes(order.status) && order.pin && (
+                  <div className="bg-primary/10 border border-primary/20 px-4 py-3 rounded-2xl flex flex-col items-center">
+                    <span className="text-[10px] font-black text-primary uppercase tracking-widest leading-none mb-1">Delivery PIN</span>
+                    <span className="text-xl font-black text-primary tracking-widest">{order.pin}</span>
                   </div>
                 )}
               </div>

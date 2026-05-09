@@ -123,6 +123,31 @@ export const AdminOrderWorkflow: React.FC<AdminOrderWorkflowProps> = ({ orders, 
             )}
           </div>
         </div>
+
+        {/* Step 4: Out for Delivery (To be Delivered) */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-500">
+              <Truck className="w-5 h-5" />
+            </div>
+            <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase tracking-widest text-xs">Out for Delivery ({actionableOrders.filter(o => o.status === 'Out for Delivery').length})</h3>
+          </div>
+
+          <div className="space-y-4">
+            {actionableOrders.filter(o => o.status === 'Out for Delivery').map(order => (
+              <WorkflowCard 
+                key={order.id} 
+                order={order} 
+                nextStatus="Delivered" 
+                nextLabel="Complete Delivery"
+                onUpdate={onUpdateStatus}
+              />
+            ))}
+            {actionableOrders.filter(o => o.status === 'Out for Delivery').length === 0 && (
+              <EmptyState icon={CheckCircle} message="No orders in transit." />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

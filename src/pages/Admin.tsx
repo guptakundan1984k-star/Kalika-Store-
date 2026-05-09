@@ -3,9 +3,11 @@ import { AdminDashboard } from '../components/AdminDashboard';
 import { AdminProductManager } from '../components/AdminProductManager';
 import { AdminOrderManager } from '../components/AdminOrderManager';
 import { AdminOrderWorkflow } from '../components/AdminOrderWorkflow';
+import { notificationService } from '../services/notificationService';
 import { AdminUserManager } from '../components/AdminUserManager';
 import { AdminCouponManager } from '../components/AdminCouponManager';
 import { AdminBannerManager } from '../components/AdminBannerManager';
+import { AdminPromotionManager } from '../components/AdminPromotionManager';
 import { AdminSupportManager } from '../components/AdminSupportManager';
 import { AdminVariationManager } from '../components/AdminVariationManager';
 import { AdminStockManager } from '../components/AdminStockManager';
@@ -27,7 +29,7 @@ import {
   Tag, Settings, LogOut, ChevronRight, ChevronLeft, Menu, X, 
   Bell, Search, User, Sparkles, Shield, Image as ImageIcon,
   Printer, Eye, EyeOff, Box, Layers, Cloud, CloudOff, RefreshCw, Database, HardDrive, CheckSquare,
-  IndianRupee, Zap, AlertCircle, Briefcase, Wallet, Navigation, ArrowLeft
+  IndianRupee, Zap, AlertCircle, Briefcase, Wallet, Navigation, ArrowLeft, Megaphone
 } from 'lucide-react';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { motion, AnimatePresence } from 'motion/react';
@@ -45,7 +47,7 @@ interface AdminProps {
 
 const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'bulk-ai' | 'party-pricing' | 'expenses' | 'orders' | 'workflow' | 'users' | 'wallet' | 'coupons' | 'banners' | 'support' | 'bulk-enquiries' | 'dues' | 'delivery' | 'variations' | 'stocks' | 'settings' | 'storage'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'bulk-ai' | 'party-pricing' | 'expenses' | 'orders' | 'workflow' | 'users' | 'wallet' | 'coupons' | 'promotions' | 'banners' | 'support' | 'bulk-enquiries' | 'dues' | 'delivery' | 'variations' | 'stocks' | 'settings' | 'storage'>('dashboard');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isDbConnected, setIsDbConnected] = useState<boolean | null>(null);
   const [pendingQueries, setPendingQueries] = useState(0);
@@ -304,6 +306,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
     { id: 'users', label: 'Customers', icon: Users },
     { id: 'wallet', label: 'Wallet Req', icon: Wallet, badge: pendingWalletRequests },
     { id: 'coupons', label: 'Coupons', icon: Tag },
+    { id: 'promotions', label: 'Promotions', icon: Megaphone },
     { id: 'banners', label: 'Banners', icon: ImageIcon },
     { id: 'support', label: 'Support', icon: Bell, badge: pendingQueries, hasDot: unreadQueries > 0 },
     { id: 'delivery', label: 'Express Coord', icon: Navigation },
@@ -457,6 +460,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                   })}
                 />
               )}
+              {activeTab === 'promotions' && <AdminPromotionManager users={users} />}
               {activeTab === 'expenses' && <AdminExpenseManager />}
               {activeTab === 'party-pricing' && <AdminPartyPricingManager products={products} />}
               {activeTab === 'products' && (
@@ -493,6 +497,30 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                     if (!order) return;
 
                     await updateDoc(doc(db, 'orders', id), { status });
+
+                    // Notify User
+                    if (order.userId) {
+                      let title = "Order Update! 📦";
+                      let body = `Your order #${id.slice(-6).toUpperCase()} is now ${status}.`;
+                      
+                      if (status === 'Packed') {
+                        title = "Order Packed! 📦";
+                        body = `Good news! Your order #${id.slice(-6).toUpperCase()} has been packed and is ready for dispatch.`;
+                      } else if (status === 'Out for Delivery') {
+                        title = "Out for Delivery! 🚚";
+                        body = `Our delivery partner is on the way with your order #${id.slice(-6).toUpperCase()}.`;
+                      } else if (status === 'Delivered') {
+                        title = "Order Delivered! ✅";
+                        body = `Your order #${id.slice(-6).toUpperCase()} has been delivered. Enjoy your items!`;
+                      }
+
+                      await notificationService.sendNotification({
+                        userIds: [order.userId],
+                        title,
+                        body,
+                        type: 'order'
+                      });
+                    }
                   })} 
                   onDeliveredWithPayment={(id, receivedAmount) => handleSyncOperation(async () => {
                     const order = orders.find(o => o.id === id);
@@ -506,6 +534,16 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                       receivedAmount,
                       walletAdjusted: true
                     });
+
+                    // Notify User
+                    if (order.userId) {
+                      await notificationService.sendNotification({
+                        userIds: [order.userId],
+                        title: "Order Delivered! ✅",
+                        body: `Your order #${id.slice(-6).toUpperCase()} has been delivered successfully. Amount paid: ₹${receivedAmount}.`,
+                        type: 'order'
+                      });
+                    }
 
                     // Update User Wallet & Transaction History
                     if (order.userId) {
@@ -550,6 +588,30 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                     if (!order) return;
 
                     await updateDoc(doc(db, 'orders', id), { status });
+
+                    // Notify User
+                    if (order.userId) {
+                      let title = "Order Update! 📦";
+                      let body = `Your order #${id.slice(-6).toUpperCase()} is now ${status}.`;
+                      
+                      if (status === 'Packed') {
+                        title = "Order Packed! 📦";
+                        body = `Good news! Your order #${id.slice(-6).toUpperCase()} has been packed and is ready for dispatch.`;
+                      } else if (status === 'Out for Delivery') {
+                        title = "Out for Delivery! 🚚";
+                        body = `Our delivery partner is on the way with your order #${id.slice(-6).toUpperCase()}.`;
+                      } else if (status === 'Delivered') {
+                        title = "Order Delivered! ✅";
+                        body = `Your order #${id.slice(-6).toUpperCase()} has been delivered. Enjoy your items!`;
+                      }
+
+                      await notificationService.sendNotification({
+                        userIds: [order.userId],
+                        title,
+                        body,
+                        type: 'order'
+                      });
+                    }
                   })} 
                 />
               )}

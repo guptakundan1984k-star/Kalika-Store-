@@ -65,6 +65,35 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
     predict();
   }, [product?.id]);
 
+  const speak = (text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.1;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const handleAddToCartWithVoice = (redirectToCheckout: boolean = false) => {
+    if (!selectedUnit) {
+      alert('Please select a unit');
+      setShowUnitSelector(true);
+      return;
+    }
+    if (quantity <= 0) {
+      alert('Quantity must be at least 1');
+      return;
+    }
+    
+    onAddToCart({ 
+      ...product, 
+      selectedVariations
+    } as any, quantity, redirectToCheckout, selectedUnit);
+
+    speak(`Added ${quantity} ${selectedUnit || 'unit'} of ${product?.name} to your cart. Go to cart to checkout.`);
+  };
+
   const avgRating = reviews.length > 0 
     ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
     : (product.rating || 4.5);
@@ -425,7 +454,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                     <label className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Select Size</label>
                     <div className="flex flex-wrap gap-3">
                       {product.variations.sizes.map(size => (
-                        <button
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
                           key={size}
                           onClick={() => setSelectedVariations(prev => ({ ...prev, size }))}
                           className={`px-6 py-3 rounded-2xl text-sm font-black transition-all border-2 ${
@@ -435,7 +465,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                           }`}
                         >
                           {size}
-                        </button>
+                        </motion.button>
                       ))}
                     </div>
                   </div>
@@ -446,7 +476,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                     <label className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Select Color</label>
                     <div className="flex flex-wrap gap-3">
                       {product.variations.colors.map(color => (
-                        <button
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
                           key={color}
                           onClick={() => setSelectedVariations(prev => ({ ...prev, color }))}
                           className={`px-6 py-3 rounded-2xl text-sm font-black transition-all border-2 ${
@@ -456,7 +487,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                           }`}
                         >
                           {color}
-                        </button>
+                        </motion.button>
                       ))}
                     </div>
                   </div>
@@ -467,7 +498,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                     <label className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Select Flavor</label>
                     <div className="flex flex-wrap gap-3">
                       {product.variations.flavors.map(flavor => (
-                        <button
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
                           key={flavor}
                           onClick={() => setSelectedVariations(prev => ({ ...prev, flavor }))}
                           className={`px-6 py-3 rounded-2xl text-sm font-black transition-all border-2 ${
@@ -477,7 +509,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                           }`}
                         >
                           {flavor}
-                        </button>
+                        </motion.button>
                       ))}
                     </div>
                   </div>
@@ -508,42 +540,25 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <button 
-                onClick={() => {
-                  if (!selectedUnit) {
-                    alert('Please select a unit');
-                    setShowUnitSelector(true);
-                    return;
-                  }
-                  onAddToCart({ 
-                    ...product, 
-                    selectedVariations
-                  } as any, quantity, false, selectedUnit);
-                }}
+              <motion.button 
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleAddToCartWithVoice(false)}
                 disabled={product.stock <= 0}
-                className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-primary text-white shadow-primary/30 hover:bg-primary-dark"
+                className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-primary text-white shadow-primary/30 hover:bg-primary-dark disabled:opacity-50"
               >
                 <ShoppingCart className="w-6 h-6" />
                 Add to Cart
-              </button>
+              </motion.button>
 
-              <button 
-                onClick={() => {
-                  if (!selectedUnit) {
-                    alert('Please select a unit');
-                    setShowUnitSelector(true);
-                    return;
-                  }
-                  onAddToCart({ 
-                    ...product, 
-                    selectedVariations
-                  } as any, quantity, true, selectedUnit);
-                }}
+              <motion.button 
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleAddToCartWithVoice(true)}
                 disabled={product.stock <= 0}
-                className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-gray-900 text-white shadow-xl shadow-gray-200 hover:bg-black"
+                className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-gray-900 text-white shadow-xl shadow-gray-200 hover:bg-black disabled:opacity-50"
               >
+                <ShoppingCart className="w-6 h-6" />
                 Buy Now
-              </button>
+              </motion.button>
             </div>
           </motion.div>
         </div>
@@ -676,7 +691,15 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                         <User className="w-6 h-6" />
                       </div>
                       <div>
-                        <h5 className="font-black text-gray-900">{review.userName}</h5>
+                        <div className="flex items-center gap-2">
+                          <h5 className="font-black text-gray-900">{review.userName}</h5>
+                          {review.isCSReview && (
+                            <div className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">
+                              <ShieldCheck className="w-3 h-3" />
+                              <span className="text-[8px] font-black uppercase tracking-widest">CS Verified</span>
+                            </div>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1">
                           {[...Array(5)].map((_, i) => (
                             <Star 

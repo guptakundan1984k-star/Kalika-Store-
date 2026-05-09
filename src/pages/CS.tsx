@@ -8,10 +8,11 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Order, UserProfile, WalletTransaction, WalletRequest } from '../types';
 import { Logo } from '../components/Logo';
-import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, addDoc, auth, handleFirestoreError, OperationType } from '../firebase';
+import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, addDoc, getDoc, auth, handleFirestoreError, OperationType } from '../firebase';
 import { AdminOrderManager } from '../components/AdminOrderManager';
 import { WalletManager } from '../components/WalletManager';
 import { AdminAssistant } from '../components/AdminAssistant';
+import { notificationService } from '../services/notificationService';
 
 interface CSProps {
   products: Product[];
@@ -332,12 +333,38 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
             <AdminOrderManager 
               orders={allOrders} 
               products={products}
+              defaultView="workflow"
               onUpdateStatus={async (id, status) => {
                 try {
                   await updateDoc(doc(db, 'orders', id), { 
                     status,
                     deliveredBy: status === 'Delivered' ? user.uid : undefined
                   });
+
+                  // Notify User about status update
+                  const order = allOrders.find(o => o.id === id);
+                  if (order && order.userId) {
+                    let title = "Order Update! 📦";
+                    let body = `Your order #${id.slice(-6).toUpperCase()} is now ${status}.`;
+                    
+                    if (status === 'Packed') {
+                      title = "Order Packed! 📦";
+                      body = `Good news! Your order #${id.slice(-6).toUpperCase()} has been packed and is ready for dispatch.`;
+                    } else if (status === 'Out for Delivery') {
+                      title = "Out for Delivery! 🚚";
+                      body = `Our delivery partner is on the way with your order #${id.slice(-6).toUpperCase()}.`;
+                    } else if (status === 'Delivered') {
+                      title = "Order Delivered! ✅";
+                      body = `Your order #${id.slice(-6).toUpperCase()} has been delivered. Enjoy your items!`;
+                    }
+
+                    await notificationService.sendNotification({
+                      userIds: [order.userId],
+                      title,
+                      body,
+                      type: 'order'
+                    });
+                  }
                 } catch (e) {
                   handleFirestoreError(e, OperationType.UPDATE, `orders/${id}`);
                 }
@@ -348,8 +375,9 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
                   if (!order) return;
 
                   const total = order.total;
-                  const balanceAdjustment = receivedAmount - total;
-                  const staffRef = doc(db, 'users', user.uid);
+                  const debtSettled = order.walletDebtSettle || 0;
+                  const basePrice = total - debtSettled;
+                  const balanceAdjustment = receivedAmount - basePrice;
                   
                   // Update Order
                   await updateDoc(doc(db, 'orders', id), {
@@ -359,23 +387,44 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
                     updatedAt: Date.now()
                   });
 
-                  // Update Staff Wallet if adjustment is negative (as per request)
-                  // "if received is 67 and amnt is 69 then write -2 balance in cs wallet in red"
-                  // We update for any non-zero adjustment to keep history clean.
-                  if (balanceAdjustment !== 0) {
-                    const newBalance = (staffProfile?.walletBalance || 0) + balanceAdjustment;
-                    await updateDoc(staffRef, { walletBalance: newBalance });
+                  // Notify User about delivery
+                  if (order.userId) {
+                    await notificationService.sendNotification({
+                      userIds: [order.userId],
+                      title: "Order Delivered! ✅",
+                      body: `Your order #${id.slice(-6).toUpperCase()} has been delivered successfully. Amount paid: ₹${receivedAmount}.`,
+                      type: 'order'
+                    });
+                  }
+
+                  // Update CUSTOMER Wallet (The user who placed the order)
+                  if (order.userId && balanceAdjustment !== 0) {
+                    const customerRef = doc(db, 'users', order.userId);
+                    const currentBalance = 0; // We'll use increment for safety or fetch
+                    
+                    // Fetch current customer balance to log it
+                    const custSnap = await getDoc(customerRef);
+                    const currentCustBalance = custSnap.exists() ? (custSnap.data() as UserProfile).walletBalance || 0 : 0;
+                    const newCustBalance = currentCustBalance + balanceAdjustment;
+
+                    await updateDoc(customerRef, { walletBalance: newCustBalance });
                     
                     await addDoc(collection(db, 'walletTransactions'), {
-                      userId: user.uid,
+                      userId: order.userId,
                       amount: balanceAdjustment,
-                      balanceAfter: newBalance,
+                      balanceAfter: newCustBalance,
                       type: 'delivery_adjustment',
-                      description: `Delivery Adjust: Order #${id.slice(-6)} (Rec: ₹${receivedAmount}, Tot: ₹${total})`,
+                      description: `Delivery Adjust: Order #${id.slice(-6).toUpperCase()} (Rec: ₹${receivedAmount}, Tot: ₹${total})`,
                       orderId: id,
                       createdAt: Date.now()
                     });
                   }
+
+                  // Optional: Update Staff Handheld if you still want to track what staff brought back
+                  const staffRef = doc(db, 'users', user.uid);
+                  const staffNewBalance = (staffProfile?.walletBalance || 0) + receivedAmount;
+                  await updateDoc(staffRef, { walletBalance: staffNewBalance });
+
                 } catch (e) {
                   handleFirestoreError(e, OperationType.UPDATE, `orders/${id}`);
                 }

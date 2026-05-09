@@ -7,26 +7,23 @@ interface ProductImageProps {
 }
 
 export const ProductImage: React.FC<ProductImageProps> = ({ src, alt, className = '' }) => {
-  const isPlaceholder = !src || src.includes('picsum.photos') || src.includes('placeholder');
+  const isPlaceholder = !src || src.includes('picsum.photos') || src.includes('placeholder') || src === '';
 
   if (isPlaceholder) {
+    // Generate a reliable Unsplash placeholder based on alt text
+    const keyword = alt.split(' ')[0] || 'grocery';
+    const fallbackUrl = `https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=800&keyword=${encodeURIComponent(keyword)}`;
+    
     return (
-      <div className={`relative overflow-hidden flex flex-col items-center justify-center ${className}`}>
-        {/* Literal Half Blue Half Cyan */}
-        <div className="absolute inset-0 flex">
-          <div className="flex-1 bg-[#00AEEF]" />
-          <div className="flex-1 bg-[#00FFFF]" />
-        </div>
-        
-        {/* Content */}
-        <div className="relative z-10 flex flex-col items-center justify-center p-4 text-center">
-          <div className="bg-white/20 backdrop-blur-md p-3 rounded-2xl mb-2">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
+      <div className={`relative overflow-hidden group ${className}`}>
+        <img 
+          src={fallbackUrl} 
+          alt={alt} 
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
           <p className="text-white text-[10px] font-black uppercase tracking-widest leading-tight drop-shadow-md">
-            Product photo will be shared soon in your number once you order
+            Product photo coming soon
           </p>
         </div>
       </div>

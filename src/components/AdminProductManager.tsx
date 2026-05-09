@@ -24,6 +24,19 @@ interface AdminProductManagerProps {
   onDelete: (id: string) => void;
 }
 
+const CATEGORY_PLACEHOLDERS: Record<string, string> = {
+  'Vegetables': 'https://images.unsplash.com/photo-1566385101042-1a000c1268c4?auto=format&fit=crop&q=80&w=1000',
+  'Fruits': 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?auto=format&fit=crop&q=80&w=1000',
+  'Dairy': 'https://images.unsplash.com/photo-1550583724-125581fe35ad?auto=format&fit=crop&q=80&w=1000',
+  'Bakery': 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=1000',
+  'Meat': 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?auto=format&fit=crop&q=80&w=1000',
+  'Snacks': 'https://images.unsplash.com/photo-1599490659223-e153c07dc4c4?auto=format&fit=crop&q=80&w=1000',
+  'Beverages': 'https://images.unsplash.com/photo-1622483767028-3f66f3614fc6?auto=format&fit=crop&q=80&w=1000',
+  'Staples': 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=1000',
+  'Oils': 'https://images.unsplash.com/photo-1474979266404-7eaacabc88c5?auto=format&fit=crop&q=80&w=1000',
+  'Household': 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=1000'
+};
+
 export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ products, onAdd, onBulkAdd, onUpdate, onDelete }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -173,6 +186,12 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
             updates.image = urls[0];
             updates.primaryImage = urls[0];
             updates.images = urls;
+          } else {
+            // Fallback to high quality placeholder
+            const placeholder = CATEGORY_PLACEHOLDERS[product.category] || CATEGORY_PLACEHOLDERS['Staples'];
+            updates.image = placeholder;
+            updates.primaryImage = placeholder;
+            updates.images = [placeholder];
           }
         }
         
@@ -269,10 +288,11 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     setLoadingAI(true);
     try {
       const desc = await generateProductDescription(editingProduct.name, editingProduct.category || '');
+      const placeholder = CATEGORY_PLACEHOLDERS[editingProduct.category || 'Staples'] || CATEGORY_PLACEHOLDERS['Staples'];
       setEditingProduct(prev => ({ 
         ...prev, 
         description: desc,
-        image: prev.image || `https://picsum.photos/seed/${editingProduct.name.replace(/\s+/g, '-')}/800/800`
+        image: prev.image && !prev.image.includes('picsum.photos') ? prev.image : placeholder
       }));
     } catch (error) {
       console.error(error);
@@ -404,16 +424,22 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
         let img = row.image || row.Image || row['Product Photo Link'] || row.photo || row.Photo || row.url || row.URL || row.image_url || row.ImageUrl || row.Img || row.Link || row.Thumbnail;
         let images: string[] = [];
+        const category = row.category || row.Category || row.group || row.Group || 'Staples';
 
         if (!img || (typeof img === 'string' && (img.includes('picsum.photos') || img.includes('placeholder')))) {
           try {
-            const urls = await aiService.findProductImages(name, row.category || row.Category);
+            const urls = await aiService.findProductImages(name, category);
             if (urls.length > 0) {
               img = urls[0];
               images = urls;
+            } else {
+              // High quality AI themed placeholder fallback
+              img = CATEGORY_PLACEHOLDERS[category] || CATEGORY_PLACEHOLDERS['Staples'];
+              images = [img];
             }
           } catch (e) {
             console.error(`AI Image fetch failed for ${name}`, e);
+            img = CATEGORY_PLACEHOLDERS[category] || CATEGORY_PLACEHOLDERS['Staples'];
           }
         }
 
@@ -421,11 +447,11 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
           name: name,
           price: parseFloat(row.price || row.SalePrice || row.Price || row['Sale Price'] || row.rate || row.Rate) || 0,
           purchasePrice: parseFloat(row.purchasePrice || row.PurchasePrice || row['Purchase Price'] || row.cost || row.Cost) || 0,
-          category: row.category || row.Category || row.group || row.Group || 'Staples',
+          category: category,
           stock: parseInt(row.stock || row.Stock || row.Quantity || row.qty || row.Qty || row['Item Stock quantity']) || 0,
           description: row.description || row.Description || '',
-          image: img || `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/800/800`,
-          images: images.length > 0 ? images : [img || `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/800/800`],
+          image: img,
+          images: images.length > 0 ? images : [img],
           weight: row.weight || row.Weight || row.unit || row.Unit || ''
         });
         

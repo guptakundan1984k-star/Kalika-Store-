@@ -124,6 +124,43 @@ async function startServer() {
     }
   });
 
+  app.post("/api/notifications/send", async (req, res) => {
+    const { userIds, title, body, type } = req.body;
+    try {
+      const tokens: string[] = [];
+      
+      // Fetch tokens for all users
+      for (const userId of userIds) {
+        const userDoc = await db.collection('users').doc(userId).get();
+        const userData = userDoc.data();
+        if (userData?.fcmTokens && Array.isArray(userData.fcmTokens)) {
+          // Filter by preference if provided
+          const prefs = userData.notificationPreferences;
+          const shouldSend = !prefs || (type === 'order' && prefs.orderUpdates) || (type === 'promotion' && prefs.promotions);
+          
+          if (shouldSend) {
+            tokens.push(...userData.fcmTokens);
+          }
+        }
+      }
+
+      if (tokens.length === 0) {
+        return res.json({ success: true, message: "No tokens found" });
+      }
+
+      const response = await admin.messaging().sendEachForMulticast({
+        tokens: [...new Set(tokens)], // Distinct tokens
+        notification: { title, body },
+        data: { type }
+      });
+
+      res.json({ success: true, response });
+    } catch (error: any) {
+      console.error('FCM Error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

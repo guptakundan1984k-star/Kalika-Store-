@@ -27,7 +27,6 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.email in [
-          "customercare@kalikastore.in",
           "guptakundan1984k@gmail.com",
           "kalikastore.info@gmail.com",
           "anshgupta4525@gmail.com"
@@ -138,11 +137,12 @@ service cloud.firestore {
     }
 
     function isValidReview(data) {
-      return hasOnlyAllowedFields(['id', 'productId', 'userId', 'userName', 'rating', 'comment', 'photos', 'createdAt']) &&
+      return hasOnlyAllowedFields(['id', 'productId', 'userId', 'userName', 'rating', 'comment', 'photos', 'createdAt', 'isCSReview']) &&
              data.productId is string && data.userId is string &&
              data.rating is number && data.rating >= 1 && data.rating <= 5 &&
              data.comment is string && data.comment.size() > 0 && data.comment.size() < 2000 &&
              (!('photos' in data) || data.photos is list) &&
+             (!('isCSReview' in data) || data.isCSReview is bool) &&
              data.createdAt is number;
     }
 
@@ -164,7 +164,7 @@ service cloud.firestore {
       return hasOnlyAllowedFields(['userId', 'userName', 'userEmail', 'userPhone', 'chatHistory', 'status', 'updatedAt', 'createdAt']) &&
              data.userId is string &&
              data.status in ['pending', 'resolved'] &&
-             data.chatHistory is list;
+             (!('chatHistory' in data) || data.chatHistory is list);
     }
 
     function isValidBulkEnquiry(data) {

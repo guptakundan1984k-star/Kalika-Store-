@@ -12,7 +12,7 @@ export const CATEGORIES = [
   { id: 'household', name: 'Household', icon: 'Home' },
 ];
 
-export const SUPPORT_EMAIL = "customercare@kalikastore.in";
+export const SUPPORT_EMAIL = "kalikastore.info@gmail.com";
 export const SUPPORT_PHONES = ["9608123427", "9905516803"];
 
 // Loyalty Program
