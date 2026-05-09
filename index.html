@@ -9,13 +9,29 @@
   <body>
     <div id="root"></div>
     <script>
+      // Global error handler to catch early crashes
+      window.onerror = function(msg, url, lineNo, columnNo, error) {
+        console.error('Fatal Initialization Error:', msg, 'at', url, ':', lineNo, ':', columnNo);
+        var root = document.getElementById('root');
+        if (root && root.innerHTML === "") {
+          root.innerHTML = '<div style="padding: 20px; font-family: sans-serif; text-align: center;">' +
+            '<h1 style="color: #F97316;">Application failed to load</h1>' +
+            '<p style="color: #666;">This may be caused by a configuration issue or a temporary connection failure.</p>' +
+            '<button onclick="location.reload()" style="background: #F97316; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">Reload</button>' +
+            '<div style="margin-top: 20px; text-align: left; background: #f5f5f5; padding: 15px; border-radius: 8px; font-size: 12px; font-family: monospace; overflow: auto; max-width: 80vw; margin-left: auto; margin-right: auto;">' +
+            '<strong>Error Trace:</strong><br>' + msg + '<br>at ' + url + ':' + lineNo +
+            '</div></div>';
+        }
+        return false;
+      };
+
       // Polyfill for process.env in browser to prevent crashes in some libraries
-      window.process = {
-        env: {
-          NODE_ENV: 'production'
-        },
-        cwd: () => '/',
-        browser: true
+      window.process = window.process || {
+        env: { NODE_ENV: 'production' },
+        cwd: function() { return '/'; },
+        browser: true,
+        version: '',
+        nextTick: function(fn) { setTimeout(fn, 0); }
       };
     </script>
     <script type="module" src="./src/main.tsx"></script>

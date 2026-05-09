@@ -84,7 +84,13 @@ function AppContent() {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [showSplash, setShowSplash] = useState(() => sessionStorage.getItem('splashShown') !== 'true');
+  const [showSplash, setShowSplash] = useState(() => {
+    try {
+      return sessionStorage.getItem('splashShown') !== 'true';
+    } catch (e) {
+      return true;
+    }
+  });
 
   useEffect(() => {
     // Safety timeout: Ensure app loads after 3 seconds even if auth state is delayed
