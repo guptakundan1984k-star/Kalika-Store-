@@ -4,7 +4,7 @@ import { ProductCard } from '../components/ProductCard';
 import { Product, Banner, StoreSettings, CartItem } from '../types';
 import { useStore } from '../contexts/StoreContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, MapPin, Clock, AlertCircle, ShoppingBag, Package } from 'lucide-react';
+import { ArrowRight, MapPin, Clock, AlertCircle, ShoppingBag, Package, ShieldCheck } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { ReachedEnd } from '../components/ReachedEnd';
 
@@ -183,6 +183,70 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
         >
           Shop by Category <ArrowRight className="w-4 h-4" />
         </button>
+      </div>
+
+      {/* Terms & Conditions Section */}
+      <div className="px-6 py-12 bg-white border-y border-gray-100">
+        <div className="max-w-4xl mx-auto space-y-12">
+          <div className="text-center space-y-2">
+            <h2 className="text-3xl font-black text-gray-900 tracking-tighter uppercase italic">Terms & Conditions</h2>
+            <div className="flex items-center justify-center gap-2">
+              <span className="h-0.5 w-8 bg-primary rounded-full" />
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Our Store Policies</p>
+              <span className="h-0.5 w-8 bg-primary rounded-full" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                  <ShoppingBag className="w-5 h-5" />
+                </div>
+                <h3 className="font-black text-gray-900 tracking-tight">Return Policy</h3>
+              </div>
+              <p className="text-sm font-medium text-gray-500 leading-relaxed">
+                Only defective items are allowed for return. <strong>Check items at the time of delivery</strong>. Issues reported after delivery partner leaves may not be eligible for return.
+              </p>
+            </div>
+
+            <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <h3 className="font-black text-gray-900 tracking-tight">Delivery Notice</h3>
+              </div>
+              <p className="text-sm font-medium text-gray-500 leading-relaxed">
+                We deliver across Ranchi, Jharkhand. <strong>If weather is not suitable, delivery will be paused without any prior notice</strong> for the safety of our partners.
+              </p>
+            </div>
+
+            <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <h3 className="font-black text-gray-900 tracking-tight">Order Records</h3>
+              </div>
+              <p className="text-sm font-medium text-gray-500 leading-relaxed">
+                Order history is preserved for <strong>6 months</strong>. Records are automatically removed after this period for security and performance.
+              </p>
+            </div>
+
+            <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <h3 className="font-black text-gray-900 tracking-tight">Loyalty Points</h3>
+              </div>
+              <p className="text-sm font-medium text-gray-500 leading-relaxed">
+                Earn Kalika Coins on every successful order (Min. ₹100). Coins can be redeemed on future purchases to get exclusive discounts.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
       
       {/* Horizontal Scroll Sections removed as per request */}

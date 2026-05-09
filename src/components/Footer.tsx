@@ -158,7 +158,7 @@ export const Footer: React.FC = () => {
                     Delivery Policy
                   </h4>
                   <p className="text-sm font-medium text-gray-500 leading-relaxed">
-                    We currently deliver only within Ranchi, Jharkhand. Delivery times may vary based on location and order volume, typically ranging from 1-2 hours for express delivery.
+                    We currently deliver only within Ranchi, Jharkhand. Delivery times may vary based on location and order volume. <strong>If weather is not suitable, delivery will be paused without any prior notice.</strong>
                   </p>
                 </section>
               </div>
