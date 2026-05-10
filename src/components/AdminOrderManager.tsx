@@ -490,7 +490,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-gray-50 border border-gray-100 rounded-full px-4 py-2 text-[8px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/5 outline-none cursor-pointer"
           >
-            {['all', 'Pending', 'Order Received', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'].map(s => (
+            {['all', 'Pending', 'Order Received', 'Packaging', 'Packed', 'Out for Delivery', 'Ready to Pick Up', 'Delivered', 'Cancelled'].map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
