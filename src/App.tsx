@@ -346,7 +346,7 @@ function AppContent() {
               <Route path="/photo-bill" element={<PhotoBillPage products={products} user={user} onAddToCart={addToCart} />} />
               <Route path="/bill" element={<BillPage products={products} onAddItems={(items) => { items.forEach(({ product, quantity }) => addToCart(product, quantity)); }} />} />
               <Route path="/cart" element={<Cart cart={cart} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClearCart={handleClearCart} products={products} onAddToCart={addToCart} storeSettings={storeSettings} user={user} />} />
-              <Route path="/checkout" element={<Checkout cart={cart} user={user} coupons={coupons} storeSettings={storeSettings} onOrderPlaced={async (order: any) => { try { await setDoc(doc(db, 'orders', order.id), order); setCart([]); navigate('/orders'); } catch (e) { console.error(e); } }} />} />
+              <Route path="/checkout" element={<Checkout cart={cart} user={user} coupons={coupons} storeSettings={storeSettings} onOrderPlaced={async (order: any) => { try { handleClearCart(); } catch (e) { console.error(e); } }} />} />
               <Route path="/profile" element={user ? <Profile user={user} orders={orders} /> : <Navigate to="/login" />} />
               <Route path="/orders" element={user ? <MyOrders orders={orders} user={user} /> : <Navigate to="/login" />} />
               <Route path="/order-tracking/:orderId" element={<OrderTracking />} />

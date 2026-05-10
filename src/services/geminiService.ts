@@ -1,26 +1,37 @@
 import { GoogleGenAI } from "@google/genai";
 
-const getApiKey = () => {
-  // Try platform injection first, then Vite env, then empty
+const getAi = () => {
+  const key = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
+              import.meta.env.VITE_GEMINI_API_KEY || 
+              '';
+  if (!key) {
+    return null;
+  }
   try {
-    return (import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || '');
+    return new GoogleGenAI({ apiKey: key });
   } catch (e) {
-    return '';
+    return null;
   }
 };
 
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+async function callAI(contents: any, modelName: string = "gemini-3-flash-preview") {
+  const ai = getAi();
+  if (!ai) {
+    console.error('Gemini API key is missing.');
+    return { text: "I'm having trouble connecting to my brain right now. Please ensure the Gemini API key is configured." };
+  }
 
-async function callAI(contents: any, model: string = "gemini-3-flash-preview") {
   try {
+    // Correct usage according to skill: ai.models.generateContent
     const response = await ai.models.generateContent({
-      model,
-      contents: Array.isArray(contents.parts) ? contents : contents
+      model: modelName,
+      contents: contents
     });
+    
     return response;
   } catch (error: any) {
     console.error('Gemini API request failed:', error);
-    throw new Error('AI analysis failed. Please ensure your API key is correctly configured.');
+    return { text: "I'm having trouble connecting to my brain right now. Please try again later." };
   }
 }
 
@@ -32,11 +43,12 @@ export async function generateProductDescription(name: string, category: string)
 }
 
 export async function findProductByBarcode(barcode: string) {
-  const result = await callAI(
+  const result: any = await callAI(
     `Identify the grocery product with barcode "${barcode}". Provide its official name, category, standard weight (if applicable), and a professional description. Also suggest a high-quality product image URL or search keywords for one. Return ONLY raw JSON: {"name": "...", "category": "...", "weight": "...", "description": "...", "searchKeywords": "..."}`
   );
   try {
-    const jsonStr = result.text?.match(/{.*}/s)?.[0] || '{}';
+    const text = result.text || "";
+    const jsonStr = text.match(/{.*}/s)?.[0] || '{}';
     return JSON.parse(jsonStr);
   } catch (e) {
     return {};
@@ -44,21 +56,22 @@ export async function findProductByBarcode(barcode: string) {
 }
 
 export async function suggestRestocking(inventory: any[]) {
-  const result = await callAI(
+  const result: any = await callAI(
     `Based on this inventory: ${JSON.stringify(inventory)}, suggest which items need restocking and why. Consider seasonal trends and common grocery demand.`
   );
   return result.text;
 }
 
 export async function analyzeProductImage(base64Image: string) {
-  const result = await callAI({
+  const result: any = await callAI({
     parts: [
       { text: "Identify this grocery product and suggest a name, category, and estimated price in INR. Return ONLY raw JSON: {\"name\": \"...\", \"category\": \"...\", \"price\": 0, \"description\": \"...\"}" },
       { inlineData: { data: base64Image.split(',')[1] || base64Image, mimeType: "image/jpeg" } }
     ]
   });
   try {
-    const jsonStr = result.text?.match(/{.*}/s)?.[0] || '{}';
+    const text = result.text || "";
+    const jsonStr = text.match(/{.*}/s)?.[0] || '{}';
     return JSON.parse(jsonStr);
   } catch (e) {
     return {};
@@ -66,14 +79,15 @@ export async function analyzeProductImage(base64Image: string) {
 }
 
 export async function parsePaperBill(base64Image: string) {
-  const result = await callAI({
+  const result: any = await callAI({
     parts: [
       { text: "Extract items and their quantities from this paper bill. Return a list of items with their names and quantities. Return ONLY raw JSON: {\"items\": [{\"name\": \"...\", \"quantity\": 1}]}" },
       { inlineData: { data: base64Image.split(',')[1] || base64Image, mimeType: "image/jpeg" } }
     ]
   });
   try {
-    const jsonStr = result.text?.match(/{.*}/s)?.[0] || '{"items": []}';
+    const text = result.text || "";
+    const jsonStr = text.match(/{.*}/s)?.[0] || '{"items": []}';
     return JSON.parse(jsonStr);
   } catch (e) {
     return { items: [] };
@@ -81,14 +95,15 @@ export async function parsePaperBill(base64Image: string) {
 }
 
 export async function recognizeHandwriting(base64Image: string) {
-  const result = await callAI({
+  const result: any = await callAI({
     parts: [
       { text: "You are an expert at reading messy handwriting, specifically doctor prescriptions in Hindi and English. Extract the list of medicines/grocery items and their quantities from this image. Return ONLY raw JSON: {\"items\": [{\"name\": \"...\", \"quantity\": 1, \"unit\": \"...\"}]}" },
       { inlineData: { data: base64Image.split(',')[1] || base64Image, mimeType: "image/jpeg" } }
     ]
   });
   try {
-    const jsonStr = result.text?.match(/{.*}/s)?.[0] || '{"items": []}';
+    const text = result.text || "";
+    const jsonStr = text.match(/{.*}/s)?.[0] || '{"items": []}';
     return JSON.parse(jsonStr);
   } catch (e) {
     return { items: [] };
@@ -96,11 +111,12 @@ export async function recognizeHandwriting(base64Image: string) {
 }
 
 export async function searchProductDetails(name: string) {
-  const result = await callAI(
+  const result: any = await callAI(
     `Search for detailed information about the grocery product "${name}". Find its professional description, typical price in India, and a high-quality public image URL if available. Return ONLY raw JSON: {"description": "...", "price": 0, "imageUrl": "...", "category": "..."}`
   );
   try {
-    const jsonStr = result.text?.match(/{.*}/s)?.[0] || '{}';
+    const text = result.text || "";
+    const jsonStr = text.match(/{.*}/s)?.[0] || '{}';
     return JSON.parse(jsonStr);
   } catch (e) {
     return {};
@@ -148,12 +164,12 @@ export async function answerAdminQuery(query: string, data: any, base64Image?: s
     });
   }
 
-  const result = await callAI({ parts });
+    const result = await callAI({ parts });
   return result.text || "Sorry, I couldn't generate a response.";
 }
 
 export async function generateSupportReply(history: any[]) {
-  const result = await callAI(
+  const result: any = await callAI(
     `Based on this chat history: ${JSON.stringify(history)}, generate a helpful reply. Return only the reply text.`
   );
   return result.text;
@@ -161,29 +177,38 @@ export async function generateSupportReply(history: any[]) {
 
 export async function checkEnvironmentStatus() {
   try {
-    const result = await ai.models.generateContent({
+    const ai = getAi();
+    if (!ai) return { status: 'open', reason: '' };
+
+    const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [
         {
-          text: `Check the following for Ranchi, Jharkhand, India:
-          1. Tomorrow's public holidays or major occasions.
-          2. Current and forecasted weather conditions (specifically rain, flood, or extreme heat).
-          
-          Based on this, determine if a grocery delivery service should be:
-          - "closed" (if there's a major occasion tomorrow)
-          - "delayed" (if there's a natural disaster or extreme weather like rain/flood/extreme heat)
-          - "open" (standard operations)
-          
-          Provide a short reason in English.
-          Return ONLY raw JSON: {"status": "open" | "delayed" | "closed", "reason": "...", "weather": "...", "holiday": "..."}`
+          role: 'user',
+          parts: [
+            {
+              text: `Check the following for Ranchi, Jharkhand, India:
+              1. Tomorrow's public holidays or major occasions.
+              2. Current and forecasted weather conditions (specifically rain, flood, or extreme heat).
+              
+              Based on this, determine if a grocery delivery service should be:
+              - "closed" (if there's a major occasion tomorrow)
+              - "delayed" (if there's a natural disaster or extreme weather like rain/flood/extreme heat)
+              - "open" (standard operations)
+              
+              Provide a short reason in English.
+              Return ONLY raw JSON: {"status": "open" | "delayed" | "closed", "reason": "...", "weather": "...", "holiday": "..."}`
+            }
+          ]
         }
       ],
       config: {
-        tools: [{ googleSearch: {} }]
+        tools: [{ googleSearch: {} }] as any
       }
     });
 
-    const jsonStr = result.text?.match(/{.*}/s)?.[0] || '{"status": "open", "reason": ""}';
+    const text = response.text;
+    const jsonStr = text.match(/{.*}/s)?.[0] || '{"status": "open", "reason": ""}';
     return JSON.parse(jsonStr);
   } catch (e) {
     return { status: 'open', reason: '' };

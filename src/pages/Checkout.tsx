@@ -4,7 +4,7 @@ import { useStore } from '../contexts/StoreContext';
 import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, ShieldCheck, Clock, XCircle, Navigation, Smartphone, Wallet, Banknote, Sparkles, AlertCircle, IndianRupee, FileText, ArrowLeft, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
-import { doc, updateDoc, db, addDoc, collection, getDoc, getDocs, query, where, onSnapshot, handleFirestoreError, OperationType, increment } from '../firebase';
+import { doc, updateDoc, db, addDoc, setDoc, collection, getDoc, getDocs, query, where, onSnapshot, handleFirestoreError, OperationType, increment } from '../firebase';
 import { InvoiceGenerator } from '../components/InvoiceGenerator';
 import { ProductImage } from '../components/ProductImage';
 import { notificationService } from '../services/notificationService';
@@ -351,6 +351,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   };
 
   const handlePlaceOrder = async () => {
+    console.log("Place Order initiated");
     // Environmental Check
     if (isEnvironmentClosed) {
       alert(`Sorry, the store is closed for tomorrow's delivery due to: ${envStatus?.reason || 'Holiday'}. Please try again later.`);
@@ -370,7 +371,9 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       const proceedAsPreOrder = window.confirm(`${storeSettings.message || "Store is currently closed."}\n\nWould you like to place a PRE-ORDER for tomorrow instead?`);
       if (proceedAsPreOrder) {
         setSelectedDate(1); // Set to Tomorrow
-        slotRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => {
+          slotRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
         return;
       }
       return;
@@ -379,6 +382,11 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
     if (!user) {
       alert("Please sign in to place an order.");
       navigate('/login');
+      return;
+    }
+
+    if (cart.length === 0) {
+      alert("Your cart is empty.");
       return;
     }
 
@@ -419,11 +427,12 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
           phoneInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
           phoneInput.focus();
         } else {
-          navigate('/profile');
+          alert("Please update your phone number in your profile.");
         }
       }, 100);
       return;
     }
+
     if (deliveryType === 'Delivery' && !deliverySlot) {
       setErrors(prev => ({ ...prev, slot: "Please select a delivery slot." }));
       setCheckoutStep(0);
@@ -432,6 +441,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       }, 100);
       return;
     }
+
     if (!paymentMethod) {
       setErrors(prev => ({ ...prev, payment: "Please select a payment method." }));
       paymentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -452,167 +462,110 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
     }
 
     setIsProcessing(true);
-
-    const pin = Math.floor(1000 + Math.random() * 9000).toString();
-    const newOrder: Order = {
-      id: Math.random().toString(36).substr(2, 9).toUpperCase(),
-      userId: user?.uid || 'guest',
-      userName: user?.name || 'Guest',
-      userPhone: user?.phone || 'N/A',
-      items: cart,
-      total,
-      status: 'Pending',
-      isPreOrder: !storeSettings?.isFunctionallyOpen,
-      deliveryType,
-      address: deliveryType === 'Delivery' ? {
-        manual: manualAddress,
-        lat: liveLocation?.lat,
-        lng: liveLocation?.lng,
-        liveLocationUrl: liveLocation ? `https://www.google.com/maps?q=${liveLocation.lat},${liveLocation.lng}` : undefined
-      } : undefined,
-      deliverySlot,
-      paymentMethod,
-      inBag,
-      pin,
-      createdAt: Date.now(),
-    };
-
-    // Pre-order check logic...
-    const preorderFlag = selectedDate > 0 || !storeSettings?.isFunctionallyOpen;
-
-    const finalOrder = {
-      ...newOrder,
-      isPreOrder: preorderFlag,
-      discount: couponDiscount,
-      walletAdjusted: (walletCredit > 0 || walletDue > 0),
-      walletRedeemed: walletCredit,
-      walletDebtSettle: walletDue,
-      total: total // Explicitly save the total including debt
-    };
+    console.log("Processing order started...");
 
     try {
+      const pin = Math.floor(1000 + Math.random() * 9000).toString();
+      const generatedOrderId = Math.random().toString(36).substr(2, 9).toUpperCase();
+      
+      const newOrder: Order = {
+        id: generatedOrderId,
+        userId: user?.uid || 'guest',
+        userName: user?.name || 'Guest',
+        userPhone: user?.phone || 'N/A',
+        items: cart,
+        total,
+        status: 'Pending',
+        isPreOrder: selectedDate > 0 || !storeSettings?.isFunctionallyOpen,
+        deliveryType,
+        address: deliveryType === 'Delivery' ? {
+          manual: manualAddress,
+          lat: liveLocation?.lat,
+          lng: liveLocation?.lng,
+          liveLocationUrl: liveLocation ? `https://www.google.com/maps?q=${liveLocation.lat},${liveLocation.lng}` : undefined
+        } : undefined,
+        deliverySlot,
+        paymentMethod,
+        inBag,
+        pin,
+        createdAt: Date.now(),
+      };
+
+      const finalOrder = {
+        ...newOrder,
+        discount: couponDiscount,
+        walletAdjusted: (walletCredit > 0 || walletDue > 0),
+        walletRedeemed: walletCredit,
+        walletDebtSettle: walletDue,
+        total: total 
+      };
+
+      console.log("Saving order to Firestore...", finalOrder.id);
       // 1. SAVE TO FIRESTORE
-      const docRef = await addDoc(collection(db, 'orders'), finalOrder);
-      setOrderId(docRef.id);
+      await setDoc(doc(db, 'orders', finalOrder.id), finalOrder);
+      setOrderId(finalOrder.id);
 
       // increment coupon usage
       if (appliedCoupon) {
-        await updateDoc(doc(db, 'coupons', appliedCoupon.id), {
+        updateDoc(doc(db, 'coupons', appliedCoupon.id), {
           usedCount: increment(1)
         }).catch(e => console.error("Coupon increment failed", e));
       }
 
-      // 2. CLEAR CART
-      onOrderPlaced(newOrder); 
+      console.log("Order saved. Calling onOrderPlaced...");
+      // 2. NOTIFY PARENT (CLEAR CART)
+      onOrderPlaced(finalOrder as any); 
+
       // 3. UPDATE USER WALLET
       if (user) {
         const updates: any = {};
-        
-        // Use wallet balance if applied
         if (walletCredit > 0) {
           updates.walletBalance = walletBalance - walletCredit;
-          
-          // Log transaction
-          try {
-            await addDoc(collection(db, 'walletTransactions'), {
-              userId: user.uid,
-              amount: -walletCredit,
-              balanceAfter: updates.walletBalance,
-              type: 'order_payment',
-              description: `Payment for Order #${newOrder.id.slice(-6).toUpperCase()}`,
-              orderId: newOrder.id,
-              createdAt: Date.now()
-            });
-          } catch (txError) {
-            console.error("Wallet transaction failed, but continuing order:", txError);
-            handleFirestoreError(txError, OperationType.WRITE, 'walletTransactions');
-          }
+          addDoc(collection(db, 'walletTransactions'), {
+            userId: user.uid,
+            amount: -walletCredit,
+            balanceAfter: updates.walletBalance,
+            type: 'order_payment',
+            description: `Payment for Order #${newOrder.id.slice(-6).toUpperCase()}`,
+            orderId: newOrder.id,
+            createdAt: Date.now()
+          }).catch(txError => console.error("Wallet transaction failed:", txError));
         }
 
         if (Object.keys(updates).length > 0) {
-          try {
-            await updateDoc(doc(db, 'users', user.uid), updates);
-          } catch (userRelError) {
-            console.error("User wallet update failed:", userRelError);
-            handleFirestoreError(userRelError, OperationType.UPDATE, `users/${user.uid}`);
-          }
+          await updateDoc(doc(db, 'users', user.uid), updates).catch(e => console.error("User wallet update failed", e));
         }
       }
 
       setOrderPin(pin);
       setIsPlaced(true);
+      console.log("Order placement successful");
 
-      // Auto-redirect to My Orders after 10 seconds
-      setTimeout(() => {
-        navigate('/orders');
-      }, 10000);
-
-      // --- PUSH NOTIFICATIONS ---
+      // Voice & Sound feedback
       try {
-        // Notify User
-        await notificationService.sendNotification({
-          userIds: [user?.uid || ''],
-          title: "Order Placed! 🛍️",
-          body: `Your order #${newOrder.id.slice(-6).toUpperCase()} has been placed successfully. Thank you!`,
-          type: 'order'
-        });
-
-        // Notify Admins
-        const adminsQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
-        const adminsSnap = await getDocs(adminsQuery);
-        const adminIds = adminsSnap.docs.map(d => d.id);
-        
-        // Also specifically target the requested phone numbers if they are registered users
-        const targetNumbers = ['6205284423', '9608123427'];
-        const numAdminsQuery = query(collection(db, 'users'), where('phone', 'in', targetNumbers));
-        const numAdminsSnap = await getDocs(numAdminsQuery);
-        const extraAdminIds = numAdminsSnap.docs.map(d => d.id);
-
-        const allTargetAdminIds = [...new Set([...adminIds, ...extraAdminIds])];
-
-        if (allTargetAdminIds.length > 0) {
-          await notificationService.sendNotification({
-            userIds: allTargetAdminIds,
-            title: "New Order Alert! 🚨",
-            body: `Order #${newOrder.id.slice(-6).toUpperCase()} received from ${user?.name || 'Guest'}. Amount: ₹${total.toFixed(2)}`,
-            type: 'order'
-          });
-        }
-      } catch (notifErr) {
-        console.error("Failed to send push notifications:", notifErr);
+        const speech = new SpeechSynthesisUtterance(`Order Placed Successfully. Your delivery PIN is ${pin}. Check WhatsApp for details.`);
+        window.speechSynthesis.speak(speech);
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(e => console.log("Audio play failed:", e));
+      } catch (mediaErr) {
+        console.warn("Media feedback failed", mediaErr);
       }
 
-      // Speak & Sound
-      const speech = new SpeechSynthesisUtterance(`Order Placed Successfully. Your delivery PIN is ${pin}. Thank you for shopping with Kalika Store.`);
-      window.speechSynthesis.speak(speech);
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.play().catch(e => console.log("Audio play failed:", e));
-
-      // Notification
-      const adminNumbers = settings?.adminWhatsAppNumbers && settings.adminWhatsAppNumbers.length > 0
-        ? settings.adminWhatsAppNumbers 
-        : ['916205284423', '919608123427', '919905516803'];
-        
-      const mapsLink = liveLocation ? `https://www.google.com/maps?q=${liveLocation.lat},${liveLocation.lng}` : '';
-      const shopLink = 'https://maps.app.goo.gl/ejW8MKHT5Y2V1DW2A?g_st=aw';
-      const addressText = deliveryType === 'Delivery' 
-        ? `${manualAddress}${mapsLink ? `%20Localización:%20${mapsLink}` : ''}`
-        : `Self Pickup (Takeaway)%0AShop: ${shopLink}`;
+      // 4. PREPARE WHATSAPP (BUT DON'T AUTO-REDIRECT WITH TIMEOUT TO AVOID BLOCKING)
+      // We will rely on the "WhatsApp Admin" button in the success UI
       
-      const message = `*NEW ORDER RECEIVED!*%0A--------------------------%0A*Order ID:* ${newOrder.id}%0A*Delivery PIN:* ${pin}%0A*Customer:* ${user?.name}%0A*Phone:* ${user?.phone}%0A*Total:* ₹${total.toFixed(2)}%0A*Method:* ${paymentMethod}%0A*Delivery:* ${deliveryType}%0A*Slot:* ${deliverySlot}%0A*Address:* ${addressText}%0A--------------------------%0A_Powered by Kalika Store_`;
-      
-      // Notify all admins via the first number
-      const whatsappUrl = `https://wa.me/${adminNumbers[0]}?text=${message}`;
-      
-      // Auto-open WhatsApp after a short delay to ensure UI updates
-      setTimeout(() => {
-        window.open(whatsappUrl, '_blank');
-      }, 1500);
+      // --- PUSH NOTIFICATIONS ---
+      notificationService.sendNotification({
+        userIds: [user?.uid || ''],
+        title: "Order Placed! 🛍️",
+        body: `Your order #${finalOrder.id.slice(-6).toUpperCase()} has been placed. PIN: ${pin}`,
+        type: 'order'
+      }).catch(notifErr => console.error("Push notification failed", notifErr));
 
     } catch (error) {
-      console.error("Error placing order:", error);
+      console.error("Critical error in handlePlaceOrder:", error);
       handleFirestoreError(error, OperationType.CREATE, 'orders');
-      alert("Failed to place order. Please check your connection and try again.");
+      alert("Failed to place order. Please check your internet connection.");
     } finally {
       setIsProcessing(false);
     }
@@ -630,13 +583,13 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
         </motion.div>
         
         <div className="space-y-4">
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight">Order Placed Successfully!</h1>
-          <p className="text-gray-500 font-medium max-w-sm mx-auto">Redirecting to your orders in a few seconds...</p>
-          <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 max-w-sm mx-auto space-y-3">
-            <p className="text-sm font-black text-primary">Customer, you will receive a verification call soon or call by your own to 9608123427</p>
+          <h1 className="text-4xl font-black text-green-600 tracking-tight">Order Placed Successfully!</h1>
+          <p className="text-gray-500 font-medium max-w-sm mx-auto">Thank you for your order. Redirecting to your orders soon...</p>
+          <div className="bg-green-50 p-4 rounded-2xl border border-green-100 max-w-sm mx-auto space-y-3">
+            <p className="text-sm font-black text-green-700">Customer, you will receive a verification call soon or call us at 9608123427</p>
             <a 
               href="tel:9608123427"
-              className="inline-flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all"
+              className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-green-600/20 hover:bg-green-700 transition-all"
             >
               <Smartphone className="w-4 h-4" />
               Call Now: 9608123427
@@ -644,21 +597,37 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
           </div>
         </div>
 
-        <div className="bg-primary/5 p-8 rounded-[40px] border border-primary/10 max-w-md w-full space-y-6">
+        <div className="bg-green-50 p-8 rounded-[40px] border border-green-100 max-w-md w-full space-y-6">
           <div className="flex flex-col items-center gap-2">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Verification PIN</span>
-            <span className="text-5xl font-black text-primary tracking-[0.5em]">{orderPin}</span>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Show this to the delivery partner</p>
+            <span className="text-xs font-bold text-green-600 uppercase tracking-widest">Verification PIN</span>
+            <span className="text-5xl font-black text-green-600 tracking-[0.5em]">{orderPin}</span>
+            <p className="text-[10px] text-green-500 font-bold uppercase tracking-widest mt-2">Show this to the delivery partner</p>
           </div>
         </div>
         
         <div className="flex flex-wrap justify-center gap-4">
           <Link 
             to="/orders"
-            className="bg-gray-900 text-white font-bold px-12 py-5 rounded-3xl shadow-2xl shadow-gray-900/30 hover:bg-black transition-all active:scale-95"
+            className="bg-gray-900 text-white font-bold px-8 py-4 rounded-2xl shadow-xl shadow-gray-900/10 hover:bg-black transition-all active:scale-95 text-xs uppercase tracking-widest"
           >
-            Go to My Orders
+            My Orders
           </Link>
+          <Link 
+            to={`/order-tracking/${orderId}`}
+            className="bg-primary text-white font-bold px-8 py-4 rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center gap-2"
+          >
+            <Navigation className="w-4 h-4" />
+            Track Order
+          </Link>
+          <a
+            href={`https://wa.me/918002914323?text=${encodeURIComponent(`Order PIN: ${orderPin} - Requesting delivery for Order #${orderId.slice(-6)}`)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-[#25D366] text-white font-bold px-8 py-4 rounded-2xl shadow-xl shadow-green-500/20 hover:bg-[#128C7E] transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center gap-2"
+          >
+            <Smartphone className="w-4 h-4" />
+            WhatsApp Admin
+          </a>
         </div>
         
         <div className="w-full max-w-md space-y-6">
@@ -1115,19 +1084,22 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                     <button 
                       onClick={handlePlaceOrder}
                       disabled={isProcessing}
-                      className={`flex-[2] bg-gray-900 text-white font-black py-5 rounded-[32px] shadow-2xl shadow-gray-900/30 hover:bg-black transition-all uppercase tracking-[0.2em] text-[10px] flex items-center justify-center gap-2 outline-none ${isProcessing ? 'opacity-70 cursor-not-allowed' : ''}`}
+                      className={`flex-[2] relative overflow-hidden group bg-green-600 text-white font-black py-5 rounded-[32px] shadow-2xl shadow-green-600/30 hover:bg-green-700 transition-all uppercase tracking-[0.2em] text-[10px] flex items-center justify-center gap-2 outline-none ${isProcessing ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
                     >
                       {isProcessing ? (
                         <>
-                          <RefreshCw className="w-4 h-4 animate-spin text-primary" />
-                          Order is being processed...
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Finalizing Order...</span>
                         </>
                       ) : (
                         <>
-                          Place Order (₹{total.toFixed(0)})
-                          <CheckCircle className="w-4 h-4" />
+                          <CheckCircle className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                          <span>Confirm & Place Order (₹{total.toFixed(0)})</span>
                         </>
                       )}
+                      
+                      {/* Shine effect */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                     </button>
                   </div>
                 </div>

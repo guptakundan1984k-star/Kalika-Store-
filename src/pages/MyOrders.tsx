@@ -151,7 +151,7 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
         {mostRecentOrder && (
           <motion.button 
             whileTap={{ scale: 0.95 }}
-            onClick={() => navigate(`/track/${mostRecentOrder.id}`)}
+            onClick={() => navigate(`/order-tracking/${mostRecentOrder.id}`)}
             className="w-full p-6 bg-primary rounded-[32px] shadow-2xl shadow-primary/20 relative overflow-hidden group mb-4 mt-2"
           >
             <div className="absolute top-0 right-0 p-4 opacity-10 transform translate-x-4 -translate-y-4 group-hover:rotate-12 transition-transform">

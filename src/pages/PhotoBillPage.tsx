@@ -36,19 +36,28 @@ const PhotoBillPageContent: React.FC<PhotoBillPageProps> = ({ products, user, on
     setErrorNote(null);
     try {
       const getApiKey = () => {
-  try {
-    return (import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : ''));
-  } catch (e) {
-    return '';
-  }
-};
+        try {
+          return (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
+                 import.meta.env.VITE_GEMINI_API_KEY || 
+                 '';
+        } catch (e) {
+          return '';
+        }
+      };
 
-const ai = new GoogleGenAI({ apiKey: getApiKey() || '' });
+      const key = getApiKey();
+      if (!key) {
+        setErrorNote("Gemini API key is not configured.");
+        setIsAnalyzing(false);
+        return;
+      }
 
+      const ai = new GoogleGenAI({ apiKey: key });
       const base64Data = selectedImage.split(',')[1];
       const result = await ai.models.generateContent({
-        model: "gemini-3-flash-preview", 
-        contents: {
+        model: "gemini-3-flash-preview",
+        contents: [{
+          role: 'user',
           parts: [
             {
               inlineData: {
@@ -62,10 +71,10 @@ const ai = new GoogleGenAI({ apiKey: getApiKey() || '' });
                 ". FOR EACH MATCH: Provide the productId and quantity. If an item name in the image looks like a product in the catalog, it's a match. Return ONLY raw JSON: [{\"productId\": \"...\", \"quantity\": 1}]. No text or markdown."
             }
           ]
-        }
+        }]
       });
 
-      const text = result.text.trim();
+      const text = result.text || "";
       const jsonStr = text.match(/\[.*\]/s)?.[0] || '[]';
       const items = JSON.parse(jsonStr);
 

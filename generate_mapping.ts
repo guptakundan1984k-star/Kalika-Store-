@@ -2,7 +2,12 @@ import { GoogleGenAI, Type } from "@google/genai";
 import fs from "fs";
 
 async function generateMapping() {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const apiKey = process.env.GEMINI_API_KEY || '';
+  if (!apiKey) {
+    console.error("GEMINI_API_KEY is not set.");
+    return;
+  }
+  const ai = new GoogleGenAI({ apiKey });
   
   const products = [
     "Aashirvaad Atta 10kg", "Active Wheel Surf 1 Kg", "Active Wheel Surf 2in1 500 Gm", "Amul kool", "Amul lassi",
@@ -13,25 +18,28 @@ async function generateMapping() {
     "Vim Dishwash Bar", "Vim Liquid Dishwash 500ml", "Vim Anti-Bacterial", "Swiss Roll", "Taaza Tea 50", "Tata gold chaipatti"
   ];
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Find high-quality, professional product image URLs for the following products. 
-    Use direct links to images from reputable retailers or CDNs (like BigBasket, Blinkit, or official brand websites). 
-    Avoid generic search result pages. 
-    Format the output as a JSON object where the keys are product names and values are image URLs.
-    
-    Products: ${products.join(", ")}`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        description: "Map of product names to image URLs"
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [{
+        role: "user",
+        parts: [{
+          text: `Find high-quality, professional product image URLs for the following products. 
+            Format the output as a JSON object where the keys are product names and values are image URLs.
+            
+            Products: ${products.join(", ")}`
+        }]
+      }],
+      config: {
+        responseMimeType: "application/json"
       }
-    }
-  });
+    });
 
-  fs.writeFileSync('product_mapping.json', response.text);
-  console.log("Mapping generated successfully.");
+    fs.writeFileSync('product_mapping.json', response.text || "{}");
+    console.log("Mapping generated successfully.");
+  } catch (error) {
+    console.error("Failed to generate mapping:", error);
+  }
 }
 
 generateMapping().catch(console.error);
