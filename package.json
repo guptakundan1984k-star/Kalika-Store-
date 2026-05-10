@@ -2,13 +2,14 @@
   "name": "react-example",
   "private": true,
   "version": "0.0.0",
+  "homepage": ".",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
     "start": "node server.ts",
     "build": "vite build",
     "preview": "tsx server.ts",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist build",
     "lint": "tsc --noEmit && eslint firestore.rules",
     "lint:rules": "eslint firestore.rules"
   },
