@@ -7,7 +7,73 @@
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5257999103693625" crossorigin="anonymous"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <style>
+        .initial-loader {
+          position: fixed;
+          inset: 0;
+          background: white;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          z-index: 100000;
+          font-family: system-ui, -apple-system, sans-serif;
+        }
+        .loader-logo {
+          width: 80px;
+          height: 80px;
+          background: #F97316;
+          border-radius: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 40px;
+          font-weight: 900;
+          margin-bottom: 24px;
+          animation: logo-pulse 1.5s infinite ease-in-out;
+        }
+        .loader-text {
+          font-size: 14px;
+          font-weight: 800;
+          color: #111;
+          letter-spacing: 0.3em;
+          text-transform: uppercase;
+          opacity: 0.8;
+        }
+        .loader-bar {
+          width: 120px;
+          height: 4px;
+          background: #f3f3f3;
+          border-radius: 2px;
+          margin-top: 16px;
+          overflow: hidden;
+        }
+        .loader-progress {
+          width: 40%;
+          height: 100%;
+          background: #F97316;
+          border-radius: 2px;
+          animation: progress-move 1.5s infinite ease-in-out;
+        }
+        @keyframes logo-pulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
+          50% { transform: scale(1.05); box-shadow: 0 10px 40px -10px rgba(249, 115, 22, 0.4); }
+        }
+        @keyframes progress-move {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(250%); }
+        }
+      </style>
+      <div class="initial-loader">
+        <div class="loader-logo">K</div>
+        <div class="loader-text">Kalika Store</div>
+        <div class="loader-bar">
+          <div class="loader-progress"></div>
+        </div>
+      </div>
+    </div>
     <script>
       // Global error handler to catch early crashes
       window.onerror = function(msg, url, lineNo, columnNo, error) {

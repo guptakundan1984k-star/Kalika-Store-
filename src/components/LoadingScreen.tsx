@@ -37,17 +37,17 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
     if (index < ITEMS.length - 1) {
       const timer = setTimeout(() => {
         setIndex(prev => prev + 1);
-      }, 600);
+      }, 350); // Reduced from 600
       return () => clearTimeout(timer);
     } else if (!showComplete) {
       const timer = setTimeout(() => {
         setShowComplete(true);
-      }, 600);
+      }, 350); // Reduced from 600
       return () => clearTimeout(timer);
     } else {
       const completeTimer = setTimeout(() => {
         onComplete?.();
-      }, 1000);
+      }, 500); // Reduced from 1000
       return () => clearTimeout(completeTimer);
     }
   }, [index, showComplete, onComplete]);

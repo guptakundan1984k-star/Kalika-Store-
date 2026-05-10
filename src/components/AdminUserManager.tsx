@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Search, Filter, User, Shield, Mail, Phone, MoreVertical, Trash2, Edit2, 
   UserPlus, UserCheck, UserX, CheckSquare, Square, Key, Eye, EyeOff, 
-  Loader2, Lock, Save, XCircle, Plus, Minus, Users
+  Loader2, Lock, Save, XCircle, Plus, Minus, Users, IndianRupee
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -516,6 +516,33 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({ users, onUpd
                       >
                         <Shield className="w-4 h-4" />
                       </button>
+                      {user.role === 'cs' && (user.walletBalance || 0) > 0 && (
+                        <button 
+                          onClick={async () => {
+                            if (window.confirm(`Receive ₹${user.walletBalance} from ${user.name}? This will set their handheld balance to 0.`)) {
+                              try {
+                                await updateDoc(doc(db, 'users', user.uid), { walletBalance: 0 });
+                                await addDoc(collection(db, 'walletTransactions'), {
+                                  userId: user.uid,
+                                  amount: -user.walletBalance!,
+                                  balanceAfter: 0,
+                                  type: 'cash_collection',
+                                  description: 'Handheld cash received by Owner',
+                                  createdAt: Date.now()
+                                });
+                                alert('Cash received and balance updated.');
+                              } catch (e) {
+                                console.error(e);
+                                alert('Failed to update balance');
+                              }
+                            }
+                          }}
+                          className="p-2 text-green-600 hover:bg-green-50 rounded-xl transition-all active:scale-95"
+                          title="Receive Cash from Staff"
+                        >
+                          <IndianRupee className="w-4 h-4" />
+                        </button>
+                      )}
                       <button 
                         onClick={() => {
                           setSelectedUser(user);

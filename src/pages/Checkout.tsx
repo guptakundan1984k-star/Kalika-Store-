@@ -36,12 +36,14 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   const [couponError, setCouponError] = useState('');
   const [isPlaced, setIsPlaced] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [orderProcessed, setOrderProcessed] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [orderPin, setOrderPin] = useState('');
   const [inBag, setInBag] = useState(false);
   const [selectedDate, setSelectedDate] = useState(0); // 0: Today, 1: Tomorrow, etc.
   const [checkoutStep, setCheckoutStep] = useState<0 | 1>(0);
   const [inWalletStep, setInWalletStep] = useState(false); // To handle back button in payment
+  const [useWallet, setUseWallet] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -96,9 +98,11 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
 
   const couponDiscount = calculateDiscount();
   const deliveryFee = deliveryType === 'Delivery' ? (subtotal >= configThreshold ? 0 : configDeliveryFee) : 0;
-  const walletCredit = walletBalance > 0 ? Math.min(walletBalance, subtotal + deliveryFee - couponDiscount) : 0;
+  
+  // Wallet credit is only applied if useWallet is true AND balance is positive
+  const walletCredit = (useWallet && walletBalance > 0) ? Math.min(walletBalance, subtotal + deliveryFee - couponDiscount) : 0;
 
-  // Total should include any outstanding debt (walletDue)
+  // Debt (walletDue) is ALWAYS added if balance is negative, because you can't "deselect" debt.
   const total = Math.max(0, subtotal + deliveryFee - couponDiscount - walletCredit + walletDue);
 
   const isEnvironmentClosed = envStatus?.status === 'closed';
@@ -479,44 +483,48 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
         isPreOrder: selectedDate > 0 || !storeSettings?.isFunctionallyOpen,
         deliveryType,
         address: deliveryType === 'Delivery' ? {
-          manual: manualAddress,
-          lat: liveLocation?.lat,
-          lng: liveLocation?.lng,
+          manual: manualAddress || undefined,
+          lat: liveLocation?.lat || undefined,
+          lng: liveLocation?.lng || undefined,
           liveLocationUrl: liveLocation ? `https://www.google.com/maps?q=${liveLocation.lat},${liveLocation.lng}` : undefined
         } : undefined,
-        deliverySlot,
-        paymentMethod,
-        inBag,
+        deliverySlot: deliverySlot || undefined,
+        paymentMethod: paymentMethod || undefined,
+        inBag: !!inBag,
         pin,
         createdAt: Date.now(),
-      };
+      } as any;
 
-      const finalOrder = {
+      const finalOrder = JSON.parse(JSON.stringify({
         ...newOrder,
-        discount: couponDiscount,
-        walletAdjusted: (walletCredit > 0 || walletDue > 0),
-        walletRedeemed: walletCredit,
-        walletDebtSettle: walletDue,
-        total: total 
-      };
+        discount: couponDiscount || 0,
+        walletAdjusted: !!(walletCredit > 0 || walletDue > 0),
+        walletRedeemed: walletCredit || 0,
+        walletDebtSettle: walletDue || 0,
+        total: total || 0 
+      }));
 
-      console.log("Saving order to Firestore...", finalOrder.id);
+      console.log("Saving sanitized order to Firestore...", finalOrder.id);
       // 1. SAVE TO FIRESTORE
       await setDoc(doc(db, 'orders', finalOrder.id), finalOrder);
+      
+      // 2. SHOW SUCCESS STATE ON BUTTON
       setOrderId(finalOrder.id);
+      setOrderPin(pin);
+      setOrderProcessed(true);
+      console.log("Order saved to Firestore. Feedback showing on button.");
 
-      // increment coupon usage
+      // 3. CLEANUP & NOTIFICATIONS (Background)
+      onOrderPlaced(finalOrder as any); 
+
+      // Support tasks
       if (appliedCoupon) {
         updateDoc(doc(db, 'coupons', appliedCoupon.id), {
           usedCount: increment(1)
         }).catch(e => console.error("Coupon increment failed", e));
       }
 
-      console.log("Order saved. Calling onOrderPlaced...");
-      // 2. NOTIFY PARENT (CLEAR CART)
-      onOrderPlaced(finalOrder as any); 
-
-      // 3. UPDATE USER WALLET
+      // Update user wallet
       if (user) {
         const updates: any = {};
         if (walletCredit > 0) {
@@ -526,41 +534,48 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
             amount: -walletCredit,
             balanceAfter: updates.walletBalance,
             type: 'order_payment',
-            description: `Payment for Order #${newOrder.id.slice(-6).toUpperCase()}`,
-            orderId: newOrder.id,
+            description: `Payment for Order #${finalOrder.id.slice(-6).toUpperCase()}`,
+            orderId: finalOrder.id,
             createdAt: Date.now()
           }).catch(txError => console.error("Wallet transaction failed:", txError));
         }
 
         if (Object.keys(updates).length > 0) {
-          await updateDoc(doc(db, 'users', user.uid), updates).catch(e => console.error("User wallet update failed", e));
+          updateDoc(doc(db, 'users', user.uid), updates).catch(e => console.error("User wallet update failed", e));
         }
       }
 
-      setOrderPin(pin);
-      setIsPlaced(true);
-      console.log("Order placement successful");
-
-      // Voice & Sound feedback
+      // Sound/Voice feedback
       try {
-        const speech = new SpeechSynthesisUtterance(`Order Placed Successfully. Your delivery PIN is ${pin}. Check WhatsApp for details.`);
+        const speech = new SpeechSynthesisUtterance(`Order Placed Successfully. Your delivery PIN is ${pin}.`);
         window.speechSynthesis.speak(speech);
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.play().catch(e => console.log("Audio play failed:", e));
+        new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play().catch(() => {});
       } catch (mediaErr) {
         console.warn("Media feedback failed", mediaErr);
       }
 
-      // 4. PREPARE WHATSAPP (BUT DON'T AUTO-REDIRECT WITH TIMEOUT TO AVOID BLOCKING)
-      // We will rely on the "WhatsApp Admin" button in the success UI
-      
-      // --- PUSH NOTIFICATIONS ---
+      // Push notification
       notificationService.sendNotification({
         userIds: [user?.uid || ''],
         title: "Order Placed! 🛍️",
         body: `Your order #${finalOrder.id.slice(-6).toUpperCase()} has been placed. PIN: ${pin}`,
         type: 'order'
       }).catch(notifErr => console.error("Push notification failed", notifErr));
+
+      // 4. PREPARE WHATSAPP MESSAGE
+      const itemsText = cart.map(item => `- ${item.name} (${item.quantity})`).join('\n');
+      const whatsappMsg = `*ORDER PLACED!*%0A--------------------------%0A*Order ID:* #${finalOrder.id.slice(-6).toUpperCase()}%0A*PIN:* ${pin}%0A*Name:* ${user?.name}%0A*Phone:* ${user?.phone}%0A*Address:* ${deliveryType === 'Delivery' ? manualAddress : 'Self Pickup'}%0A*Amount:* ₹${total.toFixed(0)}%0A%0A*Items:*%0A${encodeURIComponent(itemsText)}%0A--------------------------%0A_Verification PIN: ${pin}_`;
+      const whatsappUrl = `https://wa.me/918002914323?text=${whatsappMsg}`;
+
+      // Visual delay for feedback on the button before flipping full UI
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setIsPlaced(true);
+      console.log("Order placement routine completed, flipping to success screen");
+
+      // Auto-open WhatsApp after a short delay
+      setTimeout(() => {
+        window.open(whatsappUrl, '_blank');
+      }, 1000);
 
     } catch (error) {
       console.error("Critical error in handlePlaceOrder:", error);
@@ -573,66 +588,105 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
 
   if (isPlaced) {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center space-y-12">
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center space-y-8">
         <motion.div 
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="w-32 h-32 bg-green-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-green-500/30"
+          initial={{ scale: 0, rotate: -10 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: "spring", damping: 15 }}
+          className="w-32 h-32 bg-green-500 text-white rounded-[40px] flex items-center justify-center shadow-2xl shadow-green-500/30 relative"
         >
           <CheckCircle className="w-16 h-16" />
+          <motion.div 
+            animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="absolute -inset-4 bg-green-500 rounded-[48px] -z-10"
+          />
         </motion.div>
         
         <div className="space-y-4">
-          <h1 className="text-4xl font-black text-green-600 tracking-tight">Order Placed Successfully!</h1>
-          <p className="text-gray-500 font-medium max-w-sm mx-auto">Thank you for your order. Redirecting to your orders soon...</p>
-          <div className="bg-green-50 p-4 rounded-2xl border border-green-100 max-w-sm mx-auto space-y-3">
-            <p className="text-sm font-black text-green-700">Customer, you will receive a verification call soon or call us at 9608123427</p>
-            <a 
-              href="tel:9608123427"
-              className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-green-600/20 hover:bg-green-700 transition-all"
-            >
-              <Smartphone className="w-4 h-4" />
-              Call Now: 9608123427
-            </a>
-          </div>
+          <motion.h1 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight"
+          >
+            Order Placed <span className="text-green-600">Successfully!</span>
+          </motion.h1>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="text-gray-500 font-bold max-w-sm mx-auto uppercase tracking-widest text-[10px]"
+          >
+            Order ID: #{orderId.slice(-6).toUpperCase()} • Redirecting to WhatsApp...
+          </motion.p>
         </div>
 
-        <div className="bg-green-50 p-8 rounded-[40px] border border-green-100 max-w-md w-full space-y-6">
-          <div className="flex flex-col items-center gap-2">
-            <span className="text-xs font-bold text-green-600 uppercase tracking-widest">Verification PIN</span>
-            <span className="text-5xl font-black text-green-600 tracking-[0.5em]">{orderPin}</span>
-            <p className="text-[10px] text-green-500 font-bold uppercase tracking-widest mt-2">Show this to the delivery partner</p>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl">
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3 }}
+            className="bg-green-50 p-8 rounded-[40px] border border-green-100 flex flex-col items-center justify-center gap-4"
+          >
+            <span className="text-[10px] font-black text-green-600 uppercase tracking-[0.3em]">Verification PIN</span>
+            <span className="text-6xl font-black text-green-600 tracking-[0.3em] font-mono">{orderPin}</span>
+            <p className="text-[10px] text-green-500 font-bold uppercase tracking-widest mt-2 bg-white px-4 py-2 rounded-full">
+              Show this to delivery partner
+            </p>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-gray-50 p-8 rounded-[40px] border border-gray-100 flex flex-col items-center justify-center gap-4 text-center"
+          >
+            <Smartphone className="w-10 h-10 text-gray-400" />
+            <p className="text-sm font-black text-gray-700 tracking-tight">Need help?</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
+              Customer, you will receive a verification call soon. You can also contact us manually.
+            </p>
+            <div className="flex gap-2">
+              <a href="tel:9608123427" className="p-3 bg-white rounded-2xl shadow-sm border border-gray-100 text-gray-900 hover:scale-110 transition-all">
+                <Smartphone className="w-4 h-4" />
+              </a>
+              <a 
+                href={`https://wa.me/918002914323?text=${encodeURIComponent(`Order PIN: ${orderPin} - Requesting delivery for Order #${orderId.slice(-6)}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-3 bg-green-500 text-white rounded-2xl shadow-xl shadow-green-500/20 hover:scale-110 transition-all"
+              >
+                <ShoppingBag className="w-4 h-4" />
+              </a>
+            </div>
+          </motion.div>
         </div>
         
-        <div className="flex flex-wrap justify-center gap-4">
+        <div className="flex flex-wrap justify-center gap-4 pt-4">
           <Link 
             to="/orders"
-            className="bg-gray-900 text-white font-bold px-8 py-4 rounded-2xl shadow-xl shadow-gray-900/10 hover:bg-black transition-all active:scale-95 text-xs uppercase tracking-widest"
+            className="group relative bg-gray-900 text-white font-black px-10 py-5 rounded-[24px] shadow-2xl shadow-gray-900/10 hover:bg-black transition-all active:scale-95 text-xs uppercase tracking-[0.2em] flex items-center gap-3 overflow-hidden"
           >
-            My Orders
+            <FileText className="w-4 h-4" />
+            Go to My Orders
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
           </Link>
+          
           <Link 
             to={`/order-tracking/${orderId}`}
-            className="bg-primary text-white font-bold px-8 py-4 rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center gap-2"
+            className="bg-primary text-white font-black px-10 py-5 rounded-[24px] shadow-2xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 text-xs uppercase tracking-[0.2em] flex items-center gap-3"
           >
             <Navigation className="w-4 h-4" />
             Track Order
           </Link>
-          <a
-            href={`https://wa.me/918002914323?text=${encodeURIComponent(`Order PIN: ${orderPin} - Requesting delivery for Order #${orderId.slice(-6)}`)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-[#25D366] text-white font-bold px-8 py-4 rounded-2xl shadow-xl shadow-green-500/20 hover:bg-[#128C7E] transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center gap-2"
-          >
-            <Smartphone className="w-4 h-4" />
-            WhatsApp Admin
-          </a>
         </div>
-        
-        <div className="w-full max-w-md space-y-6">
-          <h4 className="text-sm font-black text-gray-900 tracking-tight text-center">Store Location</h4>
-          <div className="h-[250px] rounded-[32px] overflow-hidden border border-gray-100 shadow-inner relative group">
+
+        <div className="w-full max-w-3xl pt-8 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-6">
+            <h4 className="text-sm font-black text-gray-900 tracking-tight uppercase tracking-widest">Our Store Location</h4>
+            <span className="text-[10px] font-black text-primary uppercase tracking-widest">Open in Ranchi</span>
+          </div>
+          <div className="h-[250px] rounded-[40px] overflow-hidden border border-gray-100 shadow-2xl relative group">
             {import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? (
               <iframe 
                 src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${liveLocation ? `${liveLocation.lat},${liveLocation.lng}` : '23.3884631,85.2795441'}`}
@@ -658,9 +712,9 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
               href={liveLocation ? `https://www.google.com/maps/search/?api=1&query=${liveLocation.lat},${liveLocation.lng}` : "https://www.google.com/maps/search/?api=1&query=23.3884631,85.2795441"}
               target="_blank"
               rel="noopener noreferrer"
-              className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+              className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]"
             >
-              <div className="bg-white text-gray-900 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl">
+              <div className="bg-white text-gray-900 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl transform translate-y-4 group-hover:translate-y-0 transition-transform">
                 Open in Google Maps
               </div>
             </a>
@@ -707,23 +761,52 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                     className={`p-6 rounded-[32px] overflow-hidden relative group border mb-8 ${
                       walletBalance > 0 
                         ? 'bg-blue-50 border-blue-200' 
-                        : 'bg-red-50 border-red-200'
+                        : 'bg-red-50 border-red-200 shadow-lg shadow-red-500/10'
                     }`}
                   >
-                    <div className="flex items-center gap-4 relative z-10">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
-                        walletBalance > 0 ? 'bg-blue-500 text-white' : 'bg-red-500 text-white'
-                      }`}>
-                        <Wallet className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Wallet Status</p>
-                        <p className="text-lg font-black text-gray-900 tracking-tight">₹{walletBalance.toFixed(2)}</p>
-                        <p className={`text-[10px] font-bold uppercase tracking-widest ${
-                          walletBalance > 30 ? 'text-blue-600' : 'text-red-600'
+                    <div className="flex items-center justify-between relative z-10">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${
+                          walletBalance > 0 ? 'bg-blue-500 text-white' : 'bg-red-500 text-white'
                         }`}>
-                          {walletBalance > 30 ? 'Balance for instant pay' : 'Low Balance! Top up soon'}
-                        </p>
+                          <Wallet className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest opacity-60">
+                            {walletBalance < 0 ? 'Outstanding Debt' : 'Wallet Status'}
+                          </p>
+                          <p className={`text-lg font-black tracking-tight ${walletBalance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                            ₹{walletBalance.toFixed(2)}
+                          </p>
+                          <p className={`text-[10px] font-bold uppercase tracking-widest ${
+                            walletBalance > 30 ? 'text-blue-600' : 'text-red-600'
+                          }`}>
+                            {walletBalance > 0 ? 'Available for this order' : 'DUE PAYMENT (Compulsory)'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-col items-end gap-2">
+                        <button 
+                          onClick={() => {
+                            if (walletBalance < 0) {
+                              alert("Outstanding debt must be cleared with your next order. You cannot deselect this.");
+                              return;
+                            }
+                            setUseWallet(!useWallet);
+                          }}
+                          className={`w-12 h-6 rounded-full relative transition-all ${
+                            useWallet ? (walletBalance > 0 ? 'bg-blue-500' : 'bg-red-500') : 'bg-gray-200'
+                          } ${walletBalance < 0 ? 'cursor-not-allowed opacity-80' : ''}`}
+                        >
+                          <motion.div 
+                            animate={{ x: useWallet ? 24 : 4 }} 
+                            className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm ${walletBalance < 0 ? 'animate-pulse' : ''}`}
+                          />
+                        </button>
+                        <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">
+                          {walletBalance < 0 ? 'FIXED' : 'USE WALLET'}
+                        </span>
                       </div>
                     </div>
                   </motion.div>
@@ -1083,18 +1166,23 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
                     </button>
                     <button 
                       onClick={handlePlaceOrder}
-                      disabled={isProcessing}
-                      className={`flex-[2] relative overflow-hidden group bg-green-600 text-white font-black py-5 rounded-[32px] shadow-2xl shadow-green-600/30 hover:bg-green-700 transition-all uppercase tracking-[0.2em] text-[10px] flex items-center justify-center gap-2 outline-none ${isProcessing ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
+                      disabled={isProcessing || orderProcessed}
+                      className={`flex-[2] relative overflow-hidden group ${orderProcessed ? 'bg-green-500' : 'bg-green-600'} text-white font-black py-5 rounded-[32px] shadow-2xl shadow-green-600/30 hover:bg-green-700 transition-all uppercase tracking-[0.2em] text-[10px] flex items-center justify-center gap-2 outline-none ${(isProcessing || orderProcessed) ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
                     >
                       {isProcessing ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Finalizing Order...</span>
+                          <span>Processing...</span>
+                        </>
+                      ) : orderProcessed ? (
+                        <>
+                          <CheckCircle className="w-5 h-5 animate-pulse" />
+                          <span className="text-sm">ORDER PLACED!</span>
                         </>
                       ) : (
                         <>
                           <CheckCircle className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                          <span>Confirm & Place Order (₹{total.toFixed(0)})</span>
+                          <span>Place Order (₹{total.toFixed(0)})</span>
                         </>
                       )}
                       

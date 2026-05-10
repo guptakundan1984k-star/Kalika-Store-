@@ -14,9 +14,26 @@ export const AdminAssistant: React.FC<AdminAssistantProps> = ({ context, title =
   const [isMinimized, setIsMinimized] = useState(false);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('Analyzing context...');
   const [messages, setMessages] = useState<{ role: 'user' | 'ai', content: string }[]>([
     { role: 'ai', content: `Hello! I'm your AI assistant. I have access to your current ${title === 'CS Assistant' ? 'delivery & wallet' : 'store'} context. How can I help you manage things today?` }
   ]);
+
+  const loadingIntervalRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (loading) {
+      const texts = ['Analyzing context...', 'Reading store data...', 'Checking inventory...', 'Reviewing orders...', 'Matching patterns...', 'Crafting response...'];
+      let i = 0;
+      loadingIntervalRef.current = setInterval(() => {
+        i = (i + 1) % texts.length;
+        setLoadingText(texts[i]);
+      }, 1500);
+    } else {
+      if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current);
+    }
+    return () => { if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current); };
+  }, [loading]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -118,7 +135,7 @@ export const AdminAssistant: React.FC<AdminAssistantProps> = ({ context, title =
                     <div className="flex justify-start">
                       <div className="bg-white p-4 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest text-[10px]">Processing context...</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest text-[10px]">{loadingText}</span>
                       </div>
                     </div>
                   )}

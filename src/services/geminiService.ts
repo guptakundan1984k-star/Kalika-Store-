@@ -22,10 +22,9 @@ async function callAI(contents: any, modelName: string = "gemini-3-flash-preview
   }
 
   try {
-    // Correct usage according to skill: ai.models.generateContent
     const response = await ai.models.generateContent({
       model: modelName,
-      contents: contents
+      contents: contents,
     });
     
     return response;
@@ -51,7 +50,7 @@ export async function findProductByBarcode(barcode: string) {
     const jsonStr = text.match(/{.*}/s)?.[0] || '{}';
     return JSON.parse(jsonStr);
   } catch (e) {
-    return {};
+    return { name: "" };
   }
 }
 
@@ -74,7 +73,7 @@ export async function analyzeProductImage(base64Image: string) {
     const jsonStr = text.match(/{.*}/s)?.[0] || '{}';
     return JSON.parse(jsonStr);
   } catch (e) {
-    return {};
+    return { name: "" };
   }
 }
 
@@ -119,12 +118,11 @@ export async function searchProductDetails(name: string) {
     const jsonStr = text.match(/{.*}/s)?.[0] || '{}';
     return JSON.parse(jsonStr);
   } catch (e) {
-    return {};
+    return { name: "" };
   }
 }
 
 export async function answerAdminQuery(query: string, data: any, base64Image?: string) {
-  // Optimization: Truncate large context to prevent token limit errors
   const sanitizeData = (obj: any) => {
     if (Array.isArray(obj)) {
       return obj.slice(0, 50).map(item => {
@@ -140,7 +138,7 @@ export async function answerAdminQuery(query: string, data: any, base64Image?: s
     optimizedData[key] = sanitizeData(data[key]);
   }
 
-  const parts: any[] = [
+  const promptParts: any[] = [
     { text: `You are an expert AI Retail Assistant for Kalika Store.
     You help Store Admins and CS (Customer Service) agents manage inventory, orders, and user issues.
     
@@ -156,7 +154,7 @@ export async function answerAdminQuery(query: string, data: any, base64Image?: s
     User Query: ${query}` }
   ];
   if (base64Image) {
-    parts.push({
+    promptParts.push({
       inlineData: {
         data: base64Image.split(',')[1] || base64Image,
         mimeType: "image/jpeg"
@@ -164,7 +162,7 @@ export async function answerAdminQuery(query: string, data: any, base64Image?: s
     });
   }
 
-    const result = await callAI({ parts });
+  const result = await callAI({ parts: promptParts });
   return result.text || "Sorry, I couldn't generate a response.";
 }
 
@@ -180,7 +178,7 @@ export async function checkEnvironmentStatus() {
     const ai = getAi();
     if (!ai) return { status: 'open', reason: '' };
 
-    const response = await ai.models.generateContent({
+    const result = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [
         {
@@ -189,11 +187,11 @@ export async function checkEnvironmentStatus() {
             {
               text: `Check the following for Ranchi, Jharkhand, India:
               1. Tomorrow's public holidays or major occasions.
-              2. Current and forecasted weather conditions (specifically rain, flood, or extreme heat).
+              2. Current and forecasted weather conditions (specifically rain, flood, or extreme weather).
               
               Based on this, determine if a grocery delivery service should be:
               - "closed" (if there's a major occasion tomorrow)
-              - "delayed" (if there's a natural disaster or extreme weather like rain/flood/extreme heat)
+              - "delayed" (if there's extreme weather)
               - "open" (standard operations)
               
               Provide a short reason in English.
@@ -207,7 +205,7 @@ export async function checkEnvironmentStatus() {
       }
     });
 
-    const text = response.text;
+    const text = result.text;
     const jsonStr = text.match(/{.*}/s)?.[0] || '{"status": "open", "reason": ""}';
     return JSON.parse(jsonStr);
   } catch (e) {

@@ -526,7 +526,10 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                     const order = orders.find(o => o.id === id);
                     if (!order) return;
                     
-                    const balanceAdjustment = receivedAmount - order.total;
+                    // The order.total already includes any outstanding debt (order.walletDebtSettle)
+                    // So we subtract the debt from total before calculating the adjustment for this specific order items
+                    const orderBaseTotal = order.total - (order.walletDebtSettle || 0);
+                    const balanceAdjustment = (receivedAmount - orderBaseTotal);
                     
                     // Update Order
                     await updateDoc(doc(db, 'orders', id), { 
@@ -550,6 +553,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                       const userDoc = doc(db, 'users', order.userId);
                       const userRef = users.find(u => u.uid === order.userId);
                       const currentBalance = userRef?.walletBalance || 0;
+                      // The new balance correctly accounts for clearing old debt and any extra/less payment
                       const newBalance = currentBalance + balanceAdjustment;
 
                       // Update User Balance
@@ -564,17 +568,12 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                           amount: balanceAdjustment,
                           balanceAfter: newBalance,
                           type: 'delivery_adjustment',
-                          description: balanceAdjustment > 0 
-                            ? `Extra payment for Order #${order.id.slice(-6).toUpperCase()}` 
-                            : `Outstanding due for Order #${order.id.slice(-6).toUpperCase()} (Received ₹${receivedAmount} of ₹${order.total})`,
+                          description: balanceAdjustment > currentBalance 
+                            ? `Full payment & debt settlement for Order #${order.id.slice(-6).toUpperCase()}` 
+                            : `Payment adjustment for Order #${order.id.slice(-6).toUpperCase()}`,
                           orderId: order.id,
                           createdAt: Date.now()
                         });
-                      }
-                      
-                      // Log full payment if any
-                      if (receivedAmount > 0 && receivedAmount !== balanceAdjustment) {
-                        // Optional: Log the payment itself if you want full double-entry
                       }
                     }
                   })}

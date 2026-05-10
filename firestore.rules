@@ -110,18 +110,18 @@ service cloud.firestore {
     }
 
     function isValidOrder(data) {
-      return hasOnlyAllowedFields(['id', 'userId', 'userName', 'userPhone', 'items', 'total', 'status', 'deliveryType', 'address', 'pin', 'createdAt', 'updatedAt', 'tracking', 'deliverySlot', 'paymentMethod', 'prescriptionImage', 'earnedPoints', 'redeemedPoints', 'inBag', 'cancellationReason', 'deliveredBy', 'receivedAmount', 'isPreOrder', 'discount', 'walletAdjusted', 'walletRedeemed', 'estimatedDelivery']) &&
+      return hasOnlyAllowedFields(['id', 'userId', 'userName', 'userPhone', 'items', 'total', 'status', 'deliveryType', 'address', 'pin', 'createdAt', 'updatedAt', 'tracking', 'deliverySlot', 'paymentMethod', 'prescriptionImage', 'earnedPoints', 'redeemedPoints', 'inBag', 'cancellationReason', 'deliveredBy', 'receivedAmount', 'isPreOrder', 'discount', 'walletAdjusted', 'walletRedeemed', 'walletDebtSettle', 'estimatedDelivery']) &&
              data.userId is string && data.userId.size() > 0 &&
-             data.status in ['Pending', 'Order Received', 'Packed', 'Out for Delivery', 'Delivered', 'Cancelled'] &&
+             data.status in ['Pending', 'Order Received', 'Packaging', 'Packed', 'Out for Delivery', 'Ready to Pick Up', 'Delivered', 'Cancelled'] &&
              data.total is number && data.total >= 0 &&
              data.deliveryType in ['Takeaway', 'Delivery'] &&
              data.pin is string && data.pin.size() == 4 &&
              data.createdAt is number &&
              data.items is list &&
-             (!('address' in data) || (data.address is map)) &&
+             (!('address' in data) || (data.address == null || data.address is map)) &&
              (!('tracking' in data) || (data.tracking is list)) &&
-             (!('deliverySlot' in data) || (data.deliverySlot is string)) &&
-             (!('paymentMethod' in data) || (data.paymentMethod is string)) &&
+             (!('deliverySlot' in data) || (data.deliverySlot == null || data.deliverySlot is string)) &&
+             (!('paymentMethod' in data) || (data.paymentMethod == null || data.paymentMethod is string)) &&
              (!('earnedPoints' in data) || (data.earnedPoints is number)) &&
              (!('redeemedPoints' in data) || (data.redeemedPoints is number)) &&
              (!('inBag' in data) || (data.inBag is bool)) &&
@@ -133,6 +133,7 @@ service cloud.firestore {
              (!('discount' in data) || (data.discount is number)) &&
              (!('walletAdjusted' in data) || (data.walletAdjusted is bool)) &&
              (!('walletRedeemed' in data) || (data.walletRedeemed is number)) &&
+             (!('walletDebtSettle' in data) || (data.walletDebtSettle is number)) &&
              (!('estimatedDelivery' in data) || (data.estimatedDelivery is number));
     }
 

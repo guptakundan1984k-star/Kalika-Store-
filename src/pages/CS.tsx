@@ -223,9 +223,9 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
 
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex flex-col items-end">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Handheld Balance</p>
-              <h4 className={`text-md font-black tracking-tight ${staffProfile?.walletBalance && staffProfile.walletBalance < 0 ? 'text-red-500' : 'text-green-600'}`}>
-                ₹{staffProfile?.walletBalance || 0}
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Handheld Cash</p>
+              <h4 className={`text-xl font-black tracking-tighter ${staffProfile?.walletBalance && staffProfile.walletBalance < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                ₹{staffProfile?.walletBalance?.toFixed(2) || 0}
               </h4>
             </div>
             <button 
@@ -271,10 +271,11 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
               <Wallet className="w-7 h-7" />
             </div>
             <div className="flex-1">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Handheld</p>
-              <h4 className={`text-xl font-black tracking-tight ${staffProfile?.walletBalance && staffProfile.walletBalance < 0 ? 'text-red-500' : 'text-green-600'}`}>
-                ₹{staffProfile?.walletBalance || 0}
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Handheld Cash</p>
+              <h4 className={`text-2xl font-black tracking-tighter ${staffProfile?.walletBalance && staffProfile.walletBalance < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                ₹{staffProfile?.walletBalance?.toFixed(2) || 0}
               </h4>
+              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Pay to Owner</p>
             </div>
           </div>
 
