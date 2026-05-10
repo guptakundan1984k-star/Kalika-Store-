@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { CartDrawer } from './components/CartDrawer';
@@ -9,6 +10,7 @@ import ScrollToTop from './components/ScrollToTop';
 import { Product, CartItem, UserProfile, Order, Coupon, Banner, StoreSettings, WalletTransaction } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, ShoppingBag, ArrowUp, X } from 'lucide-react';
+import { PageLoader } from './components/PageLoader';
 
 // Firebase
 import { 
@@ -17,30 +19,32 @@ import {
   handleFirestoreError, OperationType
 } from './firebase';
 
-// Pages
-import Home from './pages/Home';
-import Products from './pages/Products';
-import Cart from './pages/Cart';
-import Checkout from './pages/Checkout';
-import Profile from './pages/Profile';
-import Admin from './pages/Admin';
-import Categories from './pages/Categories';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ProductDetail from './pages/ProductDetail';
-import Wishlist from './pages/Wishlist';
-import BillPage from './pages/BillPage';
-import Items from './pages/Items';
-import { MyOrders } from './pages/MyOrders';
-import { OrderTracking } from './pages/OrderTracking';
-import { BulkEnquiryPage } from './pages/BulkEnquiryPage';
-import { AddressesPage } from './pages/AddressesPage';
-import { HelpSupportPage } from './pages/HelpSupportPage';
-import { PhotoBillPage } from './pages/PhotoBillPage';
-import Scan from './pages/Scan';
-import CS from './pages/CS';
-import Topup from './pages/Topup';
-import { SearchResults } from './pages/SearchResults';
+// Lazy load Pages
+const Home = lazy(() => import('./pages/Home'));
+const Products = lazy(() => import('./pages/Products'));
+const Cart = lazy(() => import('./pages/Cart'));
+const Checkout = lazy(() => import('./pages/Checkout'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Admin = lazy(() => import('./pages/Admin'));
+const Categories = lazy(() => import('./pages/Categories'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const ProductDetail = lazy(() => import('./pages/ProductDetail'));
+const Wishlist = lazy(() => import('./pages/Wishlist'));
+const BillPage = lazy(() => import('./pages/BillPage'));
+const Items = lazy(() => import('./pages/Items'));
+const MyOrders = lazy(() => import('./pages/MyOrders').then(m => ({ default: m.MyOrders })));
+const OrderTracking = lazy(() => import('./pages/OrderTracking').then(m => ({ default: m.OrderTracking })));
+const BulkEnquiryPage = lazy(() => import('./pages/BulkEnquiryPage').then(m => ({ default: m.BulkEnquiryPage })));
+const AddressesPage = lazy(() => import('./pages/AddressesPage').then(m => ({ default: m.AddressesPage })));
+const HelpSupportPage = lazy(() => import('./pages/HelpSupportPage').then(m => ({ default: m.HelpSupportPage })));
+const PhotoBillPage = lazy(() => import('./pages/PhotoBillPage').then(m => ({ default: m.PhotoBillPage })));
+const Scan = lazy(() => import('./pages/Scan'));
+const CS = lazy(() => import('./pages/CS'));
+const Topup = lazy(() => import('./pages/Topup'));
+const SearchResults = lazy(() => import('./pages/SearchResults').then(m => ({ default: m.SearchResults })));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
 import { ProductRequestModal } from './components/ProductRequestModal';
 import { LoginPromptModal } from './components/LoginPromptModal';
 import { StoreStatusBanner } from './components/StoreStatusBanner';
@@ -52,12 +56,14 @@ import { ThemeProvider } from './context/ThemeContext';
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <Router>
-        <ScrollToTop />
-        <AppContent />
-      </Router>
-    </ThemeProvider>
+    <HelmetProvider>
+      <ThemeProvider>
+        <Router>
+          <ScrollToTop />
+          <AppContent />
+        </Router>
+      </ThemeProvider>
+    </HelmetProvider>
   );
 }
 
@@ -326,31 +332,35 @@ function AppContent() {
       <StoreStatusBanner settings={storeSettings} user={user} />
       <main className="flex-1 relative z-10">
         <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<Home products={products} onAddToCart={addToCart} banners={banners} storeSettings={storeSettings} cart={cart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} />} />
-            <Route path="/products" element={<Products products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
-            <Route path="/items" element={<Items products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
-            <Route path="/product/:id" element={<ProductDetail products={products} onAddToCart={addToCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} user={user} storeSettings={storeSettings} />} />
-            <Route path="/categories" element={<Categories products={products} onAddToCart={addToCart} cart={cart} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} />} />
-            <Route path="/wishlist" element={user ? <Wishlist products={products} wishlist={user.wishlist || []} onAddToCart={addToCart} toggleWishlist={toggleWishlist} /> : <Navigate to="/login" />} />
-            <Route path="/bulk-enquiry" element={user ? <BulkEnquiryPage user={user} /> : <Navigate to="/login" />} />
-            <Route path="/addresses" element={user ? <AddressesPage user={user} /> : <Navigate to="/login" />} />
-            <Route path="/help" element={<HelpSupportPage user={user} orders={orders} />} />
-            <Route path="/photo-bill" element={<PhotoBillPage products={products} user={user} onAddToCart={addToCart} />} />
-            <Route path="/bill" element={<BillPage products={products} onAddItems={(items) => { items.forEach(({ product, quantity }) => addToCart(product, quantity)); }} />} />
-            <Route path="/cart" element={<Cart cart={cart} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClearCart={handleClearCart} products={products} onAddToCart={addToCart} storeSettings={storeSettings} user={user} />} />
-            <Route path="/checkout" element={<Checkout cart={cart} user={user} coupons={coupons} storeSettings={storeSettings} onOrderPlaced={async (order: any) => { try { await setDoc(doc(db, 'orders', order.id), order); setCart([]); navigate('/orders'); } catch (e) { console.error(e); } }} />} />
-            <Route path="/profile" element={user ? <Profile user={user} orders={orders} /> : <Navigate to="/login" />} />
-            <Route path="/orders" element={user ? <MyOrders orders={orders} user={user} /> : <Navigate to="/login" />} />
-            <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
-            <Route path="/search" element={<SearchResults products={products} onAddToCart={addToCart} />} />
-            <Route path="/admin" element={<Admin products={products} orders={orders} coupons={coupons} banners={banners} user={user} />} />
-            <Route path="/cs" element={<CS products={products} orders={orders} user={user} />} />
-            <Route path="/topup" element={<Topup user={user} />} />
-            <Route path="/scan" element={<Scan />} />
-            <Route path="/login" element={<Login onLogin={(u: any) => setUser(u)} />} />
-            <Route path="/register" element={<Register onRegister={(u: any) => setUser(u)} />} />
-          </Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes location={location} key={location.pathname}>
+              <Route path="/" element={<Home products={products} onAddToCart={addToCart} banners={banners} storeSettings={storeSettings} cart={cart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} />} />
+              <Route path="/products" element={<Products products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
+              <Route path="/items" element={<Items products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
+              <Route path="/product/:id" element={<ProductDetail products={products} onAddToCart={addToCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} user={user} storeSettings={storeSettings} />} />
+              <Route path="/categories" element={<Categories products={products} onAddToCart={addToCart} cart={cart} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} />} />
+              <Route path="/wishlist" element={user ? <Wishlist products={products} wishlist={user.wishlist || []} onAddToCart={addToCart} toggleWishlist={toggleWishlist} /> : <Navigate to="/login" />} />
+              <Route path="/bulk-enquiry" element={user ? <BulkEnquiryPage user={user} /> : <Navigate to="/login" />} />
+              <Route path="/addresses" element={user ? <AddressesPage user={user} /> : <Navigate to="/login" />} />
+              <Route path="/help" element={<HelpSupportPage user={user} orders={orders} />} />
+              <Route path="/photo-bill" element={<PhotoBillPage products={products} user={user} onAddToCart={addToCart} />} />
+              <Route path="/bill" element={<BillPage products={products} onAddItems={(items) => { items.forEach(({ product, quantity }) => addToCart(product, quantity)); }} />} />
+              <Route path="/cart" element={<Cart cart={cart} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClearCart={handleClearCart} products={products} onAddToCart={addToCart} storeSettings={storeSettings} user={user} />} />
+              <Route path="/checkout" element={<Checkout cart={cart} user={user} coupons={coupons} storeSettings={storeSettings} onOrderPlaced={async (order: any) => { try { await setDoc(doc(db, 'orders', order.id), order); setCart([]); navigate('/orders'); } catch (e) { console.error(e); } }} />} />
+              <Route path="/profile" element={user ? <Profile user={user} orders={orders} /> : <Navigate to="/login" />} />
+              <Route path="/orders" element={user ? <MyOrders orders={orders} user={user} /> : <Navigate to="/login" />} />
+              <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
+              <Route path="/search" element={<SearchResults products={products} onAddToCart={addToCart} />} />
+              <Route path="/admin" element={<Admin products={products} orders={orders} coupons={coupons} banners={banners} user={user} />} />
+              <Route path="/cs" element={<CS products={products} orders={orders} user={user} />} />
+              <Route path="/topup" element={<Topup user={user} />} />
+              <Route path="/scan" element={<Scan />} />
+              <Route path="/login" element={<Login onLogin={(u: any) => setUser(u)} />} />
+              <Route path="/register" element={<Register onRegister={(u: any) => setUser(u)} />} />
+              {/* Catch-all 404 Route */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </AnimatePresence>
       </main>
       <Footer />

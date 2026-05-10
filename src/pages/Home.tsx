@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { ProductCard } from '../components/ProductCard';
 import { Product, Banner, StoreSettings, CartItem } from '../types';
 import { useStore } from '../contexts/StoreContext';
@@ -70,6 +71,11 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
       animate={{ opacity: 1 }}
       className="pb-32 bg-[#F8FAFC] min-h-screen"
     >
+      <Helmet>
+        <title>Kalika Store - Fresh Grocery Delivery in Ranchi | Jharkhand</title>
+        <meta name="description" content="Shop fresh groceries, cold drinks, household essentials, and more at Kalika Store Ranchi. Fast delivery and best prices guaranteed." />
+        <meta name="keywords" content="grocery, ranchi, delivery, fresh vegetables, cold drinks, rice, atta, kalika store" />
+      </Helmet>
       {/* Brand Identity / Header Section */}
       <div className="w-full pt-12 pb-8 flex flex-col items-center">
         <div className="w-full px-6 flex flex-col items-center text-center">
