@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, MapPin, Clock, AlertCircle, ShoppingBag, Package, ShieldCheck } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { ReachedEnd } from '../components/ReachedEnd';
+import { AdUnit } from '../components/AdUnit';
 
 interface HomeProps {
   products: Product[];

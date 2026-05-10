@@ -52,7 +52,7 @@ import { LanguagePromptModal } from './components/LanguagePromptModal';
 import { BonusBanner } from './components/BonusBanner';
 
 import { useStore } from './contexts/StoreContext';
-import { ThemeProvider } from './context/ThemeContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 export default function App() {
   return (
