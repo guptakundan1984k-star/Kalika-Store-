@@ -284,7 +284,11 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
     const userImg = selectedImage;
     setHelpQuery('');
     setSelectedImage(null);
-    setHelpMessages(prev => [...prev, { role: 'user', content: userMsg, image: userImg || undefined }]);
+    setHelpMessages(prev => [...prev, { 
+      role: 'user', 
+      content: userMsg, 
+      ...(userImg ? { image: userImg } : {}) 
+    }]);
     setHelpLoading(true);
     try {
       const response = await answerAdminQuery(userMsg || "Analyze this image", { user, orders }, userImg || undefined);

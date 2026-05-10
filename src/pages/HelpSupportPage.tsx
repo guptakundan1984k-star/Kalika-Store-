@@ -51,7 +51,11 @@ const HelpSupportPageContent: React.FC<HelpSupportPageProps> = ({ user, orders }
     setHelpQuery('');
     setSelectedImage(null);
     
-    const newMessages = [...helpMessages, { role: 'user' as const, content: userMsg, image: userImg || undefined }];
+    const newMessages = [...helpMessages, { 
+      role: 'user' as const, 
+      content: userMsg, 
+      ...(userImg ? { image: userImg } : {})
+    }];
     setHelpMessages(newMessages);
     setHelpLoading(true);
 
@@ -59,13 +63,13 @@ const HelpSupportPageContent: React.FC<HelpSupportPageProps> = ({ user, orders }
       // Sync to Firebase
       await setDoc(doc(db, 'support_queries', user.uid), {
         userId: user.uid,
-        userName: user.name,
-        userEmail: user.email,
+        userName: user.name || 'Anonymous',
+        userEmail: user.email || 'No email',
         userPhone: user.phone || 'Not provided',
         chatHistory: newMessages,
         status: 'pending',
         updatedAt: Date.now(),
-        createdAt: Date.now() // Only set if not exists normally, but merge: true handles it
+        createdAt: Date.now()
       }, { merge: true });
 
       const response = await answerAdminQuery(userMsg || "Analyze this image", { user, orders }, userImg || undefined);

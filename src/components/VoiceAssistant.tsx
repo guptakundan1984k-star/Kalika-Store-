@@ -128,8 +128,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
           const qRef = doc(db, 'support_queries', user.uid);
           await setDoc(qRef, {
             userId: user.uid,
-            userName: user.name,
-            userEmail: user.email,
+            userName: user.name || 'Anonymous',
+            userEmail: user.email || 'No email',
             status: 'pending',
             updatedAt: timestamp
           }, { merge: true });
