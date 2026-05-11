@@ -4,6 +4,25 @@ import { motion, AnimatePresence } from 'motion/react';
 import { answerAdminQuery } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 
+const TypingText: React.FC<{ text: string; onComplete?: () => void }> = ({ text, onComplete }) => {
+  const [displayedText, setDisplayedText] = useState('');
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (index < text.length) {
+      const timer = setTimeout(() => {
+        setDisplayedText(prev => prev + text[index]);
+        setIndex(prev => prev + 1);
+      }, 10);
+      return () => clearTimeout(timer);
+    } else {
+      onComplete?.();
+    }
+  }, [index, text, onComplete]);
+
+  return <ReactMarkdown>{displayedText}</ReactMarkdown>;
+};
+
 interface AdminAssistantProps {
   context: any;
   title?: string;
@@ -126,7 +145,11 @@ export const AdminAssistant: React.FC<AdminAssistantProps> = ({ context, title =
                         : 'bg-white text-gray-800 rounded-tl-none border border-gray-100 shadow-sm shadow-gray-200/50'
                       }`}>
                         <div className="markdown-body">
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          {msg.role === 'ai' && i === messages.length - 1 ? (
+                            <TypingText text={msg.content} />
+                          ) : (
+                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          )}
                         </div>
                       </div>
                     </motion.div>

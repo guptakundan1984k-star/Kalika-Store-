@@ -18,15 +18,19 @@ import {
   Coffee,
   Truck,
   Star,
-  SprayCan
+  SprayCan,
+  RefreshCw,
+  User,
+  ShieldCheck
 } from 'lucide-react';
 
 const ITEMS = [
-  { label: 'PREMIUM STAPLES', icon: Wheat },
-  { label: 'BEVERAGE', icon: Coffee },
-  { label: 'BISCUITS', icon: Cookie },
-  { label: 'CLEANING SUPPLIES', icon: SprayCan, useBlue: true },
-  { label: 'AND MANY MORE..', icon: Sparkles },
+  { label: 'KALIKA STORE', icon: ShoppingBag },
+  { label: 'CONNECTING...', icon: RefreshCw },
+  { label: 'CHECKING STOCK', icon: Package },
+  { label: 'SYNCING PROFILE', icon: User },
+  { label: 'SECURE LINK', icon: ShieldCheck },
+  { label: 'READY!', icon: Sparkles },
 ];
 
 export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete }) => {
@@ -37,17 +41,17 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
     if (index < ITEMS.length - 1) {
       const timer = setTimeout(() => {
         setIndex(prev => prev + 1);
-      }, 350); // Reduced from 600
+      }, 250); // Faster duration for rhythmic feel
       return () => clearTimeout(timer);
     } else if (!showComplete) {
       const timer = setTimeout(() => {
         setShowComplete(true);
-      }, 350); // Reduced from 600
+      }, 250);
       return () => clearTimeout(timer);
     } else {
       const completeTimer = setTimeout(() => {
         onComplete?.();
-      }, 500); // Reduced from 1000
+      }, 400); 
       return () => clearTimeout(completeTimer);
     }
   }, [index, showComplete, onComplete]);

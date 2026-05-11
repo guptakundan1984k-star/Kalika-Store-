@@ -5,6 +5,7 @@ import { MapPin, Truck, ShoppingBag, CreditCard, ArrowRight, CheckCircle, Shield
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { doc, updateDoc, db, addDoc, setDoc, collection, getDoc, getDocs, query, where, onSnapshot, handleFirestoreError, OperationType, increment } from '../firebase';
+import { OrderProcessingScreen } from '../components/OrderProcessingScreen';
 import { InvoiceGenerator } from '../components/InvoiceGenerator';
 import { ProductImage } from '../components/ProductImage';
 import { notificationService } from '../services/notificationService';
@@ -36,6 +37,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
   const [couponError, setCouponError] = useState('');
   const [isPlaced, setIsPlaced] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showOrderProcessing, setShowOrderProcessing] = useState(false);
   const [orderProcessed, setOrderProcessed] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [orderPin, setOrderPin] = useState('');
@@ -466,6 +468,7 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
     }
 
     setIsProcessing(true);
+    setShowOrderProcessing(true);
     console.log("Processing order started...");
 
     try {
@@ -568,9 +571,8 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       const whatsappUrl = `https://wa.me/918002914323?text=${whatsappMsg}`;
 
       // Visual delay for feedback on the button before flipping full UI
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      setIsPlaced(true);
-      console.log("Order placement routine completed, flipping to success screen");
+      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log("Order placement routine completed, waiting for processing screen to finish");
 
       // Auto-open WhatsApp after a short delay
       setTimeout(() => {
@@ -585,6 +587,15 @@ const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrderPlaced,
       setIsProcessing(false);
     }
   };
+
+  if (showOrderProcessing) {
+    return (
+      <OrderProcessingScreen onComplete={() => {
+        setShowOrderProcessing(false);
+        setIsPlaced(true);
+      }} />
+    );
+  }
 
   if (isPlaced) {
     return (
