@@ -8,6 +8,7 @@ export interface Product {
   category: string;
   image: string; // Keep for backward compatibility, but we'll use primaryImage
   images?: string[]; // Array of image URLs
+  hasManualPhoto?: boolean;
   primaryImage?: string; 
   stock: number;
   createdAt: number;
@@ -35,6 +36,7 @@ export interface Review {
   comment: string;
   photos?: string[];
   createdAt: number;
+  orderId?: string; // Link to the specific order that allowed this review
   isCSReview?: boolean;
 }
 
@@ -69,7 +71,7 @@ export interface Order {
   userId: string;
   items: CartItem[];
   total: number;
-  status: 'Pending' | 'Order Received' | 'Packaging' | 'Packed' | 'Out for Delivery' | 'Ready to Pick Up' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Order Received' | 'Order Placed' | 'Packaging' | 'Packed' | 'Out for Delivery' | 'Ready to Pick Up' | 'Picked Up' | 'Delivered' | 'Cancelled';
   deliveryType: 'Takeaway' | 'Delivery';
   userName?: string;
   userPhone?: string;
@@ -92,8 +94,12 @@ export interface Order {
   walletDebtSettle?: number;
   estimatedDelivery?: number;
   isPreOrder?: boolean;
+  orderType?: 'personal' | 'sell';
   cancellationReason?: string;
   deliveredBy?: string; // staff UID
+  placedBy?: 'User' | 'Store';
+  adminName?: string;
+  adminPhone?: string;
   tracking?: {
     status: string;
     timestamp: number;

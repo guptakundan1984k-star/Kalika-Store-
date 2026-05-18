@@ -16,7 +16,7 @@ import { PageLoader } from './components/PageLoader';
 import { 
   auth, db, onAuthStateChanged, collection, doc, 
   onSnapshot, query, where, orderBy, setDoc, getDoc, updateDoc, deleteDoc, getDocs,
-  handleFirestoreError, OperationType
+  handleFirestoreError, OperationType, limit
 } from './firebase';
 
 // Lazy load Pages
@@ -43,6 +43,7 @@ const Scan = lazy(() => import('./pages/Scan'));
 const CS = lazy(() => import('./pages/CS'));
 const Topup = lazy(() => import('./pages/Topup'));
 const SearchResults = lazy(() => import('./pages/SearchResults').then(m => ({ default: m.SearchResults })));
+const OrderSuccess = lazy(() => import('./pages/OrderSuccess'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 import { ProductRequestModal } from './components/ProductRequestModal';
@@ -91,12 +92,14 @@ function AppContent() {
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [showSplash, setShowSplash] = useState(() => {
-    try {
-      return sessionStorage.getItem('splashShown') !== 'true';
-    } catch (e) {
-      return true;
-    }
+    const hasSeenSplash = sessionStorage.getItem('has_seen_splash');
+    return !hasSeenSplash;
   });
+
+  const handleSplashComplete = () => {
+    setShowSplash(false);
+    sessionStorage.setItem('has_seen_splash', 'true');
+  };
 
   useEffect(() => {
     // Safety timeout: Ensure app loads after 3 seconds even if auth state is delayed
@@ -265,7 +268,7 @@ function AppContent() {
         };
         update();
         if (checkInterval) clearInterval(checkInterval);
-        checkInterval = setInterval(update, 60000);
+        // Sync interval removed for performance
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/store', false));
     return () => { unsubscribe(); if (checkInterval) clearInterval(checkInterval); };
@@ -280,7 +283,11 @@ function AppContent() {
 
   useEffect(() => {
     if (!isAuthReady || !user) { setOrders([]); return; }
-    const q = (user.role === 'admin' || user.role === 'cs') ? query(collection(db, 'orders'), orderBy('createdAt', 'desc')) : query(collection(db, 'orders'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
+    // Only fetch last 300 orders for performance
+    const q = (user.role === 'admin' || user.role === 'cs') 
+      ? query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(300)) 
+      : query(collection(db, 'orders'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'), limit(300));
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setOrders(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Order)));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'orders', false));
@@ -304,7 +311,7 @@ function AppContent() {
     return false;
   };
   const handleVoicePlaceOrder = () => navigate('/checkout');
-  const handleVoiceSearch = (s: string) => { setSearchQuery(s); navigate('/products'); };
+  const handleVoiceSearch = (s: string) => { navigate(`/search?q=${encodeURIComponent(s)}`); };
 
   useEffect(() => {
     const p = new URLSearchParams(location.search).get('request');
@@ -312,8 +319,19 @@ function AppContent() {
   }, [location.pathname]);
 
   // Removed disruptive visibility-change back-navigation
+  // if (!isAuthReady) return <PageLoader />;
+  
+  useEffect(() => {
+    // Force Home entry on initial load (splash screen or auth checking)
+    // The user said "Make the store load from the homepage not any other pages"
+    if ((showSplash || !isAuthReady) && location.pathname !== '/') {
+      navigate('/', { replace: true });
+    }
+  }, [showSplash, location.pathname, navigate]);
 
-  if (!isAuthReady || showSplash) return <LoadingScreen onComplete={() => { setShowSplash(false); sessionStorage.setItem('splashShown', 'true'); }} />;
+  if (showSplash) {
+    return <LoadingScreen onComplete={handleSplashComplete} />;
+  }
 
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans selection:bg-primary/20 selection:text-primary relative">
@@ -331,13 +349,16 @@ function AppContent() {
       {user && <BonusBanner user={user} />}
       <StoreStatusBanner settings={storeSettings} user={user} />
       <main className="flex-1 relative z-10">
-        <AnimatePresence mode="wait">
-          <Suspense fallback={<PageLoader />}>
-            <Routes location={location} key={location.pathname}>
-              <Route path="/" element={<Home products={products} onAddToCart={addToCart} banners={banners} storeSettings={storeSettings} cart={cart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} />} />
+        {!isAuthReady ? (
+          <PageLoader />
+        ) : (
+          <AnimatePresence mode="wait">
+            <Suspense fallback={<PageLoader />}>
+              <Routes location={location} key={location.pathname}>
+              <Route path="/" element={<Home products={products} onAddToCart={addToCart} banners={banners} storeSettings={storeSettings} cart={cart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} user={user} orders={orders} />} />
               <Route path="/products" element={<Products products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
               <Route path="/items" element={<Items products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
-              <Route path="/product/:id" element={<ProductDetail products={products} onAddToCart={addToCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} user={user} storeSettings={storeSettings} />} />
+              <Route path="/product/:id" element={<ProductDetail products={products} onAddToCart={addToCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} cart={cart} user={user} storeSettings={storeSettings} />} />
               <Route path="/categories" element={<Categories products={products} onAddToCart={addToCart} cart={cart} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} />} />
               <Route path="/wishlist" element={user ? <Wishlist products={products} wishlist={user.wishlist || []} onAddToCart={addToCart} toggleWishlist={toggleWishlist} /> : <Navigate to="/login" />} />
               <Route path="/bulk-enquiry" element={user ? <BulkEnquiryPage user={user} /> : <Navigate to="/login" />} />
@@ -345,11 +366,12 @@ function AppContent() {
               <Route path="/help" element={<HelpSupportPage user={user} orders={orders} />} />
               <Route path="/photo-bill" element={<PhotoBillPage products={products} user={user} onAddToCart={addToCart} />} />
               <Route path="/bill" element={<BillPage products={products} onAddItems={(items) => { items.forEach(({ product, quantity }) => addToCart(product, quantity)); }} />} />
-              <Route path="/cart" element={<Cart cart={cart} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClearCart={handleClearCart} products={products} onAddToCart={addToCart} storeSettings={storeSettings} user={user} />} />
+              <Route path="/cart" element={<Cart cart={cart} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClearCart={handleClearCart} products={products} onAddToCart={addToCart} storeSettings={storeSettings} user={user} orders={orders} />} />
               <Route path="/checkout" element={<Checkout cart={cart} user={user} coupons={coupons} storeSettings={storeSettings} onOrderPlaced={async (order: any) => { try { handleClearCart(); } catch (e) { console.error(e); } }} />} />
               <Route path="/profile" element={user ? <Profile user={user} orders={orders} /> : <Navigate to="/login" />} />
               <Route path="/orders" element={user ? <MyOrders orders={orders} user={user} /> : <Navigate to="/login" />} />
               <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
+              <Route path="/order-success" element={<OrderSuccess />} />
               <Route path="/search" element={<SearchResults products={products} onAddToCart={addToCart} />} />
               <Route path="/admin" element={<Admin products={products} orders={orders} coupons={coupons} banners={banners} user={user} />} />
               <Route path="/cs" element={<CS products={products} orders={orders} user={user} />} />
@@ -362,6 +384,7 @@ function AppContent() {
             </Routes>
           </Suspense>
         </AnimatePresence>
+        )}
       </main>
       <Footer />
       <AnimatePresence>

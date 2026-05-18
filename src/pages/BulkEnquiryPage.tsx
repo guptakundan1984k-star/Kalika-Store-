@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 import { db, collection, addDoc, onSnapshot, query, where, ref, uploadBytes, getDownloadURL, storage, handleFirestoreError, OperationType } from '../firebase';
 import { PageLoader } from '../components/PageLoader';
+import { optimizeImage } from '../lib/utils';
 
 interface BulkEnquiryPageProps {
   user: UserProfile;
@@ -41,9 +42,14 @@ const BulkEnquiryPageContent: React.FC<BulkEnquiryPageProps> = ({ user }) => {
 
   const uploadPhotos = async (photoFiles: File[]): Promise<string[]> => {
     const uploadPromises = photoFiles.map(async (file) => {
-      const storageRef = ref(storage, `bulk_enquiry_photos/${user.uid}_${Date.now()}_${file.name}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      return await getDownloadURL(snapshot.ref);
+      try {
+        const storageRef = ref(storage, `bulk_enquiry_photos/${user.uid}_${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        return await getDownloadURL(snapshot.ref);
+      } catch (storageError) {
+        console.warn("Storage failed for bulk enquiry photo, falling back to Base64:", storageError);
+        return await optimizeImage(file, 1024, 0.7);
+      }
     });
     return Promise.all(uploadPromises);
   };

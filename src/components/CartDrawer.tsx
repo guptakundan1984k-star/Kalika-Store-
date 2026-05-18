@@ -76,9 +76,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     {items.length > 0 && (
                       <button 
                         onClick={() => {
-                          if (window.confirm('Clear your entire cart?')) {
-                            onClear();
-                          }
+                          onClear();
                         }}
                         className="text-[8px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 px-2 py-1 rounded-lg transition-all"
                       >

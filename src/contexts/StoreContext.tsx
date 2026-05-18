@@ -82,7 +82,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const deliveryFee = settings?.deliveryFee ?? 20;
-  const freeDeliveryThreshold = settings?.freeDeliveryThreshold ?? 499;
+  const freeDeliveryThreshold = settings?.freeDeliveryThreshold ?? 299;
 
   return (
     <StoreContext.Provider value={{ settings, loading, deliveryFee, freeDeliveryThreshold, user, setUser, envStatus }}>

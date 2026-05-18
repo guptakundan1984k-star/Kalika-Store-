@@ -20,14 +20,16 @@ interface AdminOrderWorkflowProps {
 export const AdminOrderWorkflow: React.FC<AdminOrderWorkflowProps> = ({ orders, onUpdateStatus }) => {
   const [search, setSearch] = useState('');
   
-  // Only show orders that are actionable for packing/delivery
-  const actionableOrders = orders.filter(o => 
-    ['Pending', 'Order Received', 'Packed', 'Out for Delivery'].includes(o.status)
-  ).filter(o => 
-    o.id.toLowerCase().includes(search.toLowerCase()) || 
-    (o.userName || '').toLowerCase().includes(search.toLowerCase()) ||
-    (o.userPhone || '').includes(search)
-  ).sort((a, b) => b.createdAt - a.createdAt);
+  // Only show orders that are actionable for packing/delivery/pickup
+  const actionableOrders = React.useMemo(() => {
+    return orders.filter(o => 
+      ['Pending', 'Order Received', 'Packed', 'Out for Delivery', 'Ready to Pick Up'].includes(o.status)
+    ).filter(o => 
+      o.id.toLowerCase().includes(search.toLowerCase()) || 
+      (o.userName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (o.userPhone || '').includes(search)
+    ).sort((a, b) => b.createdAt - a.createdAt);
+  }, [orders, search]);
 
   return (
     <div className="space-y-8">
@@ -99,22 +101,22 @@ export const AdminOrderWorkflow: React.FC<AdminOrderWorkflowProps> = ({ orders, 
           </div>
         </div>
 
-        {/* Step 3: Packed (To be Dispatched) */}
+        {/* Step 3: Packed (To be Dispatched/Ready for Pickup) */}
         <div className="space-y-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500">
               <Package className="w-5 h-5" />
             </div>
-            <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase tracking-widest text-xs">Ready to Dispatch ({actionableOrders.filter(o => o.status === 'Packed').length})</h3>
+            <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase tracking-widest text-xs">Ready to Dispatch/Pickup ({actionableOrders.filter(o => o.status === 'Packed').length})</h3>
           </div>
-
+ 
           <div className="space-y-4">
             {actionableOrders.filter(o => o.status === 'Packed').map(order => (
               <WorkflowCard 
                 key={order.id} 
                 order={order} 
-                nextStatus="Out for Delivery" 
-                nextLabel="Dispatch Order"
+                nextStatus={order.deliveryType === 'Takeaway' ? 'Ready to Pick Up' : 'Out for Delivery'}
+                nextLabel={order.deliveryType === 'Takeaway' ? 'Ready for Pickup' : 'Dispatch Order'}
                 onUpdate={onUpdateStatus}
               />
             ))}
@@ -124,27 +126,27 @@ export const AdminOrderWorkflow: React.FC<AdminOrderWorkflowProps> = ({ orders, 
           </div>
         </div>
 
-        {/* Step 4: Out for Delivery (To be Delivered) */}
+        {/* Step 4: Dispatch/Pickup Transit */}
         <div className="space-y-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-500">
               <Truck className="w-5 h-5" />
             </div>
-            <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase tracking-widest text-xs">Out for Delivery ({actionableOrders.filter(o => o.status === 'Out for Delivery').length})</h3>
+            <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase tracking-widest text-xs">In Transit/Ready ({actionableOrders.filter(o => ['Out for Delivery', 'Ready to Pick Up'].includes(o.status)).length})</h3>
           </div>
-
+ 
           <div className="space-y-4">
-            {actionableOrders.filter(o => o.status === 'Out for Delivery').map(order => (
+            {actionableOrders.filter(o => ['Out for Delivery', 'Ready to Pick Up'].includes(o.status)).map(order => (
               <WorkflowCard 
                 key={order.id} 
                 order={order} 
-                nextStatus="Delivered" 
-                nextLabel="Complete Delivery"
+                nextStatus={order.status === 'Ready to Pick Up' ? 'Picked Up' : 'Delivered'}
+                nextLabel={order.status === 'Ready to Pick Up' ? 'Mark Picked Up' : 'Complete Delivery'}
                 onUpdate={onUpdateStatus}
               />
             ))}
-            {actionableOrders.filter(o => o.status === 'Out for Delivery').length === 0 && (
-              <EmptyState icon={CheckCircle} message="No orders in transit." />
+            {actionableOrders.filter(o => ['Out for Delivery', 'Ready to Pick Up'].includes(o.status)).length === 0 && (
+              <EmptyState icon={CheckCircle} message="No items in this stage." />
             )}
           </div>
         </div>

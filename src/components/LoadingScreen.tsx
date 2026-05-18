@@ -25,12 +25,10 @@ import {
 } from 'lucide-react';
 
 const ITEMS = [
-  { label: 'KALIKA STORE', icon: ShoppingBag },
-  { label: 'CONNECTING...', icon: RefreshCw },
-  { label: 'CHECKING STOCK', icon: Package },
-  { label: 'SYNCING PROFILE', icon: User },
-  { label: 'SECURE LINK', icon: ShieldCheck },
-  { label: 'READY!', icon: Sparkles },
+  { label: 'BISCUIT', icon: Cookie, duration: 1000 },
+  { label: 'STAPLES', icon: Wheat, duration: 1000 },
+  { label: 'CLEANING SUPPLIES', icon: SprayCan, duration: 1000 },
+  { label: 'AND MANY MORE..', icon: Sparkles, duration: 300 },
 ];
 
 export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete }) => {
@@ -38,20 +36,22 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
   const [showComplete, setShowComplete] = useState(false);
 
   useEffect(() => {
+    const currentDuration = ITEMS[index]?.duration || 1000;
+    
     if (index < ITEMS.length - 1) {
       const timer = setTimeout(() => {
         setIndex(prev => prev + 1);
-      }, 250); // Faster duration for rhythmic feel
+      }, currentDuration);
       return () => clearTimeout(timer);
     } else if (!showComplete) {
       const timer = setTimeout(() => {
         setShowComplete(true);
-      }, 250);
+      }, currentDuration);
       return () => clearTimeout(timer);
     } else {
       const completeTimer = setTimeout(() => {
         onComplete?.();
-      }, 400); 
+      }, 1500); // Shorter final reveal
       return () => clearTimeout(completeTimer);
     }
   }, [index, showComplete, onComplete]);
@@ -89,7 +89,7 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
               exit={{ opacity: 0, y: -20 }}
               className="flex flex-col items-center gap-8"
             >
-              <div className={`w-24 h-24 ${currentItem.useBlue ? 'bg-blue-500/10 text-blue-500' : 'bg-primary/10 text-primary'} rounded-[32px] flex items-center justify-center relative`}>
+              <div className="w-24 h-24 bg-primary/10 text-primary rounded-[32px] flex items-center justify-center relative">
                 <motion.div
                   initial={{ scale: 0.5, rotate: -45 }}
                   animate={{ scale: 1, rotate: 0 }}

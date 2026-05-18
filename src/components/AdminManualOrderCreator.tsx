@@ -5,7 +5,7 @@ import {
   User, Phone, MapPin, CheckCircle, X, Loader2, Sparkles, FileText, Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, collection, addDoc, handleFirestoreError, OperationType, getDoc, doc } from '../firebase';
+import { db, collection, addDoc, handleFirestoreError, OperationType, getDoc, doc, setDoc } from '../firebase';
 import { aiService } from '../services/aiService';
 
 interface AdminManualOrderCreatorProps {
@@ -96,23 +96,55 @@ export const AdminManualOrderCreator: React.FC<AdminManualOrderCreatorProps> = (
 
     setIsSubmitting(true);
     try {
-      const newOrder: Omit<Order, 'id'> = {
+      const generatedId = "MAN" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substr(2, 4).toUpperCase();
+      const pin = Math.floor(1000 + Math.random() * 9000).toString();
+      
+      const newOrder: Order = {
+        id: generatedId,
         userId: enquiry.userId,
         userName: enquiry.name,
         userPhone: enquiry.phone,
-        items: cart,
+        items: cart.map(item => ({
+          ...item,
+          selectedUnit: 'Piece',
+          total: item.price * item.quantity
+        })) as any,
         total,
         status: 'Order Received',
         deliveryType: 'Delivery',
         createdAt: Date.now(),
-        pin: Math.floor(1000 + Math.random() * 9000).toString(),
+        pin,
         address: {
-          manual: enquiry.storeName || 'Address from bulk enquiry',
+          manual: enquiry.storeName || 'Specified in Bulk Enquiry',
           verified: true
-        }
-      };
+        },
+        placedBy: 'Store',
+        adminName: targetUser?.name || 'Admin'
+      } as any;
 
-      await addDoc(collection(db, 'orders'), newOrder);
+      await setDoc(doc(db, 'orders', generatedId), newOrder);
+      
+      // WhatsApp Redirect for store orders
+      const itemsMsg = cart.map(i => `• ${i.name} x${i.quantity}`).join('%0A');
+      const now = Date.now();
+      const dateStr = new Date(now).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const timeStr = new Date(now).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      
+      const waMsg = `🏢 *STORE ORDER PLACED BY ADMIN*%0A%0A` +
+                   `*Order:* #${generatedId.slice(-6).toUpperCase()}%0A` +
+                   `*Staff (CS):* ${newOrder.adminName}%0A` +
+                   `*Customer:* ${enquiry.name}%0A` +
+                   `*Cust Phone:* ${enquiry.phone}%0A` +
+                   `*Address:* ${newOrder.address?.manual}%0A` +
+                   `*Date:* ${dateStr}%0A` +
+                   `*Time:* ${timeStr}%0A` +
+                   `*Slot:* Standard Delivery%0A%0A` +
+                   `*Items:*%0A${itemsMsg}%0A%0A` +
+                   `*Total:* ₹${total}%0A` +
+                   `*PIN:* ${pin}`;
+
+      window.open(`https://wa.me/918002914323?text=${waMsg}`, '_blank');
+
       onSuccess();
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'orders');

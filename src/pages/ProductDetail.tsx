@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Product, Review, UserProfile } from '../types';
+import { Product, Review, UserProfile, CartItem } from '../types';
 import { 
   Star, ShoppingCart, Heart, ArrowLeft, ShieldCheck, 
   Truck, Clock, MessageSquare, Send, User, Trash2, Plus, Minus, Tag,
-  Image as ImageIcon, X, Loader2, Camera
+  Image as ImageIcon, X, Loader2, Camera, AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-import { db, collection, query, where, onSnapshot, addDoc, Timestamp, deleteDoc, doc, getDocs } from '../firebase';
+import { db, collection, query, where, onSnapshot, addDoc, Timestamp, deleteDoc, doc, getDocs, updateDoc } from '../firebase';
 import { Logo } from '../components/Logo';
 import { aiService } from '../services/aiService';
 import { ChevronDown, Check } from 'lucide-react';
@@ -18,20 +18,24 @@ interface ProductDetailProps {
   onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
   toggleWishlist: (productId: string) => void;
   wishlist: string[];
+  cart: CartItem[];
   user: UserProfile | null;
   storeSettings: any;
 }
 
-const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, toggleWishlist, wishlist, user, storeSettings }) => {
+const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, toggleWishlist, wishlist, cart, user, storeSettings }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const product = products.find(p => p.id === id);
+  
+  const itemInCart = cart.find(item => item.id === id);
+  const quantityInCart = itemInCart?.quantity || 0;
   
   const finalPrice = user?.customPrices?.[product?.id || ''] ?? product?.price ?? 0;
   const hasCustomPrice = user?.customPrices?.[product?.id || ''] !== undefined;
   
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [hasOrdered, setHasOrdered] = useState(false);
+  const [eligibleOrderId, setEligibleOrderId] = useState<string | null>(null);
   const [newReview, setNewReview] = useState<{ rating: number, comment: string, photos: string[] }>({ rating: 5, comment: '', photos: [] });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -126,19 +130,23 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
 
   useEffect(() => {
     if (!id || !user || !user.uid) {
-      setHasOrdered(false);
+      setEligibleOrderId(null);
       return;
     }
 
     const checkOrder = async () => {
       try {
-        const q = query(collection(db, 'orders'), where('userId', '==', user.uid));
-        const querySnapshot = await getDocs(q);
-        const orders = querySnapshot.docs.map(doc => doc.data());
-        const ordered = orders.some(order => 
-          order.items?.some((item: any) => item.id === id)
+        const q = query(
+          collection(db, 'orders'), 
+          where('userId', '==', user.uid),
+          where('status', '==', 'Delivered')
         );
-        setHasOrdered(ordered);
+        const querySnapshot = await getDocs(q);
+        const orders = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const deliveredOrder = orders.find(order => 
+          (order as any).items?.some((item: any) => item.id === id)
+        );
+        setEligibleOrderId(deliveredOrder?.id || null);
       } catch (error) {
         console.error("Error checking order status:", error);
       }
@@ -185,7 +193,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
 
   const handleAddReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !id) return;
+    if (!user || !id || !eligibleOrderId) return;
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, 'reviews'), {
@@ -195,8 +203,19 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
         rating: newReview.rating,
         comment: newReview.comment,
         photos: newReview.photos,
+        orderId: eligibleOrderId,
         createdAt: Date.now()
       });
+
+      // Update product rating and count
+      const updatedReviews = [...reviews, { rating: newReview.rating } as any];
+      const newAvg = updatedReviews.reduce((acc, r) => acc + r.rating, 0) / updatedReviews.length;
+      
+      await updateDoc(doc(db, 'products', id), {
+        rating: newAvg,
+        reviewCount: updatedReviews.length
+      });
+
       setNewReview({ rating: 5, comment: '', photos: [] });
     } catch (error) {
       console.error("Error adding review:", error);
@@ -212,6 +231,21 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
       console.error("Error deleting review:", error);
     }
   };
+
+  const [activeImage, setActiveImage] = useState<string>('');
+
+  useEffect(() => {
+    if (product) {
+      setActiveImage(product.image || '');
+    }
+  }, [product?.id, product?.image]);
+
+  const allImages = product?.hasManualPhoto 
+    ? [product.image].filter(Boolean) as string[]
+    : Array.from(new Set([
+        product?.image,
+        ...(product?.images || [])
+      ])).filter(Boolean) as string[];
 
   if (!product) {
     return (
@@ -249,13 +283,20 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
             className="space-y-6"
           >
             <div className="aspect-square bg-white rounded-[40px] overflow-hidden shadow-2xl shadow-gray-200/50 group relative">
-              {product.image && (
+              {activeImage && (
                 <img 
-                  src={product.image} 
+                  src={activeImage} 
                   alt={product.name}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                   referrerPolicy="no-referrer"
                 />
+              )}
+
+              {!activeImage && (
+                 <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 gap-4">
+                    <ImageIcon className="w-16 h-16 opacity-20" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em]">No photo available</p>
+                 </div>
               )}
 
               {/* Global Info Banner */}
@@ -274,6 +315,23 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                 <Heart className={`w-6 h-6 ${isWishlisted ? 'fill-current' : ''}`} />
               </button>
             </div>
+
+            {/* Thumbnail Gallery */}
+            {allImages.length > 1 && (
+              <div className="flex flex-wrap gap-4 pt-2">
+                {allImages.map((img, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveImage(img)}
+                    className={`relative w-20 h-20 rounded-2xl overflow-hidden border-2 transition-all shadow-sm ${
+                      activeImage === img ? 'border-primary ring-2 ring-primary/20 scale-105' : 'border-white hover:border-primary/30'
+                    }`}
+                  >
+                    <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </button>
+                ))}
+              </div>
+            )}
           </motion.div>
 
           {/* Info Section */}
@@ -359,6 +417,14 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
             <p className="text-lg text-gray-500 font-medium leading-relaxed">
               {product.description}
             </p>
+
+            {/* Terms and Conditions Disclaimer */}
+            <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+              <p className="text-xs font-bold text-orange-700 italic">
+                Note: Product packaging may vary because of not regular update.
+              </p>
+            </div>
 
             {/* Variations Selectors */}
             <div className="space-y-8">
@@ -540,25 +606,48 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <motion.button 
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleAddToCartWithVoice(false)}
-                disabled={product.stock <= 0}
-                className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-primary text-white shadow-primary/30 hover:bg-primary-dark disabled:opacity-50"
-              >
-                <ShoppingCart className="w-6 h-6" />
-                Add to Cart
-              </motion.button>
+              {quantityInCart > 0 ? (
+                <div className="flex-1 flex items-center bg-[#00AEEF] rounded-[24px] p-2 border border-[#00AEEF] shadow-2xl shadow-[#00AEEF]/20 h-16 transition-all">
+                  <button 
+                    onClick={() => onAddToCart(product!, -1, false, selectedUnit)}
+                    className="w-12 h-12 flex items-center justify-center bg-white/20 rounded-xl hover:bg-white/30 transition-all active:scale-90 text-white"
+                  >
+                    <Minus className="w-6 h-6 stroke-[3]" />
+                  </button>
+                  <div className="flex-1 text-center flex flex-col items-center justify-center">
+                    <span className="text-xl font-black text-white leading-none">{quantityInCart}</span>
+                    {selectedUnit && <span className="text-[10px] font-bold text-white/70 uppercase tracking-tighter">{selectedUnit}</span>}
+                  </div>
+                  <button 
+                    onClick={() => onAddToCart(product!, 1, false, selectedUnit)}
+                    className="w-12 h-12 flex items-center justify-center bg-white/20 rounded-xl hover:bg-white/30 transition-all active:scale-90 text-white"
+                  >
+                    <Plus className="w-6 h-6 stroke-[3]" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <motion.button 
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleAddToCartWithVoice(false)}
+                    disabled={product.stock <= 0}
+                    className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-primary text-white shadow-primary/30 hover:bg-primary-dark disabled:opacity-50"
+                  >
+                    <ShoppingCart className="w-6 h-6" />
+                    Add to Cart
+                  </motion.button>
 
-              <motion.button 
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleAddToCartWithVoice(true)}
-                disabled={product.stock <= 0}
-                className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-gray-900 text-white shadow-xl shadow-gray-200 hover:bg-black disabled:opacity-50"
-              >
-                <ShoppingCart className="w-6 h-6" />
-                Buy Now
-              </motion.button>
+                  <motion.button 
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleAddToCartWithVoice(true)}
+                    disabled={product.stock <= 0}
+                    className="flex-1 flex items-center justify-center gap-3 font-black px-8 py-5 rounded-[24px] shadow-2xl transition-all active:scale-95 bg-gray-900 text-white shadow-xl shadow-gray-200 hover:bg-black disabled:opacity-50"
+                  >
+                    <ShoppingCart className="w-6 h-6" />
+                    Buy Now
+                  </motion.button>
+                </>
+              )}
             </div>
           </motion.div>
         </div>
@@ -571,7 +660,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
             <h3 className="text-3xl font-black text-gray-900 tracking-tight">Customer Reviews</h3>
             
             {user ? (
-              hasOrdered ? (
+              eligibleOrderId ? (
                 <form onSubmit={handleAddReview} className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-xl shadow-gray-200/50 space-y-6">
                   <h4 className="text-lg font-black text-gray-900">Write a Review</h4>
                   <div className="space-y-2">

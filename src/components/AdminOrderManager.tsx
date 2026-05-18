@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, Filter, Eye, CheckCircle, Truck, Package, Clock, 
   ShieldCheck, XCircle, MoreVertical, ArrowUpRight, ArrowDownRight, Calendar,
   Trash2, FileText, Download, CheckSquare, Square, Bluetooth, Printer, Sparkles, Edit2, Save,
   MapPin, CheckCircle2, ShoppingBag, Navigation, Plus, Minus, AlertCircle, IndianRupee, Star,
-  User, ArrowRight
+  User, ArrowRight, Zap
 } from 'lucide-react';
-import { Order, Product } from '../types';
+import { Order, Product, UserProfile } from '../types';
 import { ProductImage } from './ProductImage';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, doc, deleteDoc, updateDoc, collection, addDoc } from '../firebase';
+import { db, doc, deleteDoc, updateDoc, collection, addDoc, onSnapshot } from '../firebase';
 import { printerService } from '../services/BluetoothPrinterService';
 import { InvoiceGenerator } from './InvoiceGenerator';
 
@@ -20,6 +20,9 @@ interface AdminOrderManagerProps {
   onUpdateStatus: (id: string, status: Order['status']) => void;
   onDeliveredWithPayment?: (id: string, receivedAmount: number) => void;
   defaultView?: 'table' | 'workflow';
+  preSelectedCustomer?: UserProfile | null;
+  onClearPreSelectedCustomer?: () => void;
+  currentAdmin?: UserProfile | null;
 }
 
 export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({ 
@@ -27,10 +30,23 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
   products, 
   onUpdateStatus, 
   onDeliveredWithPayment,
-  defaultView = 'table'
+  defaultView = 'table',
+  preSelectedCustomer,
+  onClearPreSelectedCustomer,
+  currentAdmin
 }) => {
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  useEffect(() => {
+    const handleBack = () => {
+      if (selectedOrder) {
+        setSelectedOrder(null);
+      }
+    };
+    window.addEventListener('cs-back-action', handleBack);
+    return () => window.removeEventListener('cs-back-action', handleBack);
+  }, [selectedOrder]);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -40,12 +56,32 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
   const [isCollectingPayment, setIsCollectingPayment] = useState(false);
   const [printerConnected, setPrinterConnected] = useState(() => printerService.isConnected());
   const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<UserProfile | null>(null);
   const [receivedAmount, setReceivedAmount] = useState<number>(0);
+
+  useEffect(() => {
+    if (paymentOrder && paymentOrder.userId && !paymentOrder.userId.startsWith('manual-')) {
+      const unsub = onSnapshot(doc(db, 'users', paymentOrder.userId), (snap) => {
+        if (snap.exists()) setCustomerProfile(snap.data() as UserProfile);
+      });
+      return () => unsub();
+    } else {
+      setCustomerProfile(null);
+    }
+  }, [paymentOrder]);
+
+  useEffect(() => {
+    if (paymentOrder) {
+      setReceivedAmount(paymentOrder.total);
+    }
+  }, [paymentOrder]);
   const [isRating, setIsRating] = useState(false);
   const [ratingOrder, setRatingOrder] = useState<Order | null>(null);
   const [itemRatings, setItemRatings] = useState<Record<string, number>>({});
   const [viewMode, setViewMode] = useState<'table' | 'workflow'>(defaultView);
   const [csComment, setCsComment] = useState('');
+  const [isProcessingDelivery, setIsProcessingDelivery] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   // Manual Order State
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
@@ -61,6 +97,19 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
     items: []
   });
   const [manualSearch, setManualSearch] = useState('');
+
+  useEffect(() => {
+    if (preSelectedCustomer) {
+      setManualOrder({
+        customerName: preSelectedCustomer.name || '',
+        phone: (preSelectedCustomer.phone || '').replace('+91', ''),
+        address: preSelectedCustomer.address || '',
+        items: []
+      });
+      setIsCreatingOrder(true);
+      onClearPreSelectedCustomer?.();
+    }
+  }, [preSelectedCustomer, onClearPreSelectedCustomer]);
 
   const handleCreateManualOrder = async () => {
     if (!manualOrder.customerName || !manualOrder.phone || !manualOrder.address || manualOrder.items.length === 0) {
@@ -89,12 +138,36 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
       },
       paymentMethod: 'COD',
       pin,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      placedBy: 'Store',
+      adminName: currentAdmin?.name || 'Admin',
+      adminPhone: currentAdmin?.phone || ''
     };
 
     try {
       await addDoc(collection(db, 'orders'), newOrder);
-      alert(`Order created successfully! PIN: ${pin}`);
+      
+      // WhatsApp Redirect for store orders
+      const itemsMsg = manualOrder.items.map(i => `• ${i.name} x${i.quantity}`).join('%0A');
+      const dateStr = new Date(newOrder.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const timeStr = new Date(newOrder.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      
+      const waMsg = `🏢 *STORE ORDER PLACED BY ADMIN*%0A%0A` +
+                   `*Order:* #${newOrder.id.slice(-6).toUpperCase()}%0A` +
+                   `*Staff (CS):* ${newOrder.adminName}%0A` +
+                   `*Staff Phone:* ${newOrder.adminPhone}%0A` +
+                   `*Customer:* ${newOrder.userName}%0A` +
+                   `*Cust Phone:* ${newOrder.userPhone}%0A` +
+                   `*Address:* ${newOrder.address?.manual}%0A` +
+                   `*Date:* ${dateStr}%0A` +
+                   `*Time:* ${timeStr}%0A` +
+                   `*Slot:* Standard Delivery%0A%0A` +
+                   `*Items:*%0A${itemsMsg}%0A%0A` +
+                   `*Total:* ₹${newOrder.total}%0A` +
+                   `*PIN:* ${pin}`;
+
+      window.open(`https://wa.me/918002914323?text=${waMsg}`, '_blank');
+
       setIsCreatingOrder(false);
       setManualOrder({ customerName: '', phone: '', address: '', items: [] });
     } catch (e) {
@@ -170,21 +243,43 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
     }
   };
 
-  const handleConfirmDelivery = () => {
-    if (!paymentOrder || !onDeliveredWithPayment) return;
+  const handleConfirmDelivery = async () => {
+    if (!paymentOrder || !onDeliveredWithPayment || isProcessingDelivery) return;
     
-    const balanceAdjustment = receivedAmount - paymentOrder.total;
-    if (balanceAdjustment < 0) {
-      if (!window.confirm(`Warning: You received ₹${receivedAmount} for a ₹${paymentOrder.total} order. ₹${Math.abs(balanceAdjustment)} will be recorded as CUSTOMER DEBT. Continue?`)) return;
+    // Enforcement: if negative balance then no deselection allowed (must pay at least order total + debt)
+    const debt = customerProfile && customerProfile.walletBalance && customerProfile.walletBalance < 0 ? Math.abs(customerProfile.walletBalance) : 0;
+    const minAmountRequired = paymentOrder.total + (debt > 0 ? debt : 0);
+    
+    if (debt > 0 && receivedAmount < minAmountRequired) {
+      alert(`Required: ₹${minAmountRequired.toFixed(2)} (Total ₹${paymentOrder.total} + Outstanding Debt ₹${debt.toFixed(2)}). You cannot deselect debt settlement.`);
+      return;
     }
-
-    onDeliveredWithPayment(paymentOrder.id, receivedAmount);
-    setIsCollectingPayment(false);
     
-    // After payment, show rating modal
-    setRatingOrder(paymentOrder);
-    setIsRating(true);
-    setPaymentOrder(null);
+    if (receivedAmount < paymentOrder.total) {
+      if (!window.confirm(`Received amount ₹${receivedAmount} is less than order total ₹${paymentOrder.total}. Balance will be added to customer's debt. Proceed?`)) return;
+    }
+    
+    setIsProcessingDelivery(true);
+    try {
+      // Debt is NO DESELECTED - enforcing debt payment if it exists
+      await onDeliveredWithPayment(paymentOrder.id, receivedAmount);
+      
+      setShowSuccess(true);
+      // Wait 1.5s for success animation to be seen
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setShowSuccess(false);
+
+      setIsCollectingPayment(false);
+      // After payment, show rating modal
+      setRatingOrder(paymentOrder);
+      setIsRating(true);
+      setPaymentOrder(null);
+    } catch (e: any) {
+      console.error("Delivery confirmation failed", e);
+      alert(`Delivery confirmation failed: ${e.message || 'Unknown error'}. Please try again.`);
+    } finally {
+      setIsProcessingDelivery(false);
+    }
   };
 
   const handleSubmitCSRatings = async () => {
@@ -207,8 +302,8 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
       await Promise.all(reviewPromises);
       
       // Update order status if not already done
-      if (ratingOrder.status !== 'Delivered') {
-        onUpdateStatus(ratingOrder.id, 'Delivered');
+      if (ratingOrder.status !== 'Delivered' && ratingOrder.status !== 'Picked Up') {
+        onUpdateStatus(ratingOrder.id, ratingOrder.deliveryType === 'Takeaway' ? 'Picked Up' : 'Delivered');
       }
 
       setIsRating(false);
@@ -364,33 +459,35 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
     window.open('/bill', '_blank');
   };
 
-  const filteredOrders = orders.filter(o => {
-    const queryStr = search.toLowerCase();
-    const itemMatch = o.items.some(item => item.name.toLowerCase().includes(queryStr));
-    const userMatch = (o.userName || '').toLowerCase().includes(queryStr) || 
-                     (o.userPhone || '').includes(queryStr);
-    
-    const matchesSearch = o.id.toLowerCase().includes(queryStr) || 
-                         o.userId.toLowerCase().includes(queryStr) ||
-                         itemMatch || userMatch;
+  const filteredOrders = React.useMemo(() => {
+    return orders.filter(o => {
+      const queryStr = search.toLowerCase();
+      const itemMatch = o.items.some(item => item.name.toLowerCase().includes(queryStr));
+      const userMatch = (o.userName || '').toLowerCase().includes(queryStr) || 
+                       (o.userPhone || '').includes(queryStr);
+      
+      const matchesSearch = o.id.toLowerCase().includes(queryStr) || 
+                           o.userId.toLowerCase().includes(queryStr) ||
+                           itemMatch || userMatch;
 
-    const matchesStatus = statusFilter === 'all' || o.status === statusFilter;
-    
-    let matchesDate = true;
-    const now = Date.now();
-    if (dateFilter === 'today') {
-      const startOfDay = new Date().setHours(0,0,0,0);
-      matchesDate = o.createdAt >= startOfDay;
-    } else if (dateFilter === 'week') {
-      const weekAgo = now - (7 * 24 * 60 * 60 * 1000);
-      matchesDate = o.createdAt >= weekAgo;
-    } else if (dateFilter === 'month') {
-      const monthAgo = now - (30 * 24 * 60 * 60 * 1000);
-      matchesDate = o.createdAt >= monthAgo;
-    }
+      const matchesStatus = statusFilter === 'all' || o.status === statusFilter || (statusFilter === 'Store' && o.placedBy === 'Store');
+      
+      let matchesDate = true;
+      const now = Date.now();
+      if (dateFilter === 'today') {
+        const startOfDay = new Date().setHours(0,0,0,0);
+        matchesDate = o.createdAt >= startOfDay;
+      } else if (dateFilter === 'week') {
+        const weekAgo = now - (7 * 24 * 60 * 60 * 1000);
+        matchesDate = o.createdAt >= weekAgo;
+      } else if (dateFilter === 'month') {
+        const monthAgo = now - (30 * 24 * 60 * 60 * 1000);
+        matchesDate = o.createdAt >= monthAgo;
+      }
 
-    return matchesSearch && matchesStatus && matchesDate;
-  }).sort((a, b) => b.createdAt - a.createdAt);
+      return matchesSearch && matchesStatus && matchesDate;
+    }).sort((a, b) => b.createdAt - a.createdAt);
+  }, [orders, search, statusFilter, dateFilter]);
 
   const getStatusColor = (status: Order['status']) => {
     switch (status) {
@@ -400,6 +497,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
       case 'Packed': return 'bg-purple-100 text-purple-600 border-purple-200';
       case 'Out for Delivery': return 'bg-blue-100 text-blue-600 border-blue-200';
       case 'Ready to Pick Up': return 'bg-blue-100 text-blue-600 border-blue-200';
+      case 'Picked Up': return 'bg-green-100 text-green-600 border-green-200';
       case 'Delivered': return 'bg-green-100 text-green-600 border-green-200';
       case 'Cancelled': return 'bg-red-100 text-red-600 border-red-200';
       default: return 'bg-gray-100 text-gray-600 border-gray-200';
@@ -414,6 +512,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
       case 'Packed': return Package;
       case 'Out for Delivery': return Truck;
       case 'Ready to Pick Up': return MapPin;
+      case 'Picked Up': return CheckCircle;
       case 'Delivered': return CheckCircle;
       case 'Cancelled': return XCircle;
       default: return AlertCircle;
@@ -490,8 +589,8 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-gray-50 border border-gray-100 rounded-full px-4 py-2 text-[8px] font-black uppercase tracking-widest focus:ring-4 focus:ring-primary/5 outline-none cursor-pointer"
           >
-            {['all', 'Pending', 'Order Received', 'Packaging', 'Packed', 'Out for Delivery', 'Ready to Pick Up', 'Delivered', 'Cancelled'].map(s => (
-              <option key={s} value={s}>{s}</option>
+            {['all', 'Store', 'Pending', 'Order Received', 'Packaging', 'Packed', 'Out for Delivery', 'Ready to Pick Up', 'Picked Up', 'Delivered', 'Cancelled'].map(s => (
+              <option key={s} value={s}>{s === 'Store' ? '🛒 Store Orders' : s}</option>
             ))}
           </select>
           
@@ -631,7 +730,7 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
                                 <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, 'Packed'); }} className="text-[7px] font-black bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all uppercase">Pack</motion.button>
                               )}
                               {order.status === 'Packed' && (
-                                <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, order.deliveryType === 'Delivery' ? 'Out for Delivery' : 'Ready to Pick Up'); }} className="text-[7px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 hover:bg-blue-600 hover:text-white transition-all uppercase">{order.deliveryType === 'Delivery' ? 'Ship' : 'Ready'}</motion.button>
+                                <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); onUpdateStatus(order.id, order.deliveryType === 'Takeaway' ? 'Ready to Pick Up' : 'Out for Delivery'); }} className="text-[7px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 hover:bg-blue-600 hover:text-white transition-all uppercase">{order.deliveryType === 'Takeaway' ? 'Ready' : 'Ship'}</motion.button>
                               )}
                               {(order.status === 'Out for Delivery' || order.status === 'Ready to Pick Up') && (
                                 <motion.button whileTap={{ scale: 0.9 }} onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); }} className="text-[7px] font-black bg-green-50 text-green-600 px-1.5 py-0.5 rounded border border-green-100 hover:bg-green-600 hover:text-white transition-all uppercase">Verify PIN</motion.button>
@@ -712,18 +811,36 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (order.status === 'Pending') onUpdateStatus(order.id, 'Order Received');
+                          if (order.status === 'Pending') {
+                            onUpdateStatus(order.id, 'Order Received');
+                            // Voice feedback as requested
+                            try {
+                              const utterance = new SpeechSynthesisUtterance("Order Received. Processing.");
+                              window.speechSynthesis.speak(utterance);
+                            } catch (e) {}
+                          }
                           else if (order.status === 'Order Received') onUpdateStatus(order.id, 'Packed');
-                          else if (order.status === 'Packed') onUpdateStatus(order.id, order.deliveryType === 'Delivery' ? 'Out for Delivery' : 'Ready to Pick Up');
-                          else if (order.status === 'Out for Delivery') setSelectedOrder(order);
+                          else if (order.status === 'Packed') {
+                            onUpdateStatus(order.id, order.deliveryType === 'Delivery' ? 'Out for Delivery' : 'Ready to Pick Up');
+                            // WhatsApp Redirect as requested
+                            const itemsMsg = order.items.map(i => `• ${i.name} x${i.quantity}`).join('%0A');
+                            const waMsg = `📦 *${order.deliveryType === 'Delivery' ? 'Order Dispatched' : 'Order Ready for Pickup'}*%0A%0A*Order:* #${order.id.slice(-6).toUpperCase()}%0A*Customer:* ${order.userName}%0A*Phone:* ${order.userPhone || 'N/A'}%0A*PIN:* ${order.pin}%0A%0A*Items:*%0A${itemsMsg}%0A%0A*Address:* ${order.address?.manual || 'N/A'}`;
+                            window.open(`https://wa.me/918002914323?text=${waMsg}`, '_blank');
+                          }
+                          else if (order.status === 'Out for Delivery' || order.status === 'Ready to Pick Up') {
+                            setPaymentOrder(order);
+                            setReceivedAmount(order.total);
+                            setIsCollectingPayment(true);
+                          }
                         }}
                         className={`w-full py-3 rounded-2xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                          order.status === 'Out for Delivery' ? 'bg-green-600 text-white shadow-lg shadow-green-600/20' : 'bg-gray-900 text-white shadow-lg shadow-gray-900/20'
+                          (order.status === 'Out for Delivery' || order.status === 'Ready to Pick Up') ? 'bg-green-600 text-white shadow-lg shadow-green-600/20' : 'bg-gray-900 text-white shadow-lg shadow-gray-900/20'
                         }`}
                       >
                         {order.status === 'Pending' ? 'Receive' : 
                          order.status === 'Order Received' ? 'Pack' : 
-                         order.status === 'Packed' ? 'Dispatch' : 'Deliver'}
+                         order.status === 'Packed' ? (order.deliveryType === 'Delivery' ? 'Dispatch' : 'Ready') : 
+                         (order.deliveryType === 'Delivery' ? 'Deliver' : 'Picked Up')}
                         <ArrowRight className="w-3 h-3" />
                       </button>
                     </motion.div>
@@ -1321,23 +1438,124 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
             >
               <div className="p-8 bg-primary text-white">
                 <h3 className="text-2xl font-black tracking-tight">Collect Payment</h3>
-                <p className="text-xs font-bold text-white/60 uppercase tracking-widest">Order Amount: ₹{paymentOrder.total}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-white/80 uppercase tracking-widest">Order Amount: ₹{paymentOrder.total}</p>
+                  {customerProfile && (
+                    <div className="text-right">
+                      <p className="text-[10px] font-black text-white/50 uppercase tracking-widest">Customer Wallet</p>
+                      <p className={`text-sm font-black ${customerProfile.walletBalance && customerProfile.walletBalance < 0 ? 'text-red-200' : 'text-green-200'}`}>
+                        ₹{customerProfile.walletBalance?.toFixed(2) || '0.00'}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div className="p-8 space-y-6">
+                {customerProfile && customerProfile.walletBalance && customerProfile.walletBalance < 0 && (
+                   <div className="p-4 bg-red-50 border-2 border-red-200 rounded-3xl flex items-center gap-3">
+                     <AlertCircle className="w-6 h-6 text-red-500" />
+                     <div>
+                       <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Negative Balance Detected</p>
+                       <p className="text-xs font-bold text-red-900 leading-tight">User has a debt of ₹{Math.abs(customerProfile.walletBalance).toFixed(2)}. This must be settled via cash collection.</p>
+                     </div>
+                   </div>
+                )}
+
                 <div className="space-y-4">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">Amount Received (INR)</label>
                   <div className="relative">
                     <input 
                       type="number"
                       value={receivedAmount}
-                      onChange={(e) => setReceivedAmount(parseFloat(e.target.value) || 0)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setReceivedAmount(val);
+                      }}
                       className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-5 text-2xl font-black text-gray-900 focus:ring-4 focus:ring-primary/10 transition-all outline-none"
                       autoFocus
                     />
                     <IndianRupee className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400" />
                   </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {[50, 100, 200, 500, 1000, 2000].map(amt => (
+                      <button 
+                        key={amt}
+                        onClick={() => setReceivedAmount(amt)}
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all active:scale-90 border-2 ${
+                          receivedAmount === amt 
+                            ? 'bg-primary text-white border-primary shadow-xl shadow-primary/40 scale-110 ring-4 ring-primary/30' 
+                            : 'bg-white text-gray-600 border-gray-100 hover:border-primary/30 hover:text-primary shadow-sm hover:scale-105'
+                        }`}
+                      >
+                        {receivedAmount === amt && <Zap className="w-3 h-3 inline-block mr-1 animate-pulse" />}
+                        ₹{amt}
+                      </button>
+                    ))}
+                    <button 
+                      onClick={() => setReceivedAmount(paymentOrder.total)}
+                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all active:scale-90 border-2 ${
+                        receivedAmount === paymentOrder.total
+                          ? 'bg-primary text-white border-primary shadow-xl shadow-primary/40 scale-110 ring-4 ring-primary/30'
+                          : 'bg-primary/5 text-primary border-primary/20 hover:bg-primary hover:text-white shadow-sm hover:scale-105'
+                      }`}
+                    >
+                      {receivedAmount === paymentOrder.total && <Zap className="w-3 h-3 inline-block mr-1 animate-pulse" />}
+                      EXACT: ₹{paymentOrder.total}
+                    </button>
+                    
+                    {customerProfile && customerProfile.walletBalance && customerProfile.walletBalance < 0 && (
+                      <button 
+                        onClick={() => setReceivedAmount(paymentOrder.total + Math.abs(customerProfile.walletBalance || 0))}
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all active:scale-90 border-2 ${
+                          receivedAmount === (paymentOrder.total + Math.abs(customerProfile.walletBalance || 0))
+                            ? 'bg-red-600 text-white border-red-600 shadow-xl shadow-red-600/40 scale-110 ring-4 ring-red-600/30'
+                            : 'bg-red-50 text-red-600 border-red-100 hover:bg-red-600 hover:text-white shadow-sm hover:scale-105'
+                        }`}
+                      >
+                        {receivedAmount === (paymentOrder.total + Math.abs(customerProfile.walletBalance || 0)) && <CheckCircle className="w-3 h-3 inline-block mr-1" />}
+                        SETTLE ALL: ₹{(paymentOrder.total + Math.abs(customerProfile.walletBalance)).toFixed(0)}
+                      </button>
+                    )}
+                  </div>
                   
+                  {customerProfile && (
+                    <div className={`p-4 rounded-3xl border-2 transition-all ${
+                      (customerProfile.walletBalance || 0) + (receivedAmount - paymentOrder.total) < 0 
+                        ? 'bg-red-50 border-red-200 shadow-lg shadow-red-500/5' 
+                        : 'bg-green-50 border-green-200 shadow-lg shadow-green-500/5'
+                    }`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className={`p-1.5 rounded-lg ${
+                            (customerProfile.walletBalance || 0) + (receivedAmount - paymentOrder.total) < 0 ? 'bg-red-100 text-red-500' : 'bg-green-100 text-green-500'
+                          }`}>
+                            <IndianRupee className="w-3 h-3" />
+                          </div>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Predicted Wallet</span>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-lg font-black tracking-tight ${
+                            (customerProfile.walletBalance || 0) + (receivedAmount - paymentOrder.total) < 0 ? 'text-red-600' : 'text-green-600'
+                          }`}>
+                            ₹{((customerProfile.walletBalance || 0) + (receivedAmount - paymentOrder.total)).toFixed(2)}
+                          </p>
+                          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">
+                            { (customerProfile.walletBalance || 0) + (receivedAmount - paymentOrder.total) < 0 ? 'DEBT REMAINING' : 'AVAILABLE CREDIT' }
+                          </p>
+                        </div>
+                      </div>
+                      <div className="h-1 bg-black/5 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: '100%' }}
+                          className={`h-full ${ (customerProfile.walletBalance || 0) + (receivedAmount - paymentOrder.total) < 0 ? 'bg-red-400' : 'bg-green-400' }`}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {receivedAmount !== paymentOrder.total && (
                     <div className={`p-4 rounded-2xl flex items-center gap-3 border ${
                       receivedAmount < paymentOrder.total ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'
@@ -1356,21 +1574,49 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
                 </div>
 
                 <div className="flex flex-col gap-3 pt-4">
-                  <button 
-                    onClick={handleConfirmDelivery}
-                    className="w-full bg-primary text-white font-black py-5 rounded-3xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 uppercase tracking-widest text-xs"
-                  >
-                    Confirm Delivery & Rate
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setIsCollectingPayment(false);
-                      setPaymentOrder(null);
-                    }}
-                    className="w-full bg-gray-50 text-gray-400 font-black py-4 rounded-3xl hover:bg-gray-100 transition-all active:scale-95 uppercase tracking-widest text-[10px]"
-                  >
-                    Cancel
-                  </button>
+                  {showSuccess ? (
+                    <motion.div 
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="w-full bg-green-500 text-white font-black py-5 rounded-3xl shadow-xl shadow-green-500/20 flex flex-col items-center justify-center gap-2"
+                    >
+                      <CheckCircle2 className="w-8 h-8 animate-bounce" />
+                      <p className="uppercase tracking-widest text-xs">Payment Sync Successful!</p>
+                      <p className="text-[10px] opacity-80 font-bold italic">Wallet Updated & Order Completed</p>
+                    </motion.div>
+                  ) : (
+                    <>
+                      <motion.button 
+                        whileTap={{ scale: 0.9 }}
+                        onClick={handleConfirmDelivery}
+                        disabled={isProcessingDelivery}
+                        className={`w-full text-white font-black py-5 rounded-3xl shadow-xl transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2 ${
+                          isProcessingDelivery ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary shadow-primary/20 hover:bg-primary-dark'
+                        }`}
+                      >
+                        {isProcessingDelivery ? (
+                          <>
+                            <Clock className="w-4 h-4 animate-spin" />
+                            Syncing Wallet...
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="w-4 h-4" />
+                            Confirm Payment & Delivery
+                          </>
+                        )}
+                      </motion.button>
+                      <button 
+                        onClick={() => {
+                          setIsCollectingPayment(false);
+                          setPaymentOrder(null);
+                        }}
+                        className="w-full bg-gray-50 text-gray-400 font-black py-4 rounded-3xl hover:bg-gray-100 transition-all active:scale-95 uppercase tracking-widest text-[10px]"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </motion.div>

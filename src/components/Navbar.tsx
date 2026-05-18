@@ -149,7 +149,21 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
             <div className="flex items-center gap-4">
               {location.pathname !== '/' && (
                 <button 
-                  onClick={() => navigate(-1)}
+                  onClick={() => {
+                    if (location.pathname === '/checkout') {
+                      window.dispatchEvent(new CustomEvent('checkout-back-step'));
+                    } else if (location.pathname === '/cs') {
+                      window.dispatchEvent(new CustomEvent('cs-back-action'));
+                      // If we are deep in specialized views, we might not want to navigate back yet
+                      // but usually we want to go back to previous page
+                      navigate(-1);
+                    } else if (location.pathname.startsWith('/admin')) {
+                      window.dispatchEvent(new CustomEvent('cs-back-action'));
+                      navigate(-1);
+                    } else {
+                      navigate(-1);
+                    }
+                  }}
                   className="p-2.5 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all active:scale-90 border border-gray-100"
                 >
                   <ArrowLeft className="w-5 h-5 text-gray-900" />
@@ -291,7 +305,14 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
               </AnimatePresence>
             </div>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-4 text-gray-400">
-               <Mic className="w-5 h-5 cursor-pointer hover:text-primary transition-colors" />
+               <Mic 
+                 onClick={(e) => {
+                   e.stopPropagation();
+                   setIsVoiceEnabled(true);
+                   window.dispatchEvent(new CustomEvent('trigger-voice-assistant'));
+                 }}
+                 className={`w-5 h-5 cursor-pointer hover:text-primary transition-colors ${isVoiceEnabled ? 'text-primary' : ''}`} 
+               />
                <div className="w-px h-4 bg-gray-200" />
                <Search className="w-5 h-5 text-primary" />
             </div>

@@ -159,17 +159,18 @@ export const OrderTracking: React.FC = () => {
     return () => unsubscribe();
   }, [orderId]);
 
-  const isPickup = order?.address?.manual === "Store Pickup" || !order?.address?.manual;
+  const isPickupOrder = order?.deliveryType === 'Takeaway';
 
   const stages = [
     { key: 'Pending', label: 'Order Placed', icon: ShoppingBag, color: 'blue' },
+    { key: 'Order Received', label: 'Order Received', icon: CheckCircle2, color: 'blue' },
     { key: 'Packaging', label: 'Packaging', icon: Clock, color: 'orange' },
     { key: 'Packed', label: 'Packed & Ready', icon: Package, color: 'purple' },
-    ...(isPickup 
+    ...(isPickupOrder 
       ? [{ key: 'Ready to Pick Up', label: 'Ready to Pick Up', icon: MapPin, color: 'primary' }]
       : [{ key: 'Out for Delivery', label: 'Out for Delivery', icon: Truck, color: 'primary' }]
     ),
-    { key: 'Delivered', label: isPickup ? 'Picked Up' : 'Delivered', icon: CheckCircle2, color: 'green' }
+    { key: isPickupOrder ? 'Picked Up' : 'Delivered', label: isPickupOrder ? 'Picked Up' : 'Delivered', icon: CheckCircle2, color: 'green' }
   ];
 
   const currentStageIndex = stages.findIndex(s => s.key === order?.status);
@@ -440,10 +441,10 @@ export const OrderTracking: React.FC = () => {
           <Home className="w-4 h-4" />
           Home
         </Link>
-        <button className="flex-1 flex items-center justify-center gap-2 bg-primary text-white px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-primary/20 hover:bg-black transition-all">
+        <Link to="/orders" className="flex-1 flex items-center justify-center gap-2 bg-primary text-white px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-primary/20 hover:bg-black transition-all">
           <ShoppingBag className="w-4 h-4" />
           Order History
-        </button>
+        </Link>
       </div>
     </div>
   );

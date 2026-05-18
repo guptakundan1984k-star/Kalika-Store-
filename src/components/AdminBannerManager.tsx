@@ -60,7 +60,7 @@ export const AdminBannerManager: React.FC<AdminBannerManagerProps> = ({ banners,
               {banner.image ? (
                 banner.type === 'video' ? (
                   <video 
-                    src={banner.image} 
+                    src={banner.image || undefined} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     muted
                     loop
@@ -69,7 +69,7 @@ export const AdminBannerManager: React.FC<AdminBannerManagerProps> = ({ banners,
                   />
                 ) : (
                   <img 
-                    src={banner.image} 
+                    src={banner.image || undefined} 
                     alt={banner.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     referrerPolicy="no-referrer"
@@ -214,9 +214,9 @@ export const AdminBannerManager: React.FC<AdminBannerManagerProps> = ({ banners,
                     {newBanner.image && (
                       <div className="relative w-full h-32 rounded-2xl overflow-hidden border border-gray-100 shadow-inner">
                         {newBanner.type === 'video' ? (
-                          <video src={newBanner.image} className="w-full h-full object-cover" muted autoPlay loop />
+                          <video src={newBanner.image || undefined} className="w-full h-full object-cover" muted autoPlay loop />
                         ) : (
-                          <img src={newBanner.image} className="w-full h-full object-cover" />
+                          <img src={newBanner.image || undefined} className="w-full h-full object-cover" />
                         )}
                         <button 
                           onClick={() => setNewBanner(prev => ({ ...prev, image: '' }))}

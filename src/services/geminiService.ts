@@ -1,15 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 
 const getAi = () => {
-  const key = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
-              import.meta.env.VITE_GEMINI_API_KEY || 
-              '';
+  const key = process.env.GEMINI_API_KEY;
   if (!key) {
+    console.error('Missing GEMINI_API_KEY in environment');
     return null;
   }
   try {
     return new GoogleGenAI({ apiKey: key });
   } catch (e) {
+    console.error('Failed to initialize GoogleGenAI:', e);
     return null;
   }
 };
@@ -17,8 +17,7 @@ const getAi = () => {
 async function callAI(contents: any, modelName: string = "gemini-3-flash-preview") {
   const ai = getAi();
   if (!ai) {
-    console.error('Gemini API key is missing.');
-    return { text: "I'm having trouble connecting to my brain right now. Please ensure the Gemini API key is configured." };
+    return { text: "AI service is currently unavailable. Please check your API configuration." };
   }
 
   try {
@@ -30,7 +29,7 @@ async function callAI(contents: any, modelName: string = "gemini-3-flash-preview
     return response;
   } catch (error: any) {
     console.error('Gemini API request failed:', error);
-    return { text: "I'm having trouble connecting to my brain right now. Please try again later." };
+    return { text: "I'm having trouble connecting to my AI service. Please try again later." };
   }
 }
 
@@ -145,11 +144,15 @@ export async function answerAdminQuery(query: string, data: any, base64Image?: s
     Current Store Context: ${JSON.stringify(optimizedData).slice(0, 15000)}...
     
     Instructions:
-    1. Be concise, professional, and helpful.
-    2. If asked about orders, use the provided order list to give specific details.
-    3. If asked about stock, refer to active products.
-    4. For CS agents, emphasize helpfulness for delivery and wallet balance queries.
-    5. If a query is ambiguous, ask for clarification.
+    1. You are the digital backbone of Kalika Store operations. Be extremely efficient, helpful, and professional.
+    2. Help CS agents track their "Handheld Cash" (staff wallet balance) and explain why it changed.
+    3. Analyze the provided order list to identify problematic orders, needs for delivery closure, and debt summaries for customers.
+    4. Provide clear, actionable steps for inventory management.
+    5. If a CS agent or customer asks about "syncing", explain that values update immediately upon operation completion.
+    6. For customer-facing support, emphasize the store's heritage (since 2010) and commitment to quality.
+    7. Directly answer questions about store hours: Mon-Sat 10:40 AM - 8:00 PM (delivery closes at 7:45 PM), Sun 10:40 AM - 3:00 PM.
+    8. Use chat/text specifically to guide the user. Avoid long monologues.
+    9. If an order is "Out for Delivery", you can suggest the CS agent to coordinate with the delivery partner via the Phone icon if available.
     
     User Query: ${query}` }
   ];

@@ -14,6 +14,7 @@ import * as XLSX from 'xlsx';
 import { db, doc, deleteDoc, updateDoc, storage, ref, uploadBytes, getDownloadURL, handleFirestoreError, OperationType } from '../firebase';
 import { aiService } from '../services/aiService';
 import { BarcodeScanner } from './BarcodeScanner';
+import { optimizeImage } from '../lib/utils';
 
 
 interface AdminProductManagerProps {
@@ -40,6 +41,8 @@ const CATEGORY_PLACEHOLDERS: Record<string, string> = {
 export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ products, onAdd, onBulkAdd, onUpdate, onDelete }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [duplicateImportItems, setDuplicateImportItems] = useState<Partial<Product>[]>([]);
+  const [pendingNewItems, setPendingNewItems] = useState<Partial<Product>[]>([]);
   const [search, setSearch] = useState('');
   const [loadingAI, setLoadingAI] = useState(false);
   const [searchingGoogle, setSearchingGoogle] = useState(false);
@@ -146,6 +149,19 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
     }
   };
 
+  const isRealImage = (p: Partial<Product>) => {
+    if (p.hasManualPhoto) return true;
+    const url = p.image;
+    if (!url) return false;
+    // Base64 is definitely real
+    if (url.startsWith('data:image')) return true;
+    // Firebase Storage is real
+    if (url.includes('firebasestorage.googleapis.com')) return true;
+    // Anything else that doesn't explicitly look like a generic placeholder
+    const isGeneric = url.includes('picsum.photos') || url.includes('placeholder') || url.includes('via.placeholder');
+    return !isGeneric;
+  };
+
   const handleBulkSync = async (type: 'images' | 'descriptions' | 'all') => {
     const productsToSync = products.filter(p => {
       // "Leave locals" logic: Skip products in highly local/generic categories 
@@ -154,8 +170,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
       const isShortGenericName = p.name.split(' ').length <= 1; // Generic names usually 1 word
       if (isLocalCategory || isShortGenericName) return false;
 
-      const isPlaceholder = !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder');
-      const needsImage = isPlaceholder;
+      const needsImage = !isRealImage(p);
       const needsDesc = !p.description || p.description.length < 20;
       if (type === 'images') return needsImage;
       if (type === 'descriptions') return needsDesc;
@@ -167,7 +182,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
       return;
     }
 
-    if (!window.confirm(`Sync ${productsToSync.length} products using Google Image Search & Gemini?`)) return;
+    if (!window.confirm(`Sync ${productsToSync.length} products using Google Image Search & Gemini? Manual photos will NOT be overwritten.`)) return;
 
     setIsSyncing(true);
     setSyncProgress({ current: 0, total: productsToSync.length });
@@ -327,18 +342,38 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
     setAnalyzingPhoto(true);
     try {
-      const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-      
-      setEditingProduct(prev => ({
-        ...prev,
-        image: downloadURL,
-        images: Array.from(new Set([...(prev.images || []), downloadURL]))
-      }));
+      // Try Firebase Storage first - with a race to avoid hanging on retry limits
+      try {
+        const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
+        // Set a mental timeout of sorts by prioritizing reliability
+        const uploadResult = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(uploadResult.ref);
+        
+        setEditingProduct(prev => ({
+          ...prev,
+          image: downloadURL,
+          images: [downloadURL], // Exclusive
+          hasManualPhoto: true
+        }));
+      } catch (storageError: any) {
+        console.warn("Storage failed or timed out, falling back to Base64:", storageError);
+        // Fallback to optimized Base64
+        const base64 = await optimizeImage(file, 1024, 0.7);
+
+        setEditingProduct(prev => ({
+          ...prev,
+          image: base64,
+          images: [base64],
+          hasManualPhoto: true
+        }));
+        
+        if (storageError.code === 'storage/retry-limit-exceeded') {
+          console.info("Retry limit exceeded, used Base64 instead. This is normal in some network environments.");
+        }
+      }
     } catch (error) {
-      console.error("Manual photo upload failed", error);
-      alert("Failed to upload photo. Check your connection.");
+      console.error("Manual photo upload failed completely", error);
+      alert("Failed to upload photo. Please try a smaller file.");
     } finally {
       setAnalyzingPhoto(false);
     }
@@ -350,18 +385,36 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
     setAnalyzingPhoto(true);
     try {
-      const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-      
-      setEditingProduct(prev => ({
-        ...prev,
-        image: downloadURL,
-        images: Array.from(new Set([...(prev.images || []), downloadURL]))
-      }));
+      // Try Firebase Storage first
+      try {
+        const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
+        const uploadResult = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(uploadResult.ref);
+        
+        setEditingProduct(prev => ({
+          ...prev,
+          image: downloadURL,
+          images: [downloadURL], // Exclusive
+          hasManualPhoto: true
+        }));
+      } catch (storageError: any) {
+        console.warn("Storage failed, using Base64 fallback:", storageError);
+        const base64 = await optimizeImage(file, 1024, 0.7);
+
+        setEditingProduct(prev => ({
+          ...prev,
+          image: base64,
+          images: [base64],
+          hasManualPhoto: true
+        }));
+
+        if (storageError.code === 'storage/retry-limit-exceeded') {
+          console.info("Retry limit exceeded during main upload, used Base64.");
+        }
+      }
     } catch (error) {
       console.error("Photo upload failed", error);
-      alert("Failed to process photo. Please check Storage permissions or try again.");
+      alert("Failed to process photo. Please try a different image.");
     } finally {
       setAnalyzingPhoto(false);
     }
@@ -396,116 +449,68 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
   const processImportedData = async (data: any[]) => {
     setIsImporting(true);
-    const newProducts: Partial<Product>[] = [];
+    const newItems: Partial<Product>[] = [];
+    const duplicates: Partial<Product>[] = [];
     const existingNames = new Set(products.map(p => p.name.toLowerCase().trim()));
 
-    // Preparation for auto-fixing images during import
-    const rowsRequiringAI = data.filter((row: any) => {
+    for (const row of data) {
       const name = (row.name || row.ItemName || row.Name || row['Item Name'] || row.ProductName || row.item_name)?.toString().trim();
-      if (!name) return false;
+      if (!name) continue;
+
+      const img = row.image || row.Image || row['Product Photo Link'] || row.photo || row.Photo || row.url || row.URL || row.image_url || row.ImageUrl || row.Img || row.Link || row.Thumbnail || CATEGORY_PLACEHOLDERS[row.category || row.Category || 'Staples'] || CATEGORY_PLACEHOLDERS['Staples'];
       
-      // Skip if product already exists in catalog
-      if (existingNames.has(name.toLowerCase())) return false;
+      const item: Partial<Product> = {
+        name,
+        price: parseFloat(row.price || row.SalePrice || row.Price || row['Sale Price'] || row.rate || row.Rate) || 0,
+        purchasePrice: parseFloat(row.purchasePrice || row.PurchasePrice || row['Purchase Price'] || row.cost || row.Cost) || 0,
+        category: row.category || row.Category || row.group || row.Group || 'Staples',
+        stock: parseInt(row.stock || row.Stock || row.Quantity || row.qty || row.Qty || row['Item Stock quantity']) || 0,
+        description: row.description || row.Description || '',
+        image: img,
+        images: [img],
+        weight: row.weight || row.Weight || row.unit || row.Unit || ''
+      };
 
-      const img = row.image || row.Image || row['Product Photo Link'] || row.photo || row.Photo || row.url || row.URL || row.image_url || row.ImageUrl || row.Img || row.Link || row.Thumbnail;
-      return (!img || (typeof img === 'string' && (img.includes('picsum.photos') || img.includes('placeholder'))));
-    });
-
-    if (rowsRequiringAI.length > 0 && window.confirm(`Found ${rowsRequiringAI.length} items without clear images. Should I automatically find real product photos using AI?`)) {
-      for (const row of data) {
-        const name = (row.name || row.ItemName || row.Name || row['Item Name'] || row.ProductName || row.item_name)?.toString().trim();
-        if (!name) continue;
-        
-        // Skip duplicates
-        if (existingNames.has(name.toLowerCase())) {
-          console.log(`Skipping duplicate product: ${name}`);
-          continue;
-        }
-
-        let img = row.image || row.Image || row['Product Photo Link'] || row.photo || row.Photo || row.url || row.URL || row.image_url || row.ImageUrl || row.Img || row.Link || row.Thumbnail;
-        let images: string[] = [];
-        const category = row.category || row.Category || row.group || row.Group || 'Staples';
-
-        if (!img || (typeof img === 'string' && (img.includes('picsum.photos') || img.includes('placeholder')))) {
-          try {
-            const urls = await aiService.findProductImages(name, category);
-            if (urls.length > 0) {
-              img = urls[0];
-              images = urls;
-            } else {
-              // High quality AI themed placeholder fallback
-              img = CATEGORY_PLACEHOLDERS[category] || CATEGORY_PLACEHOLDERS['Staples'];
-              images = [img];
-            }
-          } catch (e) {
-            console.error(`AI Image fetch failed for ${name}`, e);
-            img = CATEGORY_PLACEHOLDERS[category] || CATEGORY_PLACEHOLDERS['Staples'];
-          }
-        }
-
-        newProducts.push({
-          name: name,
-          price: parseFloat(row.price || row.SalePrice || row.Price || row['Sale Price'] || row.rate || row.Rate) || 0,
-          purchasePrice: parseFloat(row.purchasePrice || row.PurchasePrice || row['Purchase Price'] || row.cost || row.Cost) || 0,
-          category: category,
-          stock: parseInt(row.stock || row.Stock || row.Quantity || row.qty || row.Qty || row['Item Stock quantity']) || 0,
-          description: row.description || row.Description || '',
-          image: img,
-          images: images.length > 0 ? images : [img],
-          weight: row.weight || row.Weight || row.unit || row.Unit || ''
-        });
-        
-        // Add to existing names to prevent duplicates within the same import file
-        existingNames.add(name.toLowerCase());
+      if (existingNames.has(name.toLowerCase())) {
+        duplicates.push(item);
+      } else {
+        newItems.push(item);
       }
-    } else {
-      data.forEach((row: any) => {
-        const name = (row.name || row.ItemName || row.Name || row['Item Name'] || row.ProductName || row.item_name)?.toString().trim();
-        if (name) {
-          // Skip duplicates
-          if (existingNames.has(name.toLowerCase())) {
-            console.log(`Skipping duplicate product: ${name}`);
-            return;
-          }
-
-          const img = row.image || row.Image || row['Product Photo Link'] || row.photo || row.Photo || row.url || row.URL || row.image_url || row.ImageUrl || row.Img || row.Link || row.Thumbnail || `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/800/800`;
-          newProducts.push({
-            name: name,
-            price: parseFloat(row.price || row.SalePrice || row.Price || row['Sale Price'] || row.rate || row.Rate) || 0,
-            purchasePrice: parseFloat(row.purchasePrice || row.PurchasePrice || row['Purchase Price'] || row.cost || row.Cost) || 0,
-            category: row.category || row.Category || row.group || row.Group || 'Staples',
-            stock: parseInt(row.stock || row.Stock || row.Quantity || row.qty || row.Qty || row['Item Stock quantity']) || 0,
-            description: row.description || row.Description || '',
-            image: img,
-            images: [img],
-            weight: row.weight || row.Weight || row.unit || row.Unit || ''
-          });
-          
-          existingNames.add(name.toLowerCase());
-        }
-      });
     }
 
-    if (newProducts.length === 0) {
-      alert("No new items to import. All items in the file already exist in your catalog.");
+    if (duplicates.length > 0) {
+      setDuplicateImportItems(duplicates);
+      setPendingNewItems(newItems);
+      setIsImporting(false);
+    } else {
+      await finalizeImport(newItems);
+    }
+  };
+
+  const finalizeImport = async (itemsToAdd: Partial<Product>[]) => {
+    if (itemsToAdd.length === 0) {
+      alert("No items to import.");
       setIsImporting(false);
       return;
     }
 
+    setIsImporting(true);
     try {
       if (onBulkAdd) {
-        await onBulkAdd(newProducts);
+        await onBulkAdd(itemsToAdd);
       } else {
-        for (const p of newProducts) {
+        for (const p of itemsToAdd) {
           await onAdd(p);
         }
       }
-      alert(`Successfully imported ${newProducts.length} items.`);
+      alert(`Successfully imported ${itemsToAdd.length} items.`);
     } catch (e) {
       console.error("Import failed", e);
-      alert("Failed to import some items. Check console for details.");
+      alert("Failed to import items.");
     } finally {
       setIsImporting(false);
+      setDuplicateImportItems([]);
+      setPendingNewItems([]);
     }
   };
 
@@ -573,7 +578,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
       
       {/* Photo Alerts Section */}
-      {products.filter(p => !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder')).length > 0 && (
+      {products.filter(p => !isRealImage(p)).length > 0 && (
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -587,7 +592,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
               <div>
                 <h3 className="text-lg font-black text-gray-900">Photo Alerts</h3>
                 <p className="text-xs font-bold text-blue-700 uppercase tracking-widest">
-                  {products.filter(p => !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder')).length} items need real photos
+                  {products.filter(p => !isRealImage(p)).length} items need real photos
                 </p>
               </div>
             </div>
@@ -600,7 +605,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
           </div>
           
           <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-            {products.filter(p => !p.image || p.image.includes('picsum.photos') || p.image.includes('placeholder')).slice(0, 8).map(p => (
+            {products.filter(p => !isRealImage(p)).slice(0, 8).map(p => (
               <div key={`alert-${p.id}`} className="min-w-[200px] bg-white p-4 rounded-2xl border border-blue-100 flex flex-col gap-3 shadow-sm">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gray-50 rounded-lg overflow-hidden border border-gray-100">
@@ -802,21 +807,24 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                       if (!product) continue;
 
                       // Check if product already has real photos
-                      if (product.image && !product.image.includes('picsum.photos') && !product.image.includes('placeholder')) {
-                        if (!window.confirm(`Product "${product.name}" already has a photo. Replace it?`)) continue;
+                      if (isRealImage(product)) {
+                        if (!window.confirm(`Product "${product.name}" already has a real photo. Replace it?`)) continue;
                       }
 
                       const file = files[fileIdx % files.length];
-                      const reader = new FileReader();
-                      const base64 = await new Promise<string>((resolve) => {
-                        reader.onload = () => resolve(reader.result as string);
-                        reader.readAsDataURL(file);
-                      });
+                      const storageRef = ref(storage, `products/${id}/main_${Date.now()}.jpg`);
+                      
+                      // Convert base64 to Blob for uploadBytes
+                      const base64 = await optimizeImage(file, 1024, 0.7);
+                      const blob = await (await fetch(base64)).blob();
+                      
+                      await uploadBytes(storageRef, blob);
+                      const downloadURL = await getDownloadURL(storageRef);
 
-                      // For demo we use base64, in prod we'd use Storage
                       await updateDoc(doc(db, 'products', id), {
-                        image: base64,
-                        images: Array.from(new Set([...(product.images || []), base64]))
+                        image: downloadURL,
+                        images: [downloadURL], 
+                        hasManualPhoto: true
                       });
                       fileIdx++;
                     }
@@ -844,7 +852,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
         </div>
       </div>
 
-      {products.some(p => p.image?.includes('picsum.photos') || !p.image) && (
+      {products.some(p => !isRealImage(p)) && (
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1052,7 +1060,7 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 shrink-0">
                         <img 
-                          src={product.image || `https://picsum.photos/seed/${product.id}/100/100`} 
+                          src={product.image || undefined} 
                           alt={product.name}
                           className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"
@@ -1253,6 +1261,78 @@ export const AdminProductManager: React.FC<AdminProductManagerProps> = ({ produc
 
       {/* Edit Modal */}
       <AnimatePresence>
+        {duplicateImportItems.length > 0 && (
+          <div className="fixed inset-0 z-[250] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-[40px] shadow-2xl overflow-hidden border border-orange-100 flex flex-col max-h-[85vh]"
+            >
+              <div className="p-8 text-center space-y-6">
+                <div className="w-20 h-20 bg-orange-100 rounded-[30px] flex items-center justify-center text-orange-600 mx-auto">
+                  <AlertCircle className="w-10 h-10" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">Duplicate Items Detected!</h3>
+                  <p className="text-xs font-bold text-orange-500 uppercase tracking-widest">{duplicateImportItems.length} items in your file already exist in the catalog.</p>
+                </div>
+
+                <div className="bg-gray-50 rounded-3xl border border-gray-100 overflow-hidden">
+                  <div className="p-4 bg-gray-100/50 border-b border-gray-100 flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-400">
+                    <span>Product Name</span>
+                    <span>Category</span>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto p-2 space-y-2 scrollbar-thin">
+                    {duplicateImportItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-3 text-left">
+                          <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden shrink-0">
+                            <img src={item.image || undefined} className="w-full h-full object-cover" alt="" />
+                          </div>
+                          <span className="text-xs font-bold text-gray-900">{item.name}</span>
+                        </div>
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{item.category}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 pb-4 px-4">
+                  <button 
+                    onClick={() => finalizeImport(pendingNewItems)}
+                    className="px-6 py-4 bg-gray-100 text-gray-600 font-black rounded-2xl hover:bg-gray-200 transition-all uppercase tracking-widest text-[10px]"
+                  >
+                    Add Only New Ones ({pendingNewItems.length})
+                  </button>
+                  <button 
+                    onClick={() => finalizeImport([...pendingNewItems, ...duplicateImportItems])}
+                    className="px-6 py-4 bg-orange-500 text-white font-black rounded-2xl shadow-xl shadow-orange-200 hover:bg-orange-600 transition-all uppercase tracking-widest text-[10px]"
+                  >
+                    Continue Adding All ({pendingNewItems.length + duplicateImportItems.length})
+                  </button>
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    setDuplicateImportItems([]);
+                    setPendingNewItems([]);
+                  }}
+                  className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-red-500 transition-colors pb-4"
+                >
+                  Cancel Import
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {duplicateProduct && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
             <motion.div 

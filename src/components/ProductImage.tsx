@@ -4,12 +4,13 @@ interface ProductImageProps {
   src?: string;
   alt: string;
   className?: string;
+  hasManualPhoto?: boolean;
 }
 
-export const ProductImage: React.FC<ProductImageProps> = ({ src, alt, className = '' }) => {
-  const isPlaceholder = !src || src.includes('picsum.photos') || src.includes('placeholder') || src === '';
+export const ProductImage: React.FC<ProductImageProps> = ({ src, alt, className = '', hasManualPhoto }) => {
+  const isMissing = !src || src === '' || src === 'undefined' || src === 'null';
 
-  if (isPlaceholder) {
+  if (isMissing && !hasManualPhoto) {
     // Generate a reliable Unsplash placeholder based on alt text
     const keyword = alt.split(' ')[0] || 'grocery';
     const fallbackUrl = `https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=800&keyword=${encodeURIComponent(keyword)}`;

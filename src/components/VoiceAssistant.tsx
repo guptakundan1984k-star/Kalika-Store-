@@ -96,16 +96,17 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
           const product = products.find(p => p.id === aiResult.productId || p.name === aiResult.productName);
           responseText = isHindi 
             ? `${product?.name || 'उत्पाद'} के ${qty} पीस जोड़ दिए गए हैं। क्या आप कार्ट में जाना चाहते हैं?` 
-            : `Added ${qty} of ${product?.name || 'the product'} to your cart. Go to cart?`;
+            : `Added ${qty} of ${product?.name || 'the product'} to your cart.`;
           
           setFeedback(isHindi ? `${product?.name} जोड़ा गया` : `Added ${product?.name}`);
         } else {
-          responseText = isHindi ? "क्षमा करें, मुझे वह उत्पाद नहीं मिला।" : "Sorry, I couldn't find that product in our store.";
+          responseText = isHindi ? "क्षमा करें, मुझे वह उत्पाद नहीं मिला।" : "Sorry, I couldn't find that product.";
         }
       } else if (aiResult.intent === 'search') {
         const query = aiResult.searchQuery || aiResult.productName || text;
         onSearch(query);
-        responseText = isHindi ? `${query} खोज रहा हूँ` : `Searching for ${query}`;
+        responseText = isHindi ? `${query} के लिए परिणाम दिखा रहा हूँ` : `Showing results for ${query}`;
+        setFeedback(responseText);
       } else if (aiResult.intent === 'checkout') {
         if (cart.length === 0) {
           responseText = isHindi ? "आपका कार्ट खाली है।" : "Your cart is empty. Please add items first.";
@@ -153,6 +154,14 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
       setIsAiProcessing(false);
     }
   }, [cart, language, onAddToCart, onPlaceOrder, onSearch, products, speak, t, user, navigate]);
+
+  useEffect(() => {
+    const handleTrigger = () => {
+      setIsListening(true);
+    };
+    window.addEventListener('trigger-voice-assistant', handleTrigger);
+    return () => window.removeEventListener('trigger-voice-assistant', handleTrigger);
+  }, []);
 
   useEffect(() => {
     if (!isListening) return;
@@ -219,7 +228,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onAddToCart, onP
               )}
               <div className="space-y-1">
                 <p className="text-[10px] font-black text-primary uppercase tracking-widest leading-none">
-                  AI Assistant
+                  Voice Assistant
                 </p>
                 <p className="text-sm font-bold tracking-tight leading-relaxed">
                   {feedback}

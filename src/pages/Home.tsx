@@ -2,10 +2,10 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { ProductCard } from '../components/ProductCard';
-import { Product, Banner, StoreSettings, CartItem } from '../types';
+import { Product, Banner, StoreSettings, CartItem, UserProfile, Order } from '../types';
 import { useStore } from '../contexts/StoreContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, MapPin, Clock, AlertCircle, ShoppingBag, Package, ShieldCheck } from 'lucide-react';
+import { ArrowRight, MapPin, Clock, AlertCircle, ShoppingBag, Package, ShieldCheck, Phone } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { ReachedEnd } from '../components/ReachedEnd';
 import { AdUnit } from '../components/AdUnit';
@@ -18,9 +18,11 @@ interface HomeProps {
   cart: CartItem[];
   toggleWishlist: (productId: string) => void;
   wishlist: string[];
+  user: UserProfile | null;
+  orders: Order[];
 }
 
-const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettings, cart, toggleWishlist, wishlist }) => {
+const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettings, cart, toggleWishlist, wishlist, user, orders }) => {
   const activeBanners = banners.filter(b => b.active);
   const [currentBanner, setCurrentBanner] = React.useState(0);
   const navigate = useNavigate();
@@ -50,19 +52,10 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
 
   const { envStatus } = useStore();
 
-  // Environmental Voice Announcement
+  // Environmental Announcement Logic removed
   React.useEffect(() => {
     if (envStatus && (envStatus.status === 'closed' || envStatus.status === 'delayed')) {
-      const hasAnnounced = sessionStorage.getItem(`env_announcement_${envStatus.status}_${envStatus.reason}`);
-      if (!hasAnnounced) {
-        const message = envStatus.status === 'closed' 
-          ? `Attention. Delivery will be closed tomorrow due to ${envStatus.reason}.`
-          : `Important update. Delivery is currently delayed due to ${envStatus.reason}.`;
-        
-        const speech = new SpeechSynthesisUtterance(message);
-        window.speechSynthesis.speak(speech);
-        sessionStorage.setItem(`env_announcement_${envStatus.status}_${envStatus.reason}`, 'true');
-      }
+      // Optional: Add UI banner logic here if needed, but voice is removed as per request
     }
   }, [envStatus]);
 
@@ -89,7 +82,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
             <span className="h-px w-12 bg-gray-200" />
           </div>
           
-          {!storeSettings?.isFunctionallyOpen && (
+          {!storeSettings?.isFunctionallyOpen && storeSettings && (
             <motion.div 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -100,6 +93,35 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
             </motion.div>
           )}
 
+          {/* New Call to Order Banner */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mt-8 w-full max-w-md bg-gradient-to-r from-primary to-[#00AEEF] p-6 rounded-[32px] text-white shadow-xl shadow-primary/20 relative overflow-hidden"
+          >
+            <div className="relative z-10">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                  <Phone className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Priority Delivery Service</span>
+              </div>
+              <h3 className="text-lg font-black leading-tight tracking-tight mb-4">
+                Whenever you Place an order Please call the store to get fastest delivery
+              </h3>
+              <a 
+                href="tel:9608123427"
+                className="inline-flex items-center gap-2 bg-white text-primary px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all active:scale-95 shadow-lg"
+              >
+                <Phone className="w-4 h-4" />
+                Call: 9608123427
+              </a>
+            </div>
+            {/* Decorative background elements */}
+            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
+            <div className="absolute bottom-0 left-0 -ml-8 -mb-8 w-24 h-24 bg-black/10 rounded-full blur-xl" />
+          </motion.div>
+
           <div className="mt-8 flex flex-col items-center gap-4 w-full">
               <button 
                 onClick={() => navigate('/items')}
@@ -109,6 +131,41 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
 
+              {/* Quick Re-order Section for Returning Users */}
+              {user && orders.length > 0 && (
+                <div className="w-full px-4 mt-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-black text-gray-900 tracking-tight">Buy Again</h3>
+                    <Link to="/orders" className="text-xs font-black text-primary uppercase tracking-widest">Order History</Link>
+                  </div>
+                  <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 no-scrollbar">
+                    {Array.from(new Set(orders.flatMap(o => o.items).map(item => item.id)))
+                      .slice(0, 5)
+                      .map(pid => products.find(p => p.id === pid))
+                      .filter(Boolean)
+                      .map((product: any) => (
+                        <div 
+                          key={product.id}
+                          className="min-w-[140px] bg-white p-4 rounded-[28px] border border-gray-100 shadow-sm flex flex-col items-center gap-3"
+                        >
+                          <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gray-50 border border-gray-100">
+                            <img src={product.image || undefined} alt={product.name} className="w-full h-full object-cover" />
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[10px] font-black text-gray-900 line-clamp-1 truncate w-24">{product.name}</p>
+                            <p className="text-[10px] font-black text-primary mt-0.5">₹{product.price}</p>
+                          </div>
+                          <button 
+                            onClick={() => onAddToCart(product)}
+                            className="w-full py-2 bg-gray-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary transition-all active:scale-95 shadow-lg"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
           </div>
         </div>
       </div>
@@ -128,7 +185,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
             >
               {activeBanners[currentBanner].type === 'video' ? (
                 <video 
-                  src={activeBanners[currentBanner].image} 
+                  src={activeBanners[currentBanner].image || undefined} 
                   className="absolute inset-0 w-full h-full object-cover"
                   autoPlay
                   muted
@@ -137,7 +194,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
                 />
               ) : (
                 <img 
-                  src={activeBanners[currentBanner].image} 
+                  src={activeBanners[currentBanner].image || undefined} 
                   alt={activeBanners[currentBanner].title}
                   className="absolute inset-0 w-full h-full object-cover"
                   referrerPolicy="no-referrer"
@@ -220,6 +277,18 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
             <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                  <Phone className="w-5 h-5" />
+                </div>
+                <h3 className="font-black text-gray-900 tracking-tight">Express Delivery</h3>
+              </div>
+              <p className="text-sm font-medium text-gray-500 leading-relaxed">
+                Whenever you place an order, <strong>please call the store at 9608123427 immediately</strong> to get the fastest delivery. Failure to call may result in significant delivery delays.
+              </p>
+            </div>
+
+            <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
                   <MapPin className="w-5 h-5" />
                 </div>
                 <h3 className="font-black text-gray-900 tracking-tight">Delivery Notice</h3>
@@ -241,17 +310,7 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
               </p>
             </div>
 
-            <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-                  <AlertCircle className="w-5 h-5" />
-                </div>
-                <h3 className="font-black text-gray-900 tracking-tight">Loyalty Points</h3>
-              </div>
-              <p className="text-sm font-medium text-gray-500 leading-relaxed">
-                Earn Kalika Coins on every successful order (Min. ₹100). Coins can be redeemed on future purchases to get exclusive discounts.
-              </p>
-            </div>
+
           </div>
         </div>
       </div>

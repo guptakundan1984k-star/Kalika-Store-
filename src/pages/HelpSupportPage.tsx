@@ -3,8 +3,9 @@ import { UserProfile, Order } from '../types';
 import { HelpCircle, MessageSquare, Send, Image as ImageIcon, Sparkles, Volume2, User, Loader2, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-import { db, doc, onSnapshot, setDoc } from '../firebase';
+import { db, doc, onSnapshot, setDoc, collection, getDocs, query, where } from '../firebase';
 import { answerAdminQuery } from '../services/geminiService';
+import { notificationService } from '../services/notificationService';
 import ReactMarkdown from 'react-markdown';
 import { PageLoader } from '../components/PageLoader';
 
@@ -68,9 +69,24 @@ const HelpSupportPageContent: React.FC<HelpSupportPageProps> = ({ user, orders }
         userPhone: user.phone || 'Not provided',
         chatHistory: newMessages,
         status: 'pending',
+        isRead: false,
         updatedAt: Date.now(),
         createdAt: Date.now()
       }, { merge: true });
+
+      // Notify Admins
+      const adminQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
+      const adminSnaps = await getDocs(adminQuery);
+      const adminIds = adminSnaps.docs.map(d => d.id);
+      
+      if (adminIds.length > 0) {
+        await notificationService.sendNotification({
+          userIds: adminIds,
+          title: "New Support Message! 💬",
+          body: `${user.name || 'A customer'} sent a new message: ${userMsg.slice(0, 50)}...`,
+          type: 'order' // using order type for high priority
+        });
+      }
 
       const response = await answerAdminQuery(userMsg || "Analyze this image", { user, orders }, userImg || undefined);
       const aiMsg = { role: 'ai' as const, content: response || "I'm sorry, I couldn't process that." };
@@ -141,7 +157,7 @@ const HelpSupportPageContent: React.FC<HelpSupportPageProps> = ({ user, orders }
                     'bg-gray-50 text-gray-800 border border-gray-100 rounded-tl-sm'
                   }`}>
                     {msg.image && (
-                      <img src={msg.image} alt="Attachment" className="w-full max-w-sm rounded-xl mb-3 shadow-md" />
+                      <img src={msg.image || undefined} alt="Attachment" className="w-full max-w-sm rounded-xl mb-3 shadow-md" />
                     )}
                     <div className="prose prose-sm max-w-none">
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -182,7 +198,7 @@ const HelpSupportPageContent: React.FC<HelpSupportPageProps> = ({ user, orders }
                   exit={{ height: 0, opacity: 0 }}
                   className="mb-4 relative inline-block"
                 >
-                  <img src={selectedImage} alt="Preview" className="h-20 w-20 object-cover rounded-xl border-2 border-white shadow-lg" />
+                  <img src={selectedImage || undefined} alt="Preview" className="h-20 w-20 object-cover rounded-xl border-2 border-white shadow-lg" />
                   <button 
                     onClick={() => setSelectedImage(null)}
                     className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:scale-110 transition-all"

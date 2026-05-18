@@ -21,12 +21,11 @@ export const StoreStatusBanner: React.FC<StoreStatusBannerProps> = ({ settings, 
 
   // Environmental Status (Weather/Calendar)
   const isEnvClosed = envStatus?.status === 'closed';
-  const isEnvDelayed = envStatus?.status === 'delayed';
 
   // Store is functionally closed by schedule or manual setting
   const isStoreClosed = !settings?.isFunctionallyOpen;
 
-  if (!isStoreClosed && !isEnvClosed && !isEnvDelayed) return null;
+  if (!isStoreClosed && !isEnvClosed) return null;
 
   let bannerConfig = {
     bg: 'bg-red-600',
@@ -41,13 +40,6 @@ export const StoreStatusBanner: React.FC<StoreStatusBannerProps> = ({ settings, 
       icon: <Calendar className="w-5 h-5 text-white" />,
       message: 'Delivery Closed Tomorrow',
       reason: envStatus?.reason || 'Holiday/Occasion'
-    };
-  } else if (isEnvDelayed) {
-    bannerConfig = {
-      bg: 'bg-amber-600',
-      icon: <CloudRain className="w-5 h-5 text-white" />,
-      message: 'Delivery Delayed',
-      reason: envStatus?.reason || 'Weather conditions'
     };
   } else if (isStoreClosed) {
     bannerConfig = {

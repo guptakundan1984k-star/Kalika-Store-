@@ -12,9 +12,10 @@
         "rating": { "type": "number" },
         "comment": { "type": "string" },
         "photos": { "type": "array", "items": { "type": "string" } },
-        "createdAt": { "type": "number" }
+        "createdAt": { "type": "number" },
+        "orderId": { "type": "string" }
       },
-      "required": ["productId", "userId", "rating", "comment"]
+      "required": ["productId", "userId", "rating", "comment", "orderId"]
     },
     "UserProfile": {
       "title": "User Profile",
@@ -192,6 +193,22 @@
       },
       "required": ["storeName", "name", "phone", "email", "message", "status", "createdAt"]
     },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app notifications for users and admins",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "type": { "type": "string", "enum": ["order", "promotion", "system", "wallet"] },
+        "orderId": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "isRead": { "type": "boolean" }
+      },
+      "required": ["userId", "title", "body", "type", "createdAt", "isRead"]
+    },
     "SupportQuery": {
       "title": "Support Query",
       "description": "Customer support conversations",
@@ -354,6 +371,10 @@
     "/adEarnings/{earningId}": {
       "schema": "AdEarnings",
       "description": "Tracking user ad views and payouts"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "In-app notifications for users and admins"
     }
   }
 }

@@ -17,6 +17,7 @@ import { AdminProductManager } from './AdminProductManager';
 import { AdminUserManager } from './AdminUserManager';
 import { writeBatch, updateDoc, doc, deleteDoc, addDoc } from 'firebase/firestore';
 import { aiService } from '../services/aiService';
+import { optimizeImage } from '../lib/utils';
 
 const COLORS = ['#f97316', '#facc15', '#fb923c', '#fde047'];
 
@@ -59,6 +60,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
   };
+
+  useEffect(() => {
+    // Refresh interval removed for performance
+  }, []);
 
   const scrollToWidgets = () => {
     widgetsRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -582,9 +587,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
                             }
                           }
 
-                          const storageRef = ref(storage, `products/${item.matchedId}/${Date.now()}_${item.file.name}`);
-                          const snapshot = await uploadBytes(storageRef, item.file);
-                          const url = await getDownloadURL(snapshot.ref);
+                          let url = "";
+                          try {
+                            const storageRef = ref(storage, `products/${item.matchedId}/${Date.now()}_${item.file.name}`);
+                            const snapshot = await uploadBytes(storageRef, item.file);
+                            url = await getDownloadURL(snapshot.ref);
+                          } catch (storageError) {
+                            console.warn("Storage failed for batch upload, falling back to Base64:", storageError);
+                            url = await optimizeImage(item.file, 1024, 0.7);
+                          }
                           
                           await updateDoc(doc(db, 'products', item.matchedId!), {
                             image: url,
@@ -836,9 +847,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
                         const file = e.target.files?.[0];
                         if (file) {
                           setIsFixing(true);
-                          const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
-                          await uploadBytes(storageRef, file);
-                          const url = await getDownloadURL(storageRef);
+                          let url = "";
+                          try {
+                            const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
+                            await uploadBytes(storageRef, file);
+                            url = await getDownloadURL(storageRef);
+                          } catch (storageError) {
+                            console.warn("Storage failed for manual fix, falling back to Base64:", storageError);
+                            url = await optimizeImage(file, 1024, 0.7);
+                          }
                           await updateDoc(doc(db, 'products', fixingProduct.id), { image: url, primaryImage: url });
                           setIsFixing(false);
                           setFixingProduct(null);
@@ -1111,7 +1128,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
             {products.slice(0, 4).map((product) => (
               <div key={`top-${product.id}`} className="flex items-center gap-4 group">
                 <div className="w-14 h-14 bg-gray-50 rounded-2xl overflow-hidden shadow-inner group-hover:scale-105 transition-transform">
-                  {product.image && <img src={product.image} alt={product.name} className="w-full h-full object-cover" />}
+                  {product.image && <img src={product.image || undefined} alt={product.name} className="w-full h-full object-cover" />}
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-black text-gray-900 group-hover:text-primary transition-colors">{product.name}</p>

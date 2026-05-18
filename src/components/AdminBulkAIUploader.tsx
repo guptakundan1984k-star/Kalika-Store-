@@ -8,6 +8,7 @@ import { Product } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { aiService } from '../services/aiService';
 import { storage, ref, uploadBytes, getDownloadURL } from '../firebase';
+import { optimizeImage } from '../lib/utils';
 
 interface AdminBulkAIUploaderProps {
   onBulkAdd: (products: Partial<Product>[]) => Promise<void>;
@@ -83,14 +84,21 @@ export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulk
           weight: ''
         };
         
-        const storageRef = ref(storage, `products/bulk_${Date.now()}_${idx}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
+        let url = "";
+        try {
+          const storageRef = ref(storage, `products/bulk_${Date.now()}_${idx}_${file.name}`);
+          await uploadBytes(storageRef, file);
+          url = await getDownloadURL(storageRef);
+        } catch (storageError) {
+          console.warn("Storage failed for bulk AI upload, falling back to Base64:", storageError);
+          url = await optimizeImage(file, 1024, 0.7);
+        }
         
         return { 
           ...p, 
           image: url, 
           images: [url], 
+          hasManualPhoto: true,
           stock: 100,
           price: p.price || 0,
           weight: p.weight || '',

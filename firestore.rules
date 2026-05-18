@@ -64,7 +64,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_#-]+$');
     }
 
     // ===============================================================
@@ -110,12 +110,12 @@ service cloud.firestore {
     }
 
     function isValidOrder(data) {
-      return hasOnlyAllowedFields(['id', 'userId', 'userName', 'userPhone', 'items', 'total', 'status', 'deliveryType', 'address', 'pin', 'createdAt', 'updatedAt', 'tracking', 'deliverySlot', 'paymentMethod', 'prescriptionImage', 'earnedPoints', 'redeemedPoints', 'inBag', 'cancellationReason', 'deliveredBy', 'receivedAmount', 'isPreOrder', 'discount', 'walletAdjusted', 'walletRedeemed', 'walletDebtSettle', 'estimatedDelivery']) &&
+      return hasOnlyAllowedFields(['id', 'userId', 'userName', 'userPhone', 'items', 'total', 'status', 'deliveryType', 'address', 'pin', 'createdAt', 'updatedAt', 'tracking', 'deliverySlot', 'paymentMethod', 'prescriptionImage', 'earnedPoints', 'redeemedPoints', 'inBag', 'cancellationReason', 'cancelledBy', 'deliveredBy', 'receivedAmount', 'isPreOrder', 'discount', 'walletAdjusted', 'walletRedeemed', 'walletDebtSettle', 'estimatedDelivery', 'subtotal', 'deliveryFee', 'walletUsed', 'orderType', 'timestamp', 'placedBy', 'adminName', 'adminPhone', 'discountCode']) &&
              data.userId is string && data.userId.size() > 0 &&
-             data.status in ['Pending', 'Order Received', 'Packaging', 'Packed', 'Out for Delivery', 'Ready to Pick Up', 'Delivered', 'Cancelled'] &&
+             data.status is string &&
              data.total is number && data.total >= 0 &&
              data.deliveryType in ['Takeaway', 'Delivery'] &&
-             data.pin is string && data.pin.size() == 4 &&
+             data.pin is string && data.pin.size() >= 4 &&
              data.createdAt is number &&
              data.items is list &&
              (!('address' in data) || (data.address == null || data.address is map)) &&
@@ -129,21 +129,31 @@ service cloud.firestore {
              (!('deliveredBy' in data) || (data.deliveredBy is string)) &&
              (!('receivedAmount' in data) || (data.receivedAmount is number)) &&
              (!('cancellationReason' in data) || (data.cancellationReason is string)) &&
+             (!('cancelledBy' in data) || (data.cancelledBy is string)) &&
              (!('isPreOrder' in data) || (data.isPreOrder is bool)) &&
              (!('discount' in data) || (data.discount is number)) &&
              (!('walletAdjusted' in data) || (data.walletAdjusted is bool)) &&
              (!('walletRedeemed' in data) || (data.walletRedeemed is number)) &&
              (!('walletDebtSettle' in data) || (data.walletDebtSettle is number)) &&
-             (!('estimatedDelivery' in data) || (data.estimatedDelivery is number));
+             (!('estimatedDelivery' in data) || (data.estimatedDelivery is number)) &&
+             (!('subtotal' in data) || (data.subtotal is number)) &&
+             (!('deliveryFee' in data) || (data.deliveryFee is number)) &&
+             (!('walletUsed' in data) || (data.walletUsed is number)) &&
+             (!('timestamp' in data) || (data.timestamp is string)) &&
+             (!('placedBy' in data) || (data.placedBy is string)) &&
+             (!('adminName' in data) || (data.adminName is string)) &&
+             (!('adminPhone' in data) || (data.adminPhone is string)) &&
+             (!('orderType' in data) || (data.orderType in ['personal', 'sell']));
     }
 
     function isValidReview(data) {
-      return hasOnlyAllowedFields(['id', 'productId', 'userId', 'userName', 'rating', 'comment', 'photos', 'createdAt', 'isCSReview']) &&
+      return hasOnlyAllowedFields(['id', 'productId', 'userId', 'userName', 'rating', 'comment', 'photos', 'createdAt', 'isCSReview', 'orderId']) &&
              data.productId is string && data.userId is string &&
              data.rating is number && data.rating >= 1 && data.rating <= 5 &&
              data.comment is string && data.comment.size() > 0 && data.comment.size() < 2000 &&
              (!('photos' in data) || data.photos is list) &&
              (!('isCSReview' in data) || data.isCSReview is bool) &&
+             (!('orderId' in data) || data.orderId is string) &&
              data.createdAt is number;
     }
 
@@ -222,6 +232,17 @@ service cloud.firestore {
              data.amount is number && data.amount >= 0 &&
              data.date is number;
     }
+    
+    function isValidNotification(data) {
+      return hasOnlyAllowedFields(['userId', 'title', 'body', 'type', 'orderId', 'createdAt', 'isRead']) &&
+             data.userId is string &&
+             data.title is string && data.title.size() > 0 &&
+             data.body is string && data.body.size() > 0 &&
+             data.type in ['order', 'promotion', 'system', 'wallet'] &&
+             (!('orderId' in data) || data.orderId is string) &&
+             data.createdAt is number &&
+             data.isRead is bool;
+    }
 
     function isValidStoreSettings(data) {
       return hasOnlyAllowedFields(['isOpen', 'autoSchedule', 'isFunctionallyOpen', 'openingTime', 'closingTime', 'sundayOpeningTime', 'sundayClosingTime', 'message', 'storeName', 'contactPhone', 'contactEmail', 'storeAddress', 'logoUrl', 'deliveryFee', 'freeDeliveryThreshold', 'isVoiceSupportEnabled', 'isAiAssistantEnabled', 'isDeliveryEnabled', 'updatedAt']) &&
@@ -274,7 +295,7 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow read: if (isAuthenticated() && (existing().userId == request.auth.uid || isStaff()));
       allow list: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
-      allow create: if isAuthenticated() && isValidOrder(incoming()) && (incoming().userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidOrder(incoming()) && (incoming().userId == request.auth.uid || isStaff());
       allow update: if (isStaff() && isValidOrder(incoming())) || 
                     (isOwner(existing().userId) && 
                      incoming().status == 'Cancelled' && 
@@ -290,7 +311,14 @@ service cloud.firestore {
 
     match /reviews/{reviewId} {
       allow read: if true;
-      allow create: if isAuthenticated() && isValidReview(incoming()) && incoming().userId == request.auth.uid;
+      allow create: if isAuthenticated() && 
+                    isValidReview(incoming()) && 
+                    incoming().userId == request.auth.uid && (
+                      // Ensure the user actually purchased the product and it was delivered
+                      exists(/databases/$(database)/documents/orders/$(incoming().orderId)) &&
+                      get(/databases/$(database)/documents/orders/$(incoming().orderId)).data.userId == request.auth.uid &&
+                      get(/databases/$(database)/documents/orders/$(incoming().orderId)).data.status == 'Delivered'
+                    );
       allow update, delete: if isAdmin() || (isAuthenticated() && existing().userId == request.auth.uid);
     }
 
@@ -377,6 +405,13 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isValidDeliveryRequest(incoming());
       allow update, delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.userId == 'admin' && isStaff());
+      allow create: if isAuthenticated() && isValidNotification(incoming());
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isStaff());
+      allow delete: if isStaff();
     }
   }
 }

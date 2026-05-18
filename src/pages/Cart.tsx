@@ -17,12 +17,33 @@ interface CartProps {
   onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
   storeSettings?: StoreSettings | null;
   user: UserProfile | null;
+  orders?: Order[];
 }
 
-const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCart, products, onAddToCart, storeSettings, user }) => {
+const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCart, products, onAddToCart, storeSettings, user, orders = [] }) => {
   const navigate = useNavigate();
   const { deliveryFee: configDeliveryFee, freeDeliveryThreshold: configThreshold } = useStore();
   const [isPlacingQuickOrder, setIsPlacingQuickOrder] = React.useState(false);
+  const [orderType, setOrderType] = React.useState<'personal' | 'sell'>('personal');
+  
+  // Extract unique products from previous orders for "Re-order" section
+  const recentOrderItems = React.useMemo(() => {
+    if (!user || !orders.length) return [];
+    
+    // Get all items from past orders
+    const allPastItems = orders
+      .filter(o => o.userId === user.uid)
+      .flatMap(o => o.items);
+    
+    // Get unique product IDs
+    const uniqueIds = Array.from(new Set(allPastItems.map(item => item.id)));
+    
+    // Map back to full product objects from the main products list
+    return uniqueIds
+      .map(id => products.find(p => p.id === id))
+      .filter((p): p is Product => !!p)
+      .slice(0, 4); // Limit to 4 for the column/section
+  }, [orders, user, products]);
   
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const deliveryFee = subtotal >= configThreshold ? 0 : (cart.length > 0 ? configDeliveryFee : 0);
@@ -123,14 +144,12 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
             </div>
             <button 
               onClick={() => {
-                if (window.confirm("Are you sure you want to remove all items from your cart?")) {
-                  onClearCart();
-                }
+                onClearCart();
               }}
               className="text-xs font-bold text-red-500 hover:text-red-600 uppercase tracking-widest flex items-center gap-1.5 hover:bg-red-50 px-4 py-2 rounded-xl transition-all"
             >
               <Trash2 className="w-4 h-4" />
-              Clear Cart
+              Clear All
             </button>
           </div>
 
@@ -149,18 +168,12 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                   className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row items-center gap-6 group"
                 >
                   <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gray-50 shrink-0">
-                    {item.image ? (
-                      <img 
-                        src={item.image || undefined} 
-                        alt={item.name}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-300">
-                        <ShoppingBag className="w-8 h-8" />
-                      </div>
-                    )}
+                    <img 
+                      src={item.image || undefined} 
+                      alt={item.name}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      referrerPolicy="no-referrer"
+                    />
                   </div>
                   
                   <div className="flex-1 text-center md:text-left space-y-1">
@@ -227,6 +240,46 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                 <span>Subtotal</span>
                 <span className="text-gray-900">₹{subtotal}</span>
               </div>
+              
+              {/* Order Type Toggle */}
+              <div className="pt-4 border-t border-gray-100">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">How would you use these items?</p>
+                <div className="flex bg-gray-100 p-1 rounded-2xl relative">
+                  <motion.div 
+                    layoutId="orderTypeBackground"
+                    animate={{ x: orderType === 'personal' ? 0 : '100%' }}
+                    className="absolute inset-y-1 left-1 w-[calc(50%-4px)] bg-white rounded-xl shadow-sm z-0"
+                  />
+                  <button 
+                    onClick={() => setOrderType('personal')}
+                    className={`flex-1 py-3 text-xs font-black uppercase tracking-widest relative z-10 transition-colors ${orderType === 'personal' ? 'text-primary' : 'text-gray-500'}`}
+                  >
+                    Personal Use
+                  </button>
+                  <button 
+                    onClick={() => setOrderType('sell')}
+                    className={`flex-1 py-3 text-xs font-black uppercase tracking-widest relative z-10 transition-colors ${orderType === 'sell' ? 'text-primary' : 'text-gray-500'}`}
+                  >
+                    To Sell
+                  </button>
+                </div>
+                
+                <AnimatePresence mode="wait">
+                  {orderType === 'sell' && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-4 p-4 bg-blue-50 rounded-2xl border border-blue-100"
+                    >
+                      <p className="text-[10px] font-bold text-blue-600 leading-relaxed">
+                        Items will be delivered for shops in bulk and you'll be contacted.
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
               <div className="flex justify-between text-sm font-bold text-gray-500">
                 <span>Delivery Fee</span>
                 <span className={deliveryFee === 0 ? 'text-green-600 font-black' : 'text-gray-900'}>
@@ -264,7 +317,7 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                 {storeSettings?.isOpen ? (
                   <div className="flex flex-col gap-3">
                     <Link 
-                      to="/checkout"
+                      to={`/checkout?type=${orderType}`}
                       className="flex items-center justify-center gap-2 bg-primary text-white font-bold px-10 py-5 rounded-3xl shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all active:scale-95 group"
                     >
                       Checkout
@@ -319,9 +372,66 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">24/7 Help</span>
               </div>
             </div>
+
+            {/* In-Column Quick Re-order for Desktop */}
+            {recentOrderItems.length > 0 && (
+              <div className="pt-8 border-t border-gray-100 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-green-500" />
+                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Quick Re-order</h3>
+                </div>
+                <div className="space-y-3">
+                  {recentOrderItems.slice(0, 3).map((product) => (
+                    <div key={product.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl hover:bg-white hover:shadow-md transition-all group">
+                      <div className="w-12 h-12 bg-white rounded-xl overflow-hidden shadow-sm">
+                        <img src={product.image || undefined} alt={product.name} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-black text-gray-900 truncate uppercase">{product.name}</p>
+                        <p className="text-[10px] font-bold text-primary">₹{product.price}</p>
+                      </div>
+                      <button 
+                        onClick={() => onAddToCart(product)}
+                        className="p-2 bg-white text-primary rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary hover:text-white"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <Link to="/profile" className="text-[10px] font-black text-primary uppercase tracking-[0.2em] block text-center pt-2">View Full History</Link>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Recently Ordered Items Section */}
+      {recentOrderItems.length > 0 && (
+        <div className="max-w-7xl mx-auto mt-12 space-y-8">
+          <div className="flex items-center justify-between px-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-500">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-gray-900 tracking-tight">Quick Re-order</h2>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Items you've ordered before</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 px-6 pb-4">
+            {recentOrderItems.map((product) => (
+              <ProductCard 
+                key={product.id}
+                product={product}
+                onAddToCart={onAddToCart}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Frequently Bought Section */}
       <div className="max-w-7xl mx-auto mt-20 space-y-8">

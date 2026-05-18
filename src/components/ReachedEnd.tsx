@@ -51,7 +51,7 @@ export const ReachedEnd: React.FC = () => {
       initial={{ opacity: 0, y: 30 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      className={`py-16 px-6 text-center flex flex-col items-center transition-colors duration-1000 ${isInView ? 'bg-yellow-400' : 'bg-white'}`}
+      className={`py-16 px-6 text-center flex flex-col items-center transition-colors duration-1000 bg-white`}
     >
       <div className="relative mb-6">
         {/* Decorative Circles */}

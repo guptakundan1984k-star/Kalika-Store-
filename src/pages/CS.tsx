@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { 
   ShoppingBag, Wallet, Clock, CheckCircle, Package, 
-  Search, Filter, LogOut, Lock, Sparkles, User, ArrowRight, ArrowLeft,
-  TrendingUp, Activity, AlertCircle, Phone, MapPin, ExternalLink
+  Search, Filter, LogOut, Lock, Sparkles, User, Users, ArrowRight, ArrowLeft,
+  TrendingUp, Activity, AlertCircle, Phone, MapPin, ExternalLink, MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, Order, UserProfile, WalletTransaction, WalletRequest } from '../types';
@@ -11,7 +11,7 @@ import { Logo } from '../components/Logo';
 import { db, collection, query, where, orderBy, onSnapshot, updateDoc, doc, addDoc, getDoc, auth, handleFirestoreError, OperationType } from '../firebase';
 import { AdminOrderManager } from '../components/AdminOrderManager';
 import { WalletManager } from '../components/WalletManager';
-import { AdminAssistant } from '../components/AdminAssistant';
+import { AdminSupportManager } from '../components/AdminSupportManager';
 import { notificationService } from '../services/notificationService';
 
 interface CSProps {
@@ -79,6 +79,7 @@ const AdminWalletRequestsReadOnly: React.FC = () => {
 
 const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
   const navigate = useNavigate();
+  const [isUpdating, setIsUpdating] = useState(false);
   const [password, setPassword] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(() => {
     const saved = localStorage.getItem('cs_auth_expiry');
@@ -86,7 +87,25 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
   });
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
-  const [activeTab, setActiveTab] = useState<'orders' | 'wallet' | 'transactions'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'wallet' | 'transactions' | 'support' | 'customers'>('orders');
+  const [usersList, setUsersList] = useState<UserProfile[]>([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [preSelectedCustomer, setPreSelectedCustomer] = useState<UserProfile | null>(null);
+
+  // Fetch users for CS to browse
+  useEffect(() => {
+    if (!isAuthorized) return;
+    const q = query(collection(db, 'users'), orderBy('name', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setUsersList(snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as UserProfile)));
+    });
+    return () => unsubscribe();
+  }, [isAuthorized]);
+
+  // Auto-refresh removed for 120hz style performance
+  useEffect(() => {
+    // The onSnapshot listeners handle data updates live
+  }, []);
 
   // Load staff profile data
   const [staffProfile, setStaffProfile] = useState<UserProfile | null>(null);
@@ -102,21 +121,35 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
     return () => unsubscribe();
   }, [user?.uid]);
 
+  useEffect(() => {
+    const lockout = localStorage.getItem('cs_lockout');
+    if (lockout && parseInt(lockout) > Date.now()) {
+      setIsLocked(true);
+    }
+  }, []);
+
   const handleLogin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    const lockout = localStorage.getItem('cs_lockout');
+    if (lockout && parseInt(lockout) > Date.now()) {
+      setIsLocked(true);
+      alert("Device disabled due to repeated failures. Please try again later.");
+      return;
+    }
     if (password === 'kalika@ansh2012') {
       setIsAuthorized(true);
       localStorage.setItem('cs_auth_expiry', (Date.now() + 24 * 60 * 60 * 1000).toString());
       setLoginAttempts(0);
+      localStorage.removeItem('cs_lockout');
     } else {
       const newAttempts = loginAttempts + 1;
       setLoginAttempts(newAttempts);
-      if (newAttempts >= 3) {
+      if (newAttempts >= 5) {
         setIsLocked(true);
-        setTimeout(() => {
-          setIsLocked(false);
-          setLoginAttempts(0);
-        }, 300000); // 5 min lock
+        localStorage.setItem('cs_lockout', (Date.now() + 24 * 60 * 60 * 1000).toString());
+        alert("Device disabled for 24 hours due to repeated failures. System locked.");
+      } else {
+        alert(`Incorrect password. ${5 - newAttempts} attempts remaining.`);
       }
     }
   };
@@ -127,7 +160,7 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
     navigate('/');
   };
 
-  if (!user || user.role !== 'cs') {
+  if (!user || (user.role !== 'cs' && user.role !== 'admin')) {
     return <Navigate to="/" />;
   }
 
@@ -160,7 +193,7 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
                 <input 
                   type="password" 
                   placeholder="••••••••" 
-                  className="w-full bg-gray-50 border-none rounded-3xl pl-16 pr-6 py-5 text-2xl font-black tracking-[0.5em] focus:ring-4 focus:ring-primary/10 transition-all text-gray-900 placeholder:tracking-normal placeholder:text-gray-200"
+                  className={`w-full bg-gray-50 border-none rounded-3xl pl-16 pr-6 py-5 text-2xl font-black tracking-[0.5em] focus:ring-4 focus:ring-primary/10 transition-all text-gray-900 placeholder:tracking-normal placeholder:text-gray-200 ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                   value={password}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -175,7 +208,7 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
               {isLocked && (
                 <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3">
                   <AlertCircle className="w-5 h-5 text-red-500" />
-                  <p className="text-xs font-bold text-red-600 uppercase tracking-widest">System Locked (5 min)</p>
+                  <p className="text-xs font-bold text-red-600 uppercase tracking-widest">System Disabled due to repeated failures.</p>
                 </div>
               )}
             </div>
@@ -271,11 +304,40 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
               <Wallet className="w-7 h-7" />
             </div>
             <div className="flex-1">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total Handheld Cash</p>
-              <h4 className={`text-2xl font-black tracking-tighter ${staffProfile?.walletBalance && staffProfile.walletBalance < 0 ? 'text-red-500' : 'text-green-600'}`}>
-                ₹{staffProfile?.walletBalance?.toFixed(2) || 0}
-              </h4>
-              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Pay to Owner</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Handheld Cash</p>
+              <div className="flex items-center justify-between">
+                <h4 className={`text-2xl font-black tracking-tighter ${staffProfile?.walletBalance && staffProfile.walletBalance < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                  ₹{staffProfile?.walletBalance?.toFixed(2) || 0}
+                </h4>
+                {staffProfile?.walletBalance && staffProfile.walletBalance > 0 && (
+                  <button 
+                    onClick={async () => {
+                      if (!window.confirm(`Hand over ₹${staffProfile.walletBalance.toFixed(2)} to owner? This will reset your handheld cash balance.`)) return;
+                      try {
+                        const amount = staffProfile.walletBalance;
+                        const staffRef = doc(db, 'users', user.uid);
+                        await updateDoc(staffRef, { walletBalance: 0 });
+                        await addDoc(collection(db, 'walletTransactions'), {
+                          userId: user.uid,
+                          amount: -amount,
+                          balanceAfter: 0,
+                          type: 'handover_to_owner',
+                          description: `Handed over cash to store owner`,
+                          createdAt: Date.now()
+                        });
+                        alert("Handover recorded successfully!");
+                      } catch (e) {
+                        console.error("Handover failed", e);
+                      }
+                    }}
+                    className="p-2 bg-primary text-white rounded-xl shadow-lg shadow-primary/20 hover:scale-110 active:scale-95 transition-all"
+                    title="Handover to Owner"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-1">Paid to Owner</p>
             </div>
           </div>
 
@@ -322,6 +384,24 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
             <Activity className="w-4 h-4" />
             User Top-ups
           </button>
+          <button 
+            onClick={() => setActiveTab('support')}
+            className={`px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2 ${
+              activeTab === 'support' ? 'bg-gray-900 text-white shadow-xl shadow-gray-900/20' : 'bg-white text-gray-400 border border-gray-100 hover:bg-gray-50'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            Support
+          </button>
+          <button 
+            onClick={() => setActiveTab('customers')}
+            className={`px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2 ${
+              activeTab === 'customers' ? 'bg-gray-900 text-white shadow-xl shadow-gray-900/20' : 'bg-white text-gray-400 border border-gray-100 hover:bg-gray-50'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            Customers
+          </button>
         </div>
 
         <motion.div
@@ -335,11 +415,15 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
               orders={allOrders} 
               products={products}
               defaultView="workflow"
+              currentAdmin={user}
+              preSelectedCustomer={preSelectedCustomer}
+              onClearPreSelectedCustomer={() => setPreSelectedCustomer(null)}
               onUpdateStatus={async (id, status) => {
+                setIsUpdating(true);
                 try {
                   await updateDoc(doc(db, 'orders', id), { 
                     status,
-                    deliveredBy: status === 'Delivered' ? user.uid : undefined
+                    deliveredBy: (status === 'Delivered' || status === 'Picked Up') ? user.uid : undefined
                   });
 
                   // Notify User about status update
@@ -354,9 +438,15 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
                     } else if (status === 'Out for Delivery') {
                       title = "Out for Delivery! 🚚";
                       body = `Our delivery partner is on the way with your order #${id.slice(-6).toUpperCase()}.`;
+                    } else if (status === 'Ready to Pick Up') {
+                      title = "Ready for Pick Up! 🏪";
+                      body = `Your order #${id.slice(-6).toUpperCase()} is ready! You can pick it up from our store.`;
                     } else if (status === 'Delivered') {
                       title = "Order Delivered! ✅";
                       body = `Your order #${id.slice(-6).toUpperCase()} has been delivered. Enjoy your items!`;
+                    } else if (status === 'Picked Up') {
+                      title = "Order Picked Up! ✅";
+                      body = `Your order #${id.slice(-6).toUpperCase()} has been picked up. Thank you for shopping!`;
                     }
 
                     await notificationService.sendNotification({
@@ -368,71 +458,161 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
                   }
                 } catch (e) {
                   handleFirestoreError(e, OperationType.UPDATE, `orders/${id}`);
+                } finally {
+                  setIsUpdating(false);
                 }
               }}
               onDeliveredWithPayment={async (id, receivedAmount) => {
+                setIsUpdating(true);
                 try {
                   const order = allOrders.find(o => o.id === id);
                   if (!order) return;
 
-                  const total = order.total;
-                  const debtSettled = order.walletDebtSettle || 0;
-                  const basePrice = total - debtSettled;
-                  const balanceAdjustment = receivedAmount - basePrice;
+                  // The order.total already includes any outstanding debt (order.walletDebtSettle)
+                  // So we subtract the debt from total before calculating the adjustment for this specific order items
+                  const orderBaseTotal = order.total - (order.walletDebtSettle || 0);
+                  const balanceAdjustment = (receivedAmount - orderBaseTotal);
                   
-                  // Update Order
+                  // 1. Update Order Status & Received Amount
+                  const finalStatus = order.deliveryType === 'Takeaway' ? 'Picked Up' : 'Delivered';
                   await updateDoc(doc(db, 'orders', id), {
-                    status: 'Delivered',
+                    status: finalStatus,
                     receivedAmount,
                     deliveredBy: user.uid,
-                    updatedAt: Date.now()
+                    updatedAt: Date.now(),
+                    walletAdjusted: true
                   });
 
-                  // Notify User about delivery
+                  // 2. Notify User
                   if (order.userId) {
                     await notificationService.sendNotification({
                       userIds: [order.userId],
-                      title: "Order Delivered! ✅",
-                      body: `Your order #${id.slice(-6).toUpperCase()} has been delivered successfully. Amount paid: ₹${receivedAmount}.`,
+                      title: finalStatus === 'Picked Up' ? "Order Picked Up! ✅" : "Order Delivered! ✅",
+                      body: `Your order #${id.slice(-6).toUpperCase()} has been ${finalStatus.toLowerCase()}. Amount Paid: ₹${receivedAmount}.`,
                       type: 'order'
                     });
                   }
 
-                  // Update CUSTOMER Wallet (The user who placed the order)
+                  // 3. Update CUSTOMER Wallet
                   if (order.userId && balanceAdjustment !== 0) {
                     const customerRef = doc(db, 'users', order.userId);
-                    const currentBalance = 0; // We'll use increment for safety or fetch
-                    
-                    // Fetch current customer balance to log it
                     const custSnap = await getDoc(customerRef);
-                    const currentCustBalance = custSnap.exists() ? (custSnap.data() as UserProfile).walletBalance || 0 : 0;
-                    const newCustBalance = currentCustBalance + balanceAdjustment;
+                    if (custSnap.exists()) {
+                      const currentCustBalance = (custSnap.data() as UserProfile).walletBalance || 0;
+                      const newCustBalance = currentCustBalance + balanceAdjustment;
+                      await updateDoc(customerRef, { walletBalance: newCustBalance });
+                      
+                      await addDoc(collection(db, 'walletTransactions'), {
+                        userId: order.userId,
+                        amount: balanceAdjustment,
+                        balanceAfter: newCustBalance,
+                        type: 'delivery_adjustment',
+                        description: `Exchange Adjust: Order #${id.slice(-6).toUpperCase()} (Paid: ₹${receivedAmount}, Total: ₹${order.total})`,
+                        orderId: id,
+                        createdAt: Date.now()
+                      });
+                    }
+                  }
 
-                    await updateDoc(customerRef, { walletBalance: newCustBalance });
-                    
+                  // 4. Update STAFF Handheld Cash (CS Wallet)
+                  // We track how much cash the CS staff has collected.
+                  const staffRef = doc(db, 'users', user.uid);
+                  const staffSnap = await getDoc(staffRef);
+                  if (staffSnap.exists()) {
+                    const currentStaffBalance = (staffSnap.data() as UserProfile).walletBalance || 0;
+                    const newStaffBalance = currentStaffBalance + receivedAmount;
+                    await updateDoc(staffRef, { walletBalance: newStaffBalance });
+
+                    // Log transaction for staff for transparency
                     await addDoc(collection(db, 'walletTransactions'), {
-                      userId: order.userId,
-                      amount: balanceAdjustment,
-                      balanceAfter: newCustBalance,
-                      type: 'delivery_adjustment',
-                      description: `Delivery Adjust: Order #${id.slice(-6).toUpperCase()} (Rec: ₹${receivedAmount}, Tot: ₹${total})`,
+                      userId: user.uid,
+                      amount: receivedAmount,
+                      balanceAfter: newStaffBalance,
+                      type: 'cash_collected',
+                      description: `Cash collected for Order #${id.slice(-6).toUpperCase()}. Closing Balance: ₹${newStaffBalance.toFixed(2)}`,
                       orderId: id,
                       createdAt: Date.now()
                     });
                   }
 
-                  // Optional: Update Staff Handheld if you still want to track what staff brought back
-                  const staffRef = doc(db, 'users', user.uid);
-                  const staffNewBalance = (staffProfile?.walletBalance || 0) + receivedAmount;
-                  await updateDoc(staffRef, { walletBalance: staffNewBalance });
-
                 } catch (e) {
                   handleFirestoreError(e, OperationType.UPDATE, `orders/${id}`);
+                } finally {
+                  setIsUpdating(false);
                 }
               }}
             />
           ) : activeTab === 'wallet' ? (
             <WalletManager user={user} />
+          ) : activeTab === 'support' ? (
+            <AdminSupportManager />
+          ) : activeTab === 'customers' ? (
+            <div className="bg-white rounded-[40px] border-2 border-white shadow-2xl p-8 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">Browse Customers</h3>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Select a user to view info or place order</p>
+                </div>
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input 
+                    type="text"
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    placeholder="Search by name or phone..."
+                    className="w-full bg-gray-50 border-none rounded-2xl pl-10 pr-4 py-3 text-sm font-bold shadow-inner"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {usersList
+                  .filter(u => 
+                    (u.name || '').toLowerCase().includes(customerSearch.toLowerCase()) || 
+                    (u.phone || '').includes(customerSearch)
+                  )
+                  .map(cust => (
+                    <div 
+                      key={cust.uid}
+                      className="bg-gray-50 p-6 rounded-3xl border border-gray-100 hover:border-primary/30 transition-all group"
+                    >
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-primary shadow-sm group-hover:scale-110 transition-transform">
+                          <User className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-gray-900">{cust.name || 'Anonymous'}</p>
+                          <p className="text-[10px] font-bold text-gray-400">{cust.phone || 'No Phone'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between py-3 border-t border-gray-100 mb-4">
+                        <div>
+                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Wallet Balance</p>
+                          <p className={`text-lg font-black tracking-tight ${cust.walletBalance && cust.walletBalance < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                            ₹{cust.walletBalance?.toFixed(2) || '0.00'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Orders</p>
+                          <p className="text-lg font-black text-gray-900">{allOrders.filter(o => o.userId === cust.uid).length}</p>
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => {
+                          setPreSelectedCustomer(cust);
+                          setActiveTab('orders');
+                        }}
+                        className="w-full bg-gray-900 text-white font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-2"
+                      >
+                        <ShoppingBag className="w-4 h-4" />
+                        Create Order for User
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
           ) : (
             <div className="bg-white rounded-[40px] border-2 border-white shadow-2xl p-8">
               <div className="flex items-center justify-between mb-8">
@@ -455,10 +635,24 @@ const CS: React.FC<CSProps> = ({ products, orders: allOrders, user }) => {
         </motion.div>
       </div>
 
-      <AdminAssistant 
-        context={{ staffProfile, allOrders, products }}
-        title="CS Assistant"
-      />
+      <AnimatePresence>
+        {isUpdating && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
+          >
+            <div className="bg-white rounded-[32px] p-8 flex flex-col items-center gap-4 shadow-2xl">
+              <Activity className="w-12 h-12 text-primary animate-spin" />
+              <div className="text-center">
+                <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Syncing with Cloud</h3>
+                <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-tighter italic">Please do not refresh the page...</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -142,15 +142,7 @@ export const Footer: React.FC = () => {
                   </p>
                 </section>
 
-                <section className="space-y-3">
-                  <h4 className="text-lg font-black text-gray-900 flex items-center gap-2">
-                    <div className="w-2 h-6 bg-primary rounded-full" />
-                    Loyalty Points (Kalika Coins)
-                  </h4>
-                  <p className="text-sm font-medium text-gray-500 leading-relaxed">
-                    Customers earn Kalika Coins on every successful order. Points are only earned and can only be redeemed on orders with a minimum subtotal of ₹100. Points are calculated based on the final payable amount.
-                  </p>
-                </section>
+
 
                 <section className="space-y-3">
                   <h4 className="text-lg font-black text-gray-900 flex items-center gap-2">
@@ -158,7 +150,7 @@ export const Footer: React.FC = () => {
                     Delivery Policy
                   </h4>
                   <p className="text-sm font-medium text-gray-500 leading-relaxed">
-                    We currently deliver only within Ranchi, Jharkhand. Delivery times may vary based on location and order volume. <strong>If weather is not suitable, delivery will be paused without any prior notice.</strong>
+                    We currently deliver only within Ranchi, Jharkhand. Delivery times may vary. <strong>Whenever you place an order, please call us at 9608123427 immediately to get fastest delivery.</strong> Failure to call may result in significant delivery delays. <strong>If weather is not suitable, delivery will be paused without any prior notice.</strong>
                   </p>
                 </section>
               </div>

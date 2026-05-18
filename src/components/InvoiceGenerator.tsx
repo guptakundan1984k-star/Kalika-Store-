@@ -25,6 +25,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order }) => 
           scale: 2,
           useCORS: true,
           logging: false,
+          backgroundColor: '#ffffff'
         });
         const imgData = canvas.toDataURL('image/png');
         const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -37,6 +38,7 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order }) => 
       pdf.save(`kalika_store_invoice_${order.id.slice(-6)}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
+      alert('Error generating PDF. Please ensure your browser supports canvas rendering.');
     } finally {
       setGenerating(false);
     }
@@ -48,38 +50,37 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order }) => 
   return (
     <div className="flex flex-col items-center gap-6 p-4">
       {/* Hidden invoice for PDF generation */}
-      <div className="fixed -left-[2000px] top-0">
-        <div ref={invoiceRef} className="w-[210mm] bg-white p-0">
+      <div className="fixed -left-[2000px] top-0 overflow-hidden" style={{ width: '210mm' }}>
+          <div ref={invoiceRef} className="bg-white">
           {Array.from({ length: pages }).map((_, pageIndex) => (
-            <div key={pageIndex} className="relative min-h-[297mm] flex flex-col p-12 overflow-hidden shadow-none print:shadow-none">
+            <div key={pageIndex} className="relative flex flex-col overflow-hidden" style={{ width: '210mm', height: '297mm', backgroundColor: '#ffffff', padding: '48px', color: '#111827' }}>
               {/* Header */}
               <div className="flex flex-col items-center mb-16 mt-8">
                 <div className="relative">
-                  {/* Rectangle BG for logo text as requested */}
-                  <div className="absolute inset-0 bg-gray-100 -rotate-1 rounded-sm scale-110 -z-10" />
-                  <h1 className="text-7xl font-black tracking-tighter text-gray-900 px-6 py-2">KALIKA STORE</h1>
+                  <div className="absolute inset-0 rounded-sm scale-110" style={{ backgroundColor: '#F3F4F6', transform: 'rotate(-1deg) scale(1.1)', zIndex: 0 }} />
+                  <h1 className="text-7xl font-black tracking-tighter px-6 py-2 relative" style={{ color: '#111827', zIndex: 1, margin: 0 }}>KALIKA STORE</h1>
                 </div>
               </div>
 
               {/* Info Section */}
-              <div className="grid grid-cols-2 gap-12 mb-12 text-gray-800">
+              <div className="grid grid-cols-2 gap-12 mb-12">
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Date:</h3>
-                    <p className="text-sm font-bold">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                    <h3 style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px', color: '#9CA3AF' }}>Date:</h3>
+                    <p style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#111827' }}>{new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
                   </div>
                   <div>
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Billed to:</h3>
-                    <p className="text-sm font-bold">{order.userName}</p>
-                    <p className="text-xs text-gray-600 italic mt-1">{order.address?.manual || 'Address not provided'}</p>
-                    <p className="text-xs text-gray-600">{order.userPhone}</p>
+                    <h3 style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px', color: '#9CA3AF' }}>Billed to:</h3>
+                    <p style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#111827' }}>{order.userName}</p>
+                    <p style={{ fontSize: '12px', fontStyle: 'italic', marginTop: '4px', margin: 0, color: '#4B5563' }}>{order.address?.manual || 'Address not provided'}</p>
+                    <p style={{ fontSize: '12px', margin: 0, color: '#4B5563' }}>{order.userPhone}</p>
                   </div>
                 </div>
                 <div className="space-y-4 text-right">
                   <div>
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">From:</h3>
-                    <p className="text-sm font-bold">KALIKA STORE</p>
-                    <p className="text-xs text-gray-600 leading-relaxed uppercase">
+                    <h3 style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px', color: '#9CA3AF' }}>From:</h3>
+                    <p style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#111827' }}>KALIKA STORE</p>
+                    <p style={{ fontSize: '12px', lineHeight: 1.5, textTransform: 'uppercase', margin: 0, color: '#4B5563' }}>
                       OPP. KRISHI BAZAAR, BESIDE<br />
                       BANK OF INDIA, 834005-<br />
                       JHARKHAND
@@ -89,23 +90,23 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order }) => 
               </div>
 
               {/* Items Table */}
-              <div className="flex-grow">
-                <table className="w-full text-left">
-                  <thead className="bg-[#E5E7EB] text-[#374151]">
-                    <tr>
-                      <th className="py-4 px-6 text-[10px] font-black uppercase tracking-widest">Item</th>
-                      <th className="py-4 px-6 text-[10px] font-black uppercase tracking-widest text-center">Quantity</th>
-                      <th className="py-4 px-6 text-[10px] font-black uppercase tracking-widest text-center">Price</th>
-                      <th className="py-4 px-6 text-[10px] font-black uppercase tracking-widest text-right">Amount</th>
+              <div style={{ flexGrow: 1 }}>
+                <table className="w-full text-left" style={{ borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#E5E7EB' }}>
+                      <th style={{ padding: '16px 24px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#374151' }}>Item</th>
+                      <th style={{ padding: '16px 24px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', textAlign: 'center', color: '#374151' }}>Quantity</th>
+                      <th style={{ padding: '16px 24px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', textAlign: 'center', color: '#374151' }}>Price</th>
+                      <th style={{ padding: '16px 24px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', textAlign: 'right', color: '#374151' }}>Amount</th>
                     </tr>
                   </thead>
-                  <tbody className="text-gray-800">
+                  <tbody>
                     {order.items.slice(pageIndex * itemsPerPage, (pageIndex + 1) * itemsPerPage).map((item, idx) => (
-                      <tr key={idx} className="border-b border-gray-100 italic font-medium">
-                        <td className="py-4 px-6 text-sm">{item.name}</td>
-                        <td className="py-4 px-6 text-sm text-center">{item.quantity}</td>
-                        <td className="py-4 px-6 text-sm text-center">{item.price}</td>
-                        <td className="py-4 px-6 text-sm text-right font-bold">{item.price * item.quantity}</td>
+                      <tr key={idx} style={{ borderBottom: '1px solid #F3F4F6' }}>
+                        <td style={{ padding: '16px 24px', fontSize: '14px', color: '#1F2937', fontWeight: 500, fontStyle: 'italic' }}>{item.name}</td>
+                        <td style={{ padding: '16px 24px', fontSize: '14px', textAlign: 'center', color: '#1F2937' }}>{item.quantity}</td>
+                        <td style={{ padding: '16px 24px', fontSize: '14px', textAlign: 'center', color: '#1F2937' }}>₹{item.price}</td>
+                        <td style={{ padding: '16px 24px', fontSize: '14px', textAlign: 'right', fontWeight: 700, color: '#1F2937' }}>₹{item.price * item.quantity}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -113,39 +114,39 @@ export const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order }) => 
 
                 {/* Footer and Totals (Only on last page) */}
                 {pageIndex === pages - 1 && (
-                  <div className="mt-8 space-y-8">
-                    <div className="flex justify-end gap-12 items-center">
-                      <span className="text-sm font-black uppercase tracking-widest">Total</span>
-                      <span className="text-2xl font-black">₹{order.total}</span>
+                  <div style={{ marginTop: '32px' }}>
+                    <div className="flex justify-end items-center" style={{ gap: '48px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#111827' }}>Total</span>
+                      <span style={{ fontSize: '24px', fontWeight: 900, color: '#111827' }}>₹{order.total}</span>
                     </div>
 
-                    <div className="pt-8 border-t border-gray-100 flex justify-between items-start">
+                    <div style={{ paddingTop: '32px', marginTop: '32px', borderTop: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
-                        <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Payment method:</h3>
-                        <p className="text-sm font-bold">{order.paymentMethod || 'Cash'}</p>
+                        <h3 style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px', color: '#9CA3AF' }}>Payment method:</h3>
+                        <p style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#111827' }}>{order.paymentMethod || 'Cash'}</p>
                       </div>
-                      <p className="text-sm font-bold italic text-gray-400">Thank you for choosing us!</p>
+                      <p style={{ fontSize: '14px', fontWeight: 700, fontStyle: 'italic', margin: 0, color: '#9CA3AF' }}>Thank you for choosing us!</p>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Wavy Footer Overlay (Replicating Image) */}
-              <div className="absolute bottom-0 left-0 right-0 h-48 pointer-events-none overflow-hidden">
-                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
-                    <path d="M0 50 Q 25 10 50 50 T 100 30 V 100 H 0 Z" fill="#D1D5DB" opacity="0.5" />
-                    <path d="M0 60 Q 30 20 60 60 T 100 40 V 100 H 0 Z" fill="#9CA3AF" opacity="0.5" />
+              {/* Wavy Footer Overlay */}
+              <div className="absolute bottom-0 left-0 right-0 h-48 pointer-events-none" style={{ overflow: 'hidden' }}>
+                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+                    <path d="M0 50 Q 25 10 50 50 T 100 30 V 100 H 0 Z" fill="#D1D5DB" />
+                    <path d="M0 60 Q 30 20 60 60 T 100 40 V 100 H 0 Z" fill="#9CA3AF" />
                     <path d="M0 80 Q 40 40 80 80 T 100 60 V 100 H 0 Z" fill="#374151" />
                  </svg>
               </div>
 
               {/* Page Number */}
-              <div className="absolute bottom-4 right-8 text-[10px] font-black text-gray-400 uppercase">
+              <div className="absolute bottom-4 right-8" style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', color: '#9CA3AF' }}>
                 Page {pageIndex + 1} of {pages}
               </div>
             </div>
           ))}
-        </div>
+          </div>
       </div>
 
       <button

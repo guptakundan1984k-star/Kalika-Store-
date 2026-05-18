@@ -21,7 +21,6 @@ import { AdminPartyPricingManager } from '../components/AdminPartyPricingManager
 import { AdminDuesManager } from '../components/AdminDuesManager';
 import { AdminWalletRequests } from '../components/AdminWalletRequests';
 import { AdminDeliveryRequests } from '../components/AdminDeliveryRequests';
-import { AdminAssistant } from '../components/AdminAssistant';
 
 import { Product, Order, UserProfile, Coupon, Banner, Expense, BulkEnquiry } from '../types';
 import { 
@@ -509,9 +508,15 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                       } else if (status === 'Out for Delivery') {
                         title = "Out for Delivery! 🚚";
                         body = `Our delivery partner is on the way with your order #${id.slice(-6).toUpperCase()}.`;
+                      } else if (status === 'Ready to Pick Up') {
+                        title = "Ready for Pick Up! 🏪";
+                        body = `Your order #${id.slice(-6).toUpperCase()} is ready! You can pick it up from our store.`;
                       } else if (status === 'Delivered') {
                         title = "Order Delivered! ✅";
                         body = `Your order #${id.slice(-6).toUpperCase()} has been delivered. Enjoy your items!`;
+                      } else if (status === 'Picked Up') {
+                        title = "Order Picked Up! ✅";
+                        body = `Your order #${id.slice(-6).toUpperCase()} has been picked up. Thank you for shopping!`;
                       }
 
                       await notificationService.sendNotification({
@@ -532,18 +537,20 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                     const balanceAdjustment = (receivedAmount - orderBaseTotal);
                     
                     // Update Order
+                    const finalStatus = order.deliveryType === 'Takeaway' ? 'Picked Up' : 'Delivered';
                     await updateDoc(doc(db, 'orders', id), { 
-                      status: 'Delivered',
+                      status: finalStatus,
                       receivedAmount,
-                      walletAdjusted: true
+                      walletAdjusted: true,
+                      updatedAt: Date.now()
                     });
 
                     // Notify User
                     if (order.userId) {
                       await notificationService.sendNotification({
                         userIds: [order.userId],
-                        title: "Order Delivered! ✅",
-                        body: `Your order #${id.slice(-6).toUpperCase()} has been delivered successfully. Amount paid: ₹${receivedAmount}.`,
+                        title: finalStatus === 'Picked Up' ? "Order Picked Up! ✅" : "Order Delivered! ✅",
+                        body: `Your order #${id.slice(-6).toUpperCase()} has been ${finalStatus.toLowerCase()} successfully. Amount paid: ₹${receivedAmount}.`,
                         type: 'order'
                       });
                     }
@@ -599,9 +606,15 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
                       } else if (status === 'Out for Delivery') {
                         title = "Out for Delivery! 🚚";
                         body = `Our delivery partner is on the way with your order #${id.slice(-6).toUpperCase()}.`;
+                      } else if (status === 'Ready to Pick Up') {
+                        title = "Ready for Pick Up! 🏪";
+                        body = `Your order #${id.slice(-6).toUpperCase()} is ready! You can pick it up from our store.`;
                       } else if (status === 'Delivered') {
                         title = "Order Delivered! ✅";
                         body = `Your order #${id.slice(-6).toUpperCase()} has been delivered. Enjoy your items!`;
+                      } else if (status === 'Picked Up') {
+                        title = "Order Picked Up! ✅";
+                        body = `Your order #${id.slice(-6).toUpperCase()} has been picked up. Thank you for shopping!`;
                       }
 
                       await notificationService.sendNotification({
@@ -695,11 +708,6 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
           />
         )}
       </AnimatePresence>
-      
-      <AdminAssistant 
-        context={{ products, orders, coupons, banners, users }}
-        title="Admin AI Assistant"
-      />
     </div>
   );
 };

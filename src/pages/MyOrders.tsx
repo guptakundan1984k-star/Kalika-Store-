@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, ArrowRight, SlidersHorizontal, ChevronRight, Star, ShoppingBag, Clock, Package, Truck, CheckCircle, XCircle, AlertTriangle, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, SlidersHorizontal, ChevronRight, Star, ShoppingBag, Clock, Package, Truck, CheckCircle, XCircle, AlertTriangle, Sparkles, Store } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Order, UserProfile } from '../types';
 
@@ -58,6 +58,7 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
 
   const filters = [
     { id: 'filter', label: 'Filter', icon: SlidersHorizontal },
+    { id: 'store_orders', label: 'Store', icon: Store },
     { id: 'quick', label: 'Quick', icon: null },
     { id: 'shop_all', label: 'Shop All', icon: null },
     { id: 'last_30', label: 'Last 30', icon: null },
@@ -67,6 +68,10 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
     if (order.status === 'Delivered') {
       const date = new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       return `Delivered, ${date}`;
+    }
+    if (order.status === 'Picked Up') {
+      const date = new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `Picked Up, ${date}`;
     }
     return order.status === 'Pending' ? 'Under Process' : order.status;
   };
@@ -79,6 +84,7 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
     if (!matchesSearch) return false;
 
     if (activeFilter === 'Shop All' || activeFilter === 'All') return true;
+    if (activeFilter === 'Store') return order.placedBy === 'Store';
     if (activeFilter === 'Quick') return true; 
     if (activeFilter === 'Last 30') {
       const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
@@ -88,11 +94,11 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
   });
 
   const getStatusColor = (status: string) => {
-    const activeStatuses = ['Packed', 'Out for Delivery', 'Ready for Pickup', 'Order Received'];
+    const activeStatuses = ['Pending', 'Order Received', 'Order Placed', 'Packaging', 'Packed', 'Out for Delivery', 'Ready to Pick Up'];
     if (activeStatuses.includes(status)) {
       return 'text-green-600 animate-pulse font-black';
     }
-    if (status === 'Delivered') return 'text-gray-900 font-black';
+    if (status === 'Delivered' || status === 'Picked Up') return 'text-gray-900 font-black';
     if (status === 'Cancelled') return 'text-red-500 font-black';
     return 'text-gray-900 font-black';
   };
@@ -182,52 +188,83 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
               className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-6 group"
             >
               <div className="flex items-center justify-between">
-                <h3 className={`text-xl tracking-tight transition-all ${getStatusColor(order.status)}`}>
-                  {getStatusDisplay(order)}
-                </h3>
-                {/* Quick Badge */}
+                <div className="space-y-1">
+                  <h3 className={`text-xl tracking-tight transition-all ${getStatusColor(order.status)}`}>
+                    {getStatusDisplay(order)}
+                  </h3>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    {new Date(order.createdAt).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  {order.placedBy === 'Store' && (
+                    <div className="mt-1 flex">
+                      <div className="bg-gray-900 text-white px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm">
+                        <Store className="w-2.5 h-2.5" />
+                        Placed by Store
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {/* Status Badge */}
                 <div className="bg-orange-50 border border-orange-100 px-3 py-1 rounded-xl flex items-center gap-1 shadow-sm">
                   <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">⚡ -Quick</span>
                 </div>
               </div>
 
-              {/* Product Thumbnails Row */}
-              <div className="flex flex-wrap gap-4 items-end justify-between">
-                <div className="flex flex-wrap gap-4">
-                  {order.items.slice(0, 4).map((item, idx) => (
-                    <div key={idx} className="relative w-20 h-20 bg-gray-50 rounded-2xl p-1 border border-gray-100 shadow-sm">
-                      {item.image ? (
-                        <img 
-                          src={item.image || undefined} 
-                          alt={item.name} 
-                          className="w-full h-full object-contain mix-blend-multiply" 
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-200">
-                          <ShoppingBag className="w-8 h-8" />
+              {/* Items Summary */}
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-4 items-center justify-between">
+                  <div className="flex flex-wrap gap-4">
+                    {order.items.slice(0, 4).map((item, idx) => (
+                      <div key={idx} className="relative w-20 h-20 bg-gray-50 rounded-2xl p-1 border border-gray-100 shadow-sm">
+                        {item.image ? (
+                          <img 
+                            src={item.image || undefined} 
+                            alt={item.name} 
+                            className="w-full h-full object-contain mix-blend-multiply" 
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-200">
+                            <ShoppingBag className="w-8 h-8" />
+                          </div>
+                        )}
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center border border-gray-100 shadow-lg">
+                          <span className="text-[10px] font-black text-gray-900">{item.quantity}</span>
                         </div>
-                      )}
-                      {/* Quantity Badge */}
-                      <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center border border-gray-100 shadow-lg">
-                        <span className="text-[10px] font-black text-gray-900">{item.quantity}</span>
                       </div>
+                    ))}
+                    {order.items.length > 4 && (
+                      <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center border border-gray-100 border-dashed">
+                        <span className="text-xs font-black text-gray-400">+{order.items.length - 4}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Amount</p>
+                    <p className="text-2xl font-black text-gray-900 tracking-tighter">₹{order.total.toFixed(0)}</p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                      <Clock className="w-4 h-4 text-gray-400" />
                     </div>
-                  ))}
-                  {order.items.length > 4 && (
-                    <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center border border-gray-100 border-dashed">
-                      <span className="text-xs font-black text-gray-400">+{order.items.length - 4}</span>
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Selected Slot</p>
+                      <p className="text-xs font-bold text-gray-900">{order.deliverySlot || (order.deliveryType === 'Takeaway' ? 'Pickup at Store' : 'Standard')}</p>
+                    </div>
+                  </div>
+                  {['Pending', 'Order Received', 'Packed', 'Out for Delivery'].includes(order.status) && order.pin && (
+                    <div className="bg-primary/10 border border-primary/20 px-4 py-2 rounded-xl flex items-center gap-3">
+                      <div className="text-center">
+                        <p className="text-[8px] font-black text-primary uppercase tracking-widest leading-none mb-1">Entry PIN</p>
+                        <p className="text-lg font-black text-primary tracking-[0.2em]">{order.pin}</p>
+                      </div>
                     </div>
                   )}
                 </div>
-
-                {/* Delivery PIN Badge */}
-                {['Pending', 'Order Received', 'Packed', 'Out for Delivery'].includes(order.status) && order.pin && (
-                  <div className="bg-primary/10 border border-primary/20 px-4 py-3 rounded-2xl flex flex-col items-center">
-                    <span className="text-[10px] font-black text-primary uppercase tracking-widest leading-none mb-1">Delivery PIN</span>
-                    <span className="text-xl font-black text-primary tracking-widest">{order.pin}</span>
-                  </div>
-                )}
               </div>
 
               {/* Rating Section for Delivered Orders */}

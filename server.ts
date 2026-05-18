@@ -157,7 +157,14 @@ async function startServer() {
       res.json({ success: true, response });
     } catch (error: any) {
       console.error('FCM Error:', error);
-      res.status(500).json({ success: false, error: error.message });
+      if (error.code === 'messaging/permission-denied' || error.message.includes('PERMISSION_DENIED')) {
+        console.error('IMPORTANT: Please ensure "Firebase Cloud Messaging API" is enabled in your Google Cloud Console and the service account has the "Firebase Messaging Admin" role.');
+      }
+      res.status(500).json({ 
+        success: false, 
+        error: error.message,
+        hint: "Check Firebase Console to ensure FCM API is enabled and service account has permissions."
+      });
     }
   });
 

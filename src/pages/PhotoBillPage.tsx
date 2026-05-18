@@ -153,7 +153,7 @@ const PhotoBillPageContent: React.FC<PhotoBillPageProps> = ({ products, user, on
             >
               {selectedImage ? (
                 <>
-                  <img src={selectedImage} alt="Preview" className="w-full h-full object-cover" />
+                  <img src={selectedImage || undefined} alt="Preview" className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <p className="text-white font-black uppercase tracking-widest text-xs">Change Photo</p>
                   </div>

@@ -8,6 +8,7 @@ import { Expense } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, collection, addDoc, query, onSnapshot, orderBy, deleteDoc, doc, storage, ref, uploadBytes, getDownloadURL } from '../firebase';
 import { aiService } from '../services/aiService';
+import { optimizeImage } from '../lib/utils';
 
 export const AdminExpenseManager: React.FC = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -93,21 +94,26 @@ export const AdminExpenseManager: React.FC = () => {
 
     setIsProcessing(true);
     try {
-      const storageRef = ref(storage, `expenses/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      let url = "";
+      try {
+        const storageRef = ref(storage, `expenses/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        url = await getDownloadURL(storageRef);
+      } catch (storageError) {
+        console.warn("Storage failed for expense bill, falling back to Base64:", storageError);
+        url = await optimizeImage(file, 1024, 0.7);
+      }
 
-      const base64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-        reader.readAsDataURL(file);
-      });
+      // We need optimized base64 for AI analysis too
+      const optimizedBase64 = await optimizeImage(file, 800, 0.6);
+      const base64DataOnly = optimizedBase64.split(',')[1];
 
-      const structured = await aiService.analyzeBill(base64, file.type);
+      const structured = await aiService.analyzeBill(base64DataOnly, 'image/jpeg');
       setNewExpense(prev => ({ ...prev, ...structured, photoUrl: url, source: 'photo' }));
       setIsAdding(true);
     } catch (e) {
       console.error("Bill processing failed", e);
+      alert("Failed to process bill. Please try a clearer photo.");
     } finally {
       setIsProcessing(false);
     }

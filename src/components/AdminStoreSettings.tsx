@@ -24,7 +24,6 @@ export const AdminStoreSettings: React.FC = () => {
           sundayOpeningTime: '10:40',
           sundayClosingTime: '15:00',
           isVoiceSupportEnabled: true,
-          isAiAssistantEnabled: true,
           isDeliveryEnabled: true,
           updatedAt: Date.now()
         };
@@ -67,7 +66,7 @@ export const AdminStoreSettings: React.FC = () => {
     }
   };
 
-  const toggleFeature = async (feature: 'isVoiceSupportEnabled' | 'isAiAssistantEnabled' | 'isDeliveryEnabled') => {
+  const toggleFeature = async (feature: 'isVoiceSupportEnabled' | 'isDeliveryEnabled') => {
     if (!settings) return;
     const newStatus = !settings[feature];
     setSettings(prev => prev ? { ...prev, [feature]: newStatus } : null);
@@ -82,22 +81,33 @@ export const AdminStoreSettings: React.FC = () => {
   };
 
   const handleResetCatalog = async () => {
-    if (window.confirm("⚠️ DANGER: This will delete ALL products permanently. Proceed?")) {
-      const confirmText = window.prompt("Type 'DELETE CATALOG' to confirm permanent deletion of all products:");
+    const mode = window.confirm("Do you want to KEEP 'Sudha milk' and delete all other products? (OK for Keep Milk, Cancel for Delete All)") ? 'selective' : 'all';
+    
+    if (window.confirm(`⚠️ DANGER: This will delete ${mode === 'selective' ? 'all products EXCEPT Sudha milk' : 'EVERY product'} permanently. Proceed?`)) {
+      const confirmText = window.prompt(`Type 'DELETE CATALOG' to confirm permanent deletion:`);
       if (confirmText === 'DELETE CATALOG') {
         const { collection, getDocs, deleteDoc, doc, writeBatch } = await import('firebase/firestore');
         const { db } = await import('../firebase');
         setSaving(true);
         try {
           const snapshot = await getDocs(collection(db, 'products'));
+          let deletedCount = 0;
+          
           // Firebase batch limit is 500
           for (let i = 0; i < snapshot.docs.length; i += 500) {
             const batch = writeBatch(db);
             const chunk = snapshot.docs.slice(i, i + 500);
-            chunk.forEach(d => batch.delete(d.ref));
+            chunk.forEach(d => {
+              const data = d.data();
+              const isSudhaMilk = data.name && data.name.toLowerCase().includes('sudha milk');
+              if (mode === 'all' || !isSudhaMilk) {
+                batch.delete(d.ref);
+                deletedCount++;
+              }
+            });
             await batch.commit();
           }
-          alert("Product Catalog reset successfully!");
+          alert(`Successfully removed ${deletedCount} products. Catalog updated!`);
           window.location.reload();
         } catch (error) {
           console.error("Reset failed:", error);
@@ -343,30 +353,6 @@ export const AdminStoreSettings: React.FC = () => {
             {(!settings?.adminWhatsAppNumbers || settings.adminWhatsAppNumbers.length === 0) && (
               <p className="text-[10px] text-orange-500 font-bold uppercase py-2">⚠️ At least one number is recommended.</p>
             )}
-          </div>
-
-          <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100">
-            <div className="space-y-1 text-left">
-              <span className={`text-[10px] font-black uppercase tracking-widest ${settings?.isAiAssistantEnabled !== false ? 'text-primary' : 'text-gray-400'}`}>
-                AI Assistant (Customer End): {settings?.isAiAssistantEnabled !== false ? 'ENABLED' : 'DISABLED'}
-              </span>
-              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
-                {settings?.isAiAssistantEnabled !== false ? 'Floating AI bubble is visible to users.' : 'UI is cleaner, AI assistant is hidden.'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => toggleFeature('isAiAssistantEnabled')}
-              className={`relative inline-flex h-10 w-20 items-center rounded-full transition-all duration-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
-                settings?.isAiAssistantEnabled !== false ? 'bg-primary' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-8 w-8 transform rounded-full bg-white transition-transform duration-300 ${
-                  settings?.isAiAssistantEnabled !== false ? 'translate-x-11' : 'translate-x-1'
-                } shadow-md`}
-              />
-            </button>
           </div>
 
           <div className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100">
