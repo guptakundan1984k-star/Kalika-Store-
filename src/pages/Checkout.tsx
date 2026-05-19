@@ -432,18 +432,6 @@ export const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrder
         }, 100);
         return;
       }
-
-      const addressLower = manualAddress.toLowerCase();
-      const isJharkhand = addressLower.includes('jharkhand') || 
-                           addressLower.includes('ranchi') || 
-                           addressLower.includes('834') || 
-                           (liveLocation && liveLocation.lat >= 21.9 && liveLocation.lat <= 25.3);
-      
-      if (!isJharkhand) {
-        setErrors(prev => ({ ...prev, address: "Delivery is only available in Jharkhand (Ranchi region)." }));
-        setCheckoutStep(0);
-        return;
-      }
     }
 
     if (!phoneInput || !/^\d{10,}$/.test(phoneInput.replace(/\s/g, ''))) {
@@ -458,18 +446,7 @@ export const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrder
       return;
     }
 
-    // Snappy feedback
     setIsProcessing(true);
-
-    try {
-      // Pre-check connectivity
-      await getDoc(doc(db, 'settings', 'store'));
-    } catch (err: any) {
-      console.error("Firestore connectivity check failed:", err);
-      alert("⚠️ Network Error: Could not reach the server. Please check your internet connection and try again.");
-      setIsProcessing(false);
-      return;
-    }
 
     try {
       const pin = Math.floor(1000 + Math.random() * 9000).toString();
@@ -552,9 +529,8 @@ export const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrder
       setOrderId(finalOrder.id);
       setOrderPin(pin);
       
-      // We don't call finalizeOrder here anymore. 
-      // Instead, we let the OrderProcessingScreen (which is showing because isProcessing is true) 
-      // trigger finalizeOrder when its animation completes.
+      // Speed up: Call finalizeOrder immediately instead of waiting for processing screen
+      finalizeOrder(finalOrder.id, pin);
       
     } catch (error: any) {
       console.error('Checkout error:', error);
@@ -564,37 +540,42 @@ export const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrder
     }
   };
 
-  const finalizeOrder = () => {
+  const finalizeOrder = (oId?: string, oPin?: string) => {
+    const finalId = oId || orderId;
+    const finalPin = oPin || orderPin;
+
     setIsProcessing(false);
     setIsPlaced(true);
     
     // WhatsApp Redirect for Everyone
-    const itemsMsg = cart.map(i => `• ${i.name} x ${i.quantity}`).join('%0A');
-    const now = Date.now();
-    const dateStr = new Date(now).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    const timeStr = new Date(now).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const itemsMsg = cart.map(i => `• ${i.name} x ${i.quantity}${i.selectedUnit ? ` (${i.selectedUnit})` : ''}`).join('%0A');
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    
+    // Safety check for delivery date
+    const deliveryDate = availableDays[selectedDate]?.dateStr || (selectedDate === 0 ? 'Today' : 'Upcoming');
     
     const isAdmin = user?.role === 'admin' || user?.role === 'cs';
     
-    let staffDetails = `*CS Name:* Kalika Support%0A`;
-    if (isAdmin || user?.role === 'cs') {
-      staffDetails = `*CS Support Name:* ${user?.name}%0A*CS Phone:* ${user?.phone || 'N/A'}%0A`;
-    }
+    const csName = isAdmin ? (user?.name || 'Kalika Support') : 'Kalika Support';
+    const csContact = isAdmin ? (user?.phone || '8002914323') : '8002914323';
 
-    const waMsg = `🛍️ *${isAdmin ? 'STORE ORDER' : 'NEW ORDER'}*%0A%0A` +
-                 `*Order:* #${orderId.slice(-6).toUpperCase()}%0A` +
-                 `*PIN:* ${orderPin}%0A` +
-                 `*Date:* ${dateStr}%0A` +
-                 `*Time:* ${timeStr}%0A` +
-                 staffDetails +
-                 `*Customer:* ${user?.name}%0A` +
+    const waMsg = `🛍️ *${isAdmin ? 'STORE ORDER CONFIRMED' : 'NEW ORDER RECEIVED'}*%0A%0A` +
+                 `*CS Name:* ${csName}%0A` +
+                 `*CS Contact:* ${csContact}%0A` +
+                 `*Customer:* ${user?.name || 'Customer'}%0A` +
                  `*Contact:* ${phoneInput || user?.phone || 'N/A'}%0A` +
-                 `*Address:* ${deliveryType === 'Delivery' ? manualAddress : 'Store Pickup (Ranchi)'}%0A` +
+                 `*Address:* ${deliveryType === 'Delivery' ? (manualAddress || 'Jharkhand') : 'Store Pickup (Ranchi)'}%0A%0A` +
+                 `*Order ID:* #${finalId.slice(-6).toUpperCase()}%0A` +
+                 `*Order PIN:* ${finalPin || '0000'}%0A` +
+                 `*Order Date/Time:* ${dateStr} | ${timeStr}%0A` +
+                 `*Date of Delivery:* ${deliveryDate}%0A` +
                  `*Time Slot:* ${deliverySlot || (deliveryType === 'Delivery' ? 'Standard' : 'Pickup')}%0A%0A` +
                  `*Items:*%0A${itemsMsg}%0A%0A` +
-                 `*Total:* ₹${total.toFixed(0)}%0A%0A` +
-                 `_Order placed via Kalika App_%0A` +
-                 `_Please confirm for delivery._`;
+                 `*Total Amnt:* ₹${total.toFixed(0)}%0A%0A` +
+                 `_Order placed via Kalika Web App_%0A` +
+                 `_Thank you for choosing Kalika_`;
 
     window.open(`https://wa.me/918002914323?text=${waMsg}`, '_blank');
 
@@ -642,17 +623,6 @@ export const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrder
     } catch (e) {}
   };
 
-
-  if (isProcessing) {
-    return (
-      <OrderProcessingScreen 
-        items={cart}
-        onComplete={() => {
-          finalizeOrder();
-        }}
-      />
-    );
-  }
 
   if (isPlaced) {
     return (
@@ -1292,163 +1262,29 @@ export const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrder
                       Back
                     </button>
                     
-                    {/* Swipe to Order Interaction - Redesigned (Mini, Blue → Green transition) */}
-                    <div className="flex-[7] space-y-2">
-                      <div className="text-center px-8">
-                        <span className={`text-[10px] font-black uppercase tracking-[0.4em] transition-colors duration-500 ${
-                          (isPlaced || isProcessing) ? 'text-green-600' : 'text-gray-400 animate-pulse'
-                        }`}>
-                          {isProcessing ? 'Processing...' : isPlaced ? 'Order Placed!' : 'Swipe to Order'}
-                        </span>
-                      </div>
-
-                      <div 
-                        ref={swipeContainerRef}
-                        className={`relative h-20 rounded-[28px] p-1.5 overflow-hidden border transition-all duration-700 shadow-lg`}
-                        style={{ 
-                          backgroundColor: (isPlaced || isProcessing) ? '#f0fdf4' : `rgb(${59 * (1 - swipeProgress) + 187 * swipeProgress}, ${130 * (1 - swipeProgress) + 247 * swipeProgress}, ${246 * (1 - swipeProgress) + 208 * swipeProgress})`,
-                          borderColor: (isPlaced || isProcessing) ? '#4ade80' : `rgb(${29 * (1 - swipeProgress) + 74 * swipeProgress}, ${78 * (1 - swipeProgress) + 222 * swipeProgress}, ${216 * (1 - swipeProgress) + 128 * swipeProgress})`
-                        }}
+                    {/* Place Order Interaction */}
+                    <div className="flex-[7] space-y-4">
+                      <button
+                        onClick={handlePlaceOrder}
+                        disabled={isProcessing}
+                        className={`w-full py-5 rounded-[28px] font-black text-lg uppercase tracking-[0.2em] shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3 ${
+                          isProcessing 
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' 
+                            : 'bg-primary text-white shadow-primary/30 hover:bg-primary-dark cursor-pointer'
+                        }`}
                       >
-                        {/* Water Splash Effect */}
-                        <AnimatePresence>
-                          {(isProcessing || isPlaced) && (
-                            <>
-                              <motion.div
-                                initial={{ scale: 0, opacity: 1 }}
-                                animate={{ scale: 6, opacity: 0 }}
-                                transition={{ duration: 1, ease: "easeOut" }}
-                                className="absolute bg-white/60 rounded-full z-[1] pointer-events-none"
-                                style={{ 
-                                  left: (swipeContainerRef.current?.offsetWidth || 0) - 40,
-                                  top: '50%',
-                                  width: 40,
-                                  height: 40,
-                                  marginTop: -20,
-                                  marginLeft: -20
-                                }}
-                              />
-                              <motion.div
-                                initial={{ scale: 0, opacity: 1 }}
-                                animate={{ scale: 4, opacity: 0 }}
-                                transition={{ duration: 0.8, delay: 0.1, ease: "easeOut" }}
-                                className="absolute bg-green-200/40 rounded-full z-[1] pointer-events-none"
-                                style={{ 
-                                  left: (swipeContainerRef.current?.offsetWidth || 0) - 40,
-                                  top: '40%',
-                                  width: 30,
-                                  height: 30,
-                                  marginTop: -15,
-                                  marginLeft: -15
-                                }}
-                              />
-                              <motion.div
-                                initial={{ scale: 0, opacity: 1 }}
-                                animate={{ scale: 5, opacity: 0 }}
-                                transition={{ duration: 1.2, delay: 0.2, ease: "easeOut" }}
-                                className="absolute bg-white/30 rounded-full z-[1] pointer-events-none"
-                                style={{ 
-                                  left: (swipeContainerRef.current?.offsetWidth || 0) - 60,
-                                  top: '60%',
-                                  width: 35,
-                                  height: 35,
-                                  marginTop: -17.5,
-                                  marginLeft: -17.5
-                                }}
-                              />
-                            </>
-                          )}
-                        </AnimatePresence>
-
-                        {/* Liquid wave overlay */}
-                        <motion.div 
-                          initial={false}
-                          animate={{ 
-                             x: (isProcessing || isPlaced) ? '0%' : (swipeProgress * 100 - 100) + '%',
-                          }}
-                          transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                          className="absolute inset-0 bg-green-400/30 z-0 pointer-events-none"
-                        />
-
-                        {/* Swipable Handle */}
-                        <motion.div
-                          drag={!isProcessing && !isPlaced ? "x" : false}
-                          dragConstraints={{ left: 0, right: (swipeContainerRef.current?.offsetWidth || 0) - 76 }}
-                          dragElastic={0.1}
-                          dragMomentum={false}
-                          onTap={() => {
-                            if (!isProcessing && !isPlaced) {
-                              setSwipeProgress(1);
-                              handlePlaceOrder();
-                            }
-                          }}
-                          onDrag={(e, info) => {
-                            const container = swipeContainerRef.current;
-                            if (!container) return;
-                            const rect = container.getBoundingClientRect();
-                            const containerWidth = rect.width - 76;
-                            // Calculate progress based on touch/mouse position relative to container
-                            const relativeX = info.point.x - rect.left - 32;
-                            const progress = Math.max(0, Math.min(1, relativeX / containerWidth));
-                            setSwipeProgress(progress);
-                          }}
-                          onDragEnd={(e, info) => {
-                            const container = swipeContainerRef.current;
-                            if (!container) return;
-                            const rect = container.getBoundingClientRect();
-                            const containerWidth = rect.width - 76;
-                            const relativeX = info.point.x - rect.left - 32;
-                            const progress = relativeX / containerWidth;
-
-                            if (progress > 0.8) {
-                              setSwipeProgress(1);
-                              handlePlaceOrder();
-                            } else {
-                              setSwipeProgress(0);
-                            }
-                          }}
-                          animate={(isPlaced || isProcessing) ? { x: (swipeContainerRef.current?.offsetWidth || 0) - 76 } : swipeProgress === 0 ? { x: 0 } : {}}
-                          transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                          whileTap={{ scale: 0.95 }}
-                          className={`absolute left-1.5 top-1.5 bottom-1.5 w-16 rounded-[20px] flex items-center justify-center bg-white shadow-xl cursor-pointer active:cursor-grabbing z-10 transition-colors ${
-                            (isPlaced || isProcessing) ? 'text-green-500' : 'text-blue-600'
-                          }`}
-                        >
-                          {isProcessing ? (
-                            <RefreshCw className="w-6 h-6 animate-spin" />
-                          ) : isPlaced ? (
-                            <CheckCircle className="w-8 h-8" />
-                          ) : (
-                            <motion.div 
-                              animate={{ 
-                                scale: [1, 1.15, 1],
-                                opacity: [0.7, 1, 0.7]
-                              }}
-                              transition={{ duration: 1.2, repeat: Infinity }}
-                              className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center border-2 border-blue-100 shadow-inner"
-                            >
-                              <ArrowRight className="w-6 h-6" />
-                            </motion.div>
-                          )}
-                        </motion.div>
-
-                        {/* Progress Overlay */}
-                        {!isPlaced && (
-                          <motion.div 
-                            className="absolute inset-y-0 left-0 bg-white/20 rounded-l-[28px]"
-                            style={{ width: `${swipeProgress * 100}%` }}
-                          />
+                        {isProcessing ? (
+                          <>
+                            <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingBag className="w-6 h-6" />
+                            Place Order
+                          </>
                         )}
-                        
-                        {/* Shine Effect */}
-                        {!isPlaced && !isProcessing && (
-                           <motion.div 
-                            animate={{ x: ['-100%', '200%'] }}
-                            transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
-                            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 pointer-events-none"
-                           />
-                        )}
-                      </div>
+                      </button>
                     </div>
                   </div>
                   

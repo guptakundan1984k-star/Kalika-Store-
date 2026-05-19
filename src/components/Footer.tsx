@@ -79,6 +79,10 @@ export const Footer: React.FC = () => {
               </p>
             </div>
           </div>
+
+          <div className="pt-4 border-t border-gray-100 flex items-center">
+            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Fssai lic no: 21125008000027</span>
+          </div>
         </div>
       </div>
       

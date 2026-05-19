@@ -81,6 +81,10 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
             </p>
             <span className="h-px w-12 bg-gray-200" />
           </div>
+
+          <div className="mt-4 flex items-center justify-center bg-white/50 backdrop-blur-sm px-4 py-1 rounded-full border border-gray-100 shadow-sm">
+            <span className="text-[9px] font-black text-gray-500 tracking-wider uppercase">Fssai lic no: 21125008000027</span>
+          </div>
           
           {!storeSettings?.isFunctionallyOpen && storeSettings && (
             <motion.div 

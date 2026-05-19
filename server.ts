@@ -18,20 +18,25 @@ if (fs.existsSync(firebaseConfigPath)) {
 
 const getAdminApp = () => {
   if (admin.apps.length > 0) return admin.apps[0];
+  
+  const projectId = process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId;
+  
   try {
+    // Try to initialize with default credentials first
     return admin.initializeApp({
       credential: admin.credential.applicationDefault(),
-      projectId: firebaseConfig.projectId,
+      projectId: projectId,
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.warn('Firebase Admin: Failed to initialize with applicationDefault(), falling back to basic initialization.', error.message);
     return admin.initializeApp({
-      projectId: firebaseConfig.projectId,
+      projectId: projectId,
     });
   }
 };
 
 const adminApp = getAdminApp();
-const db = getFirestore(adminApp, firebaseConfig.firestoreDatabaseId);
+const db = getFirestore(adminApp, firebaseConfig.firestoreDatabaseId || '(default)');
 
 async function startServer() {
   const app = express();
@@ -156,14 +161,22 @@ async function startServer() {
 
       res.json({ success: true, response });
     } catch (error: any) {
-      console.error('FCM Error:', error);
+      console.error('FCM Error Details:', JSON.stringify(error, null, 2));
+      
+      let hint = "Check Firebase Console to ensure FCM API is enabled.";
       if (error.code === 'messaging/permission-denied' || error.message.includes('PERMISSION_DENIED')) {
-        console.error('IMPORTANT: Please ensure "Firebase Cloud Messaging API" is enabled in your Google Cloud Console and the service account has the "Firebase Messaging Admin" role.');
+        const projectId = admin.app().options.projectId;
+        hint = `IMPORTANT: Please ensure the "Firebase Cloud Messaging API" is enabled for project "${projectId}". 
+        Visit: https://console.cloud.google.com/apis/library/fcm.googleapis.com?project=${projectId}
+        Also verify that your service account has the "Firebase Messaging Admin" role.`;
+        console.error(hint);
       }
+
       res.status(500).json({ 
         success: false, 
         error: error.message,
-        hint: "Check Firebase Console to ensure FCM API is enabled and service account has permissions."
+        code: error.code,
+        hint: hint
       });
     }
   });
