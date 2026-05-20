@@ -577,7 +577,14 @@ export const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrder
                  `_Order placed via Kalika Web App_%0A` +
                  `_Thank you for choosing Kalika_`;
 
-    window.open(`https://wa.me/918002914323?text=${waMsg}`, '_blank');
+    const waUrl = `https://wa.me/918002914323?text=${waMsg}`;
+    const newWindow = window.open(waUrl, '_blank');
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+      console.log("Popup blocker active, redirecting in-context");
+      setTimeout(() => {
+        window.location.href = waUrl;
+      }, 1000);
+    }
 
     // Voice feedback
     try {

@@ -349,11 +349,10 @@ const Topup: React.FC<TopupProps> = ({ user }) => {
 
                     <button 
                       onClick={handlePaymentComplete}
-                      disabled={loading || !screenshot}
+                      disabled={loading}
                       className={`w-full py-6 font-black rounded-3xl transition-all flex items-center justify-center gap-3 border ${
                         loading ? 'bg-gray-100 text-gray-400 border-gray-200' : 
-                        !screenshot ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed' :
-                        'bg-gray-900 text-white border-black hover:bg-black shadow-xl shadow-gray-200'
+                        'bg-gray-900 text-white border-black hover:bg-black shadow-xl shadow-gray-200 active:scale-95'
                       }`}
                     >
                       {loading ? (

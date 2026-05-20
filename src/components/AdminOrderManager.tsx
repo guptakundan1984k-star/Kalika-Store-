@@ -372,69 +372,272 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
+    const formattedDate = new Date(order.createdAt).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+    const formattedTime = new Date(order.createdAt).toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+
     const invoiceHtml = `
       <html>
         <head>
-          <title>Invoice - ${order.id}</title>
+          <title>Thermal Receipt - #${order.id.slice(-6).toUpperCase()}</title>
           <style>
-            @page { margin: 0; }
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;850;950&family=JetBrains+Mono:wght@400;500;700;900&display=swap');
+            @page { margin: 0; size: 58mm auto; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
             body { 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: 'Inter', -apple-system, sans-serif; 
               width: 58mm; 
-              margin: 0; 
-              padding: 5mm; 
-              font-size: 10px;
-              line-height: 1.2;
+              margin: 0 auto; 
+              padding: 4.5mm 3mm; 
+              font-size: 9px;
+              line-height: 1.35;
               color: #000;
+              background-color: #fff;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
             .center { text-align: center; }
-            .bold { font-weight: bold; }
-            .border-top { border-top: 1px dashed #000; margin-top: 5px; padding-top: 5px; }
-            .border-bottom { border-bottom: 1px dashed #000; margin-bottom: 5px; padding-bottom: 5px; }
-            .flex { display: flex; justify-content: space-between; }
-            .items-table { width: 100%; margin: 10px 0; }
-            .items-table th { text-align: left; font-size: 8px; border-bottom: 1px solid #000; }
-            .items-table td { padding: 2px 0; }
-            .qr-placeholder { width: 40mm; height: 40mm; background: #eee; margin: 10px auto; display: flex; items-center; justify-content: center; font-size: 8px; }
+            .right { text-align: right; }
+            .bold { font-weight: 700; }
+            .mono { font-family: 'JetBrains Mono', monospace; }
+            .divider { 
+              border-top: 1px dashed #000; 
+              margin: 5px 0; 
+            }
+            .double-divider { 
+              border-top: 3px double #000; 
+              margin: 5px 0; 
+            }
+            .brand-header {
+              font-size: 14px;
+              font-weight: 950;
+              letter-spacing: -0.5px;
+              text-transform: uppercase;
+              margin-bottom: 2px;
+            }
+            .brand-subtitle {
+              font-size: 7.5px;
+              text-transform: uppercase;
+              font-weight: 600;
+              letter-spacing: 0.5px;
+              margin-bottom: 3px;
+              opacity: 0.8;
+            }
+            .store-address {
+              font-size: 7.5px;
+              line-height: 1.2;
+              opacity: 0.9;
+            }
+            .info-block {
+              margin: 6px 0;
+              font-size: 8px;
+            }
+            .flex-row { 
+              display: flex; 
+              justify-content: space-between; 
+              margin-bottom: 3.5px;
+              align-items: flex-start;
+            }
+            .flex-row span:first-child {
+              text-transform: uppercase;
+              font-size: 7px;
+              letter-spacing: 0.3px;
+              font-weight: 500;
+              color: #444;
+            }
+            .flex-row span:last-child {
+              font-weight: 700;
+            }
+            .items-table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin: 6px 0; 
+            }
+            .items-table th { 
+              text-align: left; 
+              font-size: 8px; 
+              font-weight: bold;
+              border-bottom: 1.5px solid #000; 
+              padding-bottom: 3.5px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            .items-table td { 
+              padding: 4.5px 0; 
+              vertical-align: top;
+              font-size: 8px;
+              border-bottom: 0.5px dashed #eee;
+            }
+            .item-title {
+              font-weight: 700;
+              text-transform: uppercase;
+              font-size: 8.5px;
+              line-height: 1.25;
+            }
+            .item-unit {
+              font-size: 7px;
+              color: #555;
+              font-weight: 500;
+              margin-top: 1px;
+            }
+            .item-price-each {
+              font-size: 7px;
+              color: #666;
+              font-weight: 500;
+              margin-top: 1.5px;
+            }
+            .pin-box {
+              border: 1.5px dashed #000;
+              border-radius: 6px;
+              padding: 5px;
+              margin: 8px 0;
+              text-align: center;
+              background: #fff;
+            }
+            .pin-title {
+              font-size: 7px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 1.5px;
+              margin-bottom: 2px;
+            }
+            .pin-value {
+              font-size: 15px;
+              font-weight: 900;
+              letter-spacing: 2px;
+              font-family: 'JetBrains Mono', monospace;
+            }
+            .footer-msg {
+              font-size: 7px;
+              margin-top: 6px;
+              line-height: 1.45;
+              font-weight: 500;
+              color: #444;
+            }
+            .payment-badge {
+              border: 1px solid #000;
+              padding: 2.5px 6px;
+              font-size: 7px;
+              font-weight: 800;
+              display: inline-block;
+              margin-top: 3px;
+              letter-spacing: 0.5px;
+              border-radius: 2px;
+              text-transform: uppercase;
+            }
+            .barcode-style {
+              font-family: 'JetBrains Mono', monospace;
+              letter-spacing: 3px;
+              font-size: 6.5px;
+              font-weight: 900;
+              margin: 10px 0 2px 0;
+            }
           </style>
         </head>
         <body>
-          <div class="center bold" style="font-size: 14px;">KALIKA STORE</div>
-          <div class="center">Ranchi, Jharkhand</div>
-          <div class="center">Ph: 6205284423</div>
+          <!-- Brand Logo Header -->
+          <div class="center">
+            <div class="brand-header">★ KALIKA STORE ★</div>
+            <div class="brand-subtitle">Perfect Premium Quality</div>
+            <div class="store-address">Opp. Krishi Bazaar, Ranchi, Jharkhand</div>
+            <div class="store-address" style="font-weight: 700;">Mob/WA: +91 8002914323</div>
+          </div>
           
-          <div class="border-top border-bottom">
-            <div class="flex"><span>Date:</span> <span>${new Date(order.createdAt).toLocaleDateString()}</span></div>
-            <div class="flex"><span>Order:</span> <span>#${order.id.slice(-6).toUpperCase()}</span></div>
-            <div class="flex"><span>Type:</span> <span>${order.deliveryType}</span></div>
+          <div class="double-divider"></div>
+          
+          <!-- Metadata Info -->
+          <div class="info-block">
+            <div class="flex-row"><span>Receipt ID</span> <span class="bold mono">#${order.id.slice(-6).toUpperCase()}</span></div>
+            <div class="flex-row"><span>Date/Time</span> <span class="mono">${formattedDate} | ${formattedTime}</span></div>
+            <div class="flex-row"><span>Customer</span> <span class="bold">${order.userName || 'Guest Customer'}</span></div>
+            <div class="flex-row"><span>Phone No</span> <span class="mono">${order.userPhone || 'N/A'}</span></div>
+            <div class="flex-row"><span>Type</span> <span class="bold" style="text-transform: uppercase;">${order.deliveryType}</span></div>
+            ${order.address?.manual ? `
+              <div style="margin-top: 3.5px; padding-top: 3.5px; border-top: 0.5px dashed #ddd;">
+                <p style="font-weight: 500; font-size: 6.5px; text-transform: uppercase; color: #555; margin-bottom: 1.5px;">Delivery Address</p>
+                <p style="font-weight: 700; font-size: 7.5px; line-height: 1.25; word-break: break-word;">${order.address.manual}</p>
+              </div>
+            ` : ''}
           </div>
 
+          <div class="divider"></div>
+
+          <!-- Items Table -->
           <table class="items-table">
             <thead>
               <tr>
-                <th>Item</th>
-                <th>Qty</th>
-                <th style="text-align: right;">Amt</th>
+                <th style="width: 55%;">Particulars</th>
+                <th style="width: 15%; text-align: center;">Qty</th>
+                <th style="width: 30%; text-align: right;">Amount</th>
               </tr>
             </thead>
             <tbody>
               ${order.items.map(item => `
                 <tr>
-                  <td style="max-width: 30mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.name}</td>
-                  <td>${item.quantity}</td>
-                  <td style="text-align: right;">${item.price * item.quantity}</td>
+                  <td>
+                    <div class="item-title">${item.name}</div>
+                    ${item.selectedUnit ? `<div class="item-unit">${item.selectedUnit}</div>` : ''}
+                    <div class="item-price-each mono">₹${item.price} each</div>
+                  </td>
+                  <td class="center bold mono" style="font-size: 9.5px; vertical-align: middle;">${item.quantity}</td>
+                  <td class="right bold mono" style="font-size: 9.5px; vertical-align: middle;">₹${(item.price * item.quantity).toFixed(0)}</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
 
-          <div class="border-top bold" style="font-size: 12px;">
-            <div class="flex"><span>TOTAL:</span> <span>₹${order.total}</span></div>
+          <div class="double-divider"></div>
+
+          <!-- Total Calculation Information -->
+          <div class="info-block">
+            <div class="flex-row" style="font-size: 8px;">
+              <span>Subtotal</span>
+              <span class="mono">₹${order.total}</span>
+            </div>
+            <div class="flex-row" style="font-size: 8px;">
+              <span>Delivery Fee</span>
+              <span class="mono">₹0.00</span>
+            </div>
+            ${order.walletUsed ? `
+              <div class="flex-row style="font-size: 8px;">
+                <span>Wallet Credit</span>
+                <span class="mono">-₹${order.walletUsed}</span>
+              </div>
+            ` : ''}
+            <div class="flex-row bold" style="font-size: 11px; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #000;">
+              <span>Net Total</span>
+              <span class="mono">₹${order.total}</span>
+            </div>
           </div>
-          
-          <div class="center border-top" style="margin-top: 10px;">
-            <div class="bold">Verification PIN: ${order.pin}</div>
-            <p style="font-size: 8px;">Thank you for shopping!</p>
+
+          <!-- Payment Badge -->
+          <div class="center" style="margin-bottom: 4px;">
+            <span class="payment-badge">
+              PAY: ${order.paymentMethod ? order.paymentMethod.toUpperCase() : 'CASH'}
+            </span>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Delivery PIN Box -->
+          <div class="pin-box">
+            <div class="pin-title">Order Verification PIN</div>
+            <div class="pin-value">${order.pin || 'N/A'}</div>
+          </div>
+
+          <!-- Verification barcode & message -->
+          <div class="center barcode-style">||| |||| || ||| |*${order.id.slice(-6).toUpperCase()}*|</div>
+          <div class="center footer-msg">
+            <div class="bold">*** THANK YOU ***</div>
+            <div>Please check items before leaving.</div>
+            <div style="font-size: 6.5px; opacity: 0.6; margin-top: 3px; font-style: italic;">Computer Generated Receipt</div>
           </div>
 
           <script>

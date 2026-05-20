@@ -92,6 +92,7 @@ export interface Order {
   walletAdjusted?: boolean;
   walletRedeemed?: number;
   walletDebtSettle?: number;
+  walletUsed?: number;
   estimatedDelivery?: number;
   isPreOrder?: boolean;
   orderType?: 'personal' | 'sell';
