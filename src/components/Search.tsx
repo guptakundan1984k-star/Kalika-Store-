@@ -39,19 +39,38 @@ export const Search: React.FC<SearchProps> = ({ value, onChange }) => {
     }
   };
   
+  React.useEffect(() => {
+    (window as any).atOptions = {
+      'key' : '61cbe7b93132ec2a0010b6c3a1a1ebd1',
+      'format' : 'iframe',
+      'height' : 50,
+      'width' : 320,
+      'params' : {}
+    };
+
+    const container = document.getElementById('search-ad-container-61cbe7b93132ec2a0010b6c3a1a1ebd1');
+    if (container && !container.querySelector('script')) {
+      const script = document.createElement('script');
+      script.async = true;
+      script.src = 'https://www.highperformanceformat.com/61cbe7b93132ec2a0010b6c3a1a1ebd1/invoke.js';
+      container.appendChild(script);
+    }
+  }, []);
+
   return (
-    <div className="relative w-full max-w-2xl mx-auto group">
-      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
-        {isSearching ? <Loader2 className="w-6 h-6 animate-spin text-primary" /> : <SearchIcon className="w-6 h-6" />}
-      </div>
-      <input 
-        type="text" 
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={isSearching ? "Identifying product..." : "Search for grocery items..."}
-        className="w-full bg-white border border-gray-100 rounded-3xl py-5 pl-14 pr-32 text-lg font-medium shadow-xl shadow-gray-200/50 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all placeholder:text-gray-300"
-        disabled={isSearching}
-      />
+    <div className="w-full max-w-2xl mx-auto space-y-4">
+      <div className="relative group">
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
+          {isSearching ? <Loader2 className="w-6 h-6 animate-spin text-primary" /> : <SearchIcon className="w-6 h-6" />}
+        </div>
+        <input 
+          type="text" 
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={isSearching ? "Identifying product..." : "Search for grocery items..."}
+          className="w-full bg-white border border-gray-100 rounded-3xl py-5 pl-14 pr-32 text-lg font-medium shadow-xl shadow-gray-200/50 focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all placeholder:text-gray-300"
+          disabled={isSearching}
+        />
       <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
         {value && !isSearching && (
           <button 
@@ -87,5 +106,7 @@ export const Search: React.FC<SearchProps> = ({ value, onChange }) => {
         </button>
       </div>
     </div>
+    <div id="search-ad-container-61cbe7b93132ec2a0010b6c3a1a1ebd1" className="flex justify-center"></div>
+  </div>
   );
 };

@@ -59,6 +59,17 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
     }
   }, [envStatus]);
 
+  React.useEffect(() => {
+    const container = document.getElementById('container-238f50cbf3ea3e03478d0c48dd223d90');
+    if (container && !container.querySelector('script')) {
+      const script = document.createElement('script');
+      script.async = true;
+      script.setAttribute('data-cfasync', 'false');
+      script.src = 'https://pl29511201.effectivecpmnetwork.com/238f50cbf3ea3e03478d0c48dd223d90/invoke.js';
+      container.appendChild(script);
+    }
+  }, []);
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -73,6 +84,9 @@ const Home: React.FC<HomeProps> = ({ products, onAddToCart, banners, storeSettin
       {/* Brand Identity / Header Section */}
       <div className="w-full pt-12 pb-8 flex flex-col items-center">
         <div className="w-full px-6 flex flex-col items-center text-center">
+          <div className="mb-6 flex justify-center">
+            <div id="container-238f50cbf3ea3e03478d0c48dd223d90"></div>
+          </div>
           <Logo large className="mb-8" />
           <div className="flex items-center gap-3">
             <span className="h-px w-12 bg-gray-200" />

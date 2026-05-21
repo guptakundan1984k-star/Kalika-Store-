@@ -18,6 +18,24 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
   const [isCancelling, setIsCancelling] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
 
+  React.useEffect(() => {
+    (window as any).atOptions = {
+      'key' : '61cbe7b93132ec2a0010b6c3a1a1ebd1',
+      'format' : 'iframe',
+      'height' : 50,
+      'width' : 320,
+      'params' : {}
+    };
+
+    const container = document.getElementById('orders-ad-container-61cbe7b93132ec2a0010b6c3a1a1ebd1');
+    if (container && !container.querySelector('script')) {
+      const script = document.createElement('script');
+      script.async = true;
+      script.src = 'https://www.highperformanceformat.com/61cbe7b93132ec2a0010b6c3a1a1ebd1/invoke.js';
+      container.appendChild(script);
+    }
+  }, []);
+
   const handleCancelOrder = async (orderId: string) => {
     if (!cancelReason.trim()) {
       alert("Please provide a reason for cancellation.");
@@ -134,6 +152,9 @@ export const MyOrders: React.FC<MyOrdersProps> = ({ orders, user }) => {
 
 
       </div>
+
+      {/* Orders Ad Container */}
+      <div id="orders-ad-container-61cbe7b93132ec2a0010b6c3a1a1ebd1" className="bg-white py-4 flex justify-center border-b border-gray-100"></div>
 
       {/* Filter Bar */}
       <div className="bg-gray-50 px-6 py-4 flex items-center gap-3 overflow-x-auto scrollbar-hide">
