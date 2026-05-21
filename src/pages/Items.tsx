@@ -37,16 +37,7 @@ const Items: React.FC<ItemsProps> = ({
     if (query) setSearch(query);
   }, [searchParams]);
 
-  useEffect(() => {
-    const container = document.getElementById('container-238f50cbf3ea3e03478d0c48dd223d90');
-    if (container && !container.querySelector('script')) {
-      const script = document.createElement('script');
-      script.async = true;
-      script.setAttribute('data-cfasync', 'false');
-      script.src = 'https://pl29511201.effectivecpmnetwork.com/238f50cbf3ea3e03478d0c48dd223d90/invoke.js';
-      container.appendChild(script);
-    }
-  }, []);
+
 
   const filteredProducts = products.filter(p => {
     const searchTerms = search.toLowerCase().split(' ').filter(t => t.length > 0);
@@ -61,11 +52,8 @@ const Items: React.FC<ItemsProps> = ({
 
   return (
     <div className="min-h-screen bg-gray-50/50 pb-20">
-      <div className="bg-white py-4 flex justify-center border-b border-gray-100 pt-24">
-        <div id="container-238f50cbf3ea3e03478d0c48dd223d90"></div>
-      </div>
       {/* Header Section */}
-      <div className="bg-white border-b border-gray-100 pt-6 pb-12 px-6">
+      <div className="bg-white border-b border-gray-100 pt-24 pb-12 px-6">
         <div className="max-w-7xl mx-auto space-y-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>

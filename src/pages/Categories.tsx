@@ -29,6 +29,8 @@ const Categories: React.FC<CategoriesProps> = ({ products, onAddToCart, cart, on
     }
   }, [location.search]);
 
+
+
   const categories = [
     { id: 'Vegetables', name: 'Fruits & veggies', image: 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&q=80&w=200' },
     { id: 'Bakery', name: 'Bakery & batters', image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=200' },
@@ -129,6 +131,7 @@ const Categories: React.FC<CategoriesProps> = ({ products, onAddToCart, cart, on
       </div>
 
       <div className="max-w-7xl mx-auto px-4 md:px-6 mt-8">
+
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-6">
           {filteredProducts.map((product) => (
             <ProductCard 

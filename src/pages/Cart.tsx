@@ -97,6 +97,8 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
   const summaryRef = React.useRef<HTMLDivElement>(null);
   const itemRefs = React.useRef<{ [key: string]: HTMLDivElement | null }>({});
 
+
+
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -457,6 +459,8 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
           ))}
         </div>
       </div>
+
+
     </div>
   );
 };

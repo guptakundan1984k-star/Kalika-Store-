@@ -65,6 +65,8 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
     if (edit === 'true') setIsEditingProfile(true);
   }, []);
 
+
+
   const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [newAddress, setNewAddress] = useState({ label: 'Home', address: '' });
@@ -416,6 +418,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
   return (
     <div className="min-h-screen bg-gray-50 pt-24 pb-12 px-4 md:px-8">
       <div className="max-w-7xl mx-auto">
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
           {/* Complete Profile Prompt */}
           {!user.phone && (
@@ -1531,6 +1534,7 @@ const Profile: React.FC<ProfileProps> = ({ user, orders }) => {
             </div>
           )}
         </AnimatePresence>
+
       </div>
     </div>
   );
