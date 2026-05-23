@@ -7,6 +7,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { db, collection, addDoc, handleFirestoreError, OperationType, getDoc, doc, setDoc } from '../firebase';
 import { aiService } from '../services/aiService';
+import { notificationService } from '../services/notificationService';
 
 interface AdminManualOrderCreatorProps {
   enquiry: BulkEnquiry;
@@ -123,6 +124,13 @@ export const AdminManualOrderCreator: React.FC<AdminManualOrderCreatorProps> = (
       } as any;
 
       await setDoc(doc(db, 'orders', generatedId), newOrder);
+      
+      // Trigger Exotel SMS notification to admin numbers instantly
+      try {
+        notificationService.triggerSMSNotification(generatedId, newOrder);
+      } catch (smsErr) {
+        console.error("SMS notification trigger failed safely in background:", smsErr);
+      }
       
       // WhatsApp Redirect for store orders
       const itemsMsg = cart.map(i => `• ${i.name} x${i.quantity}`).join('%0A');

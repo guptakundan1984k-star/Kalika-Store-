@@ -18,6 +18,7 @@ import { AdminUserManager } from './AdminUserManager';
 import { writeBatch, updateDoc, doc, deleteDoc, addDoc } from 'firebase/firestore';
 import { aiService } from '../services/aiService';
 import { optimizeImage } from '../lib/utils';
+import { printerService } from '../services/BluetoothPrinterService';
 
 const COLORS = ['#f97316', '#facc15', '#fb923c', '#fde047'];
 
@@ -144,11 +145,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onTabChange, use
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       audio.play().catch(e => console.log("Audio play failed:", e));
       
-      if (Notification.permission === "granted" && orders[0]) {
+      const newOrder = orders[0];
+      if (Notification.permission === "granted" && newOrder) {
         new Notification("New Order Received!", {
-          body: `Order #${orders[0].id.slice(-8)} for ₹${orders[0].total}`,
+          body: `Order #${newOrder.id.slice(-8)} for ₹${newOrder.total}`,
           icon: "/favicon.ico"
         });
+      }
+
+      // Auto-print newly received order if printer settings are active
+      if (newOrder) {
+        const isPrinterEnabled = localStorage.getItem('bluetooth_autoprint_enabled') !== 'false';
+        if (isPrinterEnabled) {
+          if (printerService.isConnected()) {
+            console.log("[Auto-Print] Sending print bytes for new order:", newOrder.id);
+            printerService.printOrder(newOrder).catch(err => {
+              console.error("[Auto-Print] direct transmission failed:", err);
+            });
+          } else {
+            const savedId = localStorage.getItem('paired_bluetooth_device_id');
+            if (savedId) {
+              console.log("[Auto-Print] Paired printer detected. Reconnecting in background to print order:", newOrder.id);
+              printerService.connect().then(() => {
+                if (printerService.isConnected()) {
+                  printerService.printOrder(newOrder).catch(printErr => {
+                    console.error("[Auto-Print] Print after reconnect failed:", printErr);
+                  });
+                }
+              }).catch(connErr => {
+                console.warn("[Auto-Print] background auto-reconnection failed:", connErr);
+              });
+            }
+          }
+        }
       }
     }
     setLastOrderCount(orders.length);

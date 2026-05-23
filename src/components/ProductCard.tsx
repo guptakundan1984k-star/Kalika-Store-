@@ -138,6 +138,12 @@ const ProductCardComponent: React.FC<ProductCardProps> = ({
     >
       {/* Image Container */}
       <div className="aspect-square relative bg-[#F9FAFB] rounded-[32px] overflow-hidden group-hover:bg-gray-50 transition-colors">
+        {quantityInCart > 0 && (
+          <div className="absolute top-4 left-4 z-10 bg-green-500 text-white px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-md flex items-center gap-1 animate-in fade-in zoom-in duration-300">
+            <Check className="w-3.5 h-3.5 stroke-[3]" />
+            <span>{quantityInCart} Added</span>
+          </div>
+        )}
         <button 
           className={`absolute top-4 right-4 z-10 bg-white p-2 rounded-full border-2 border-gray-100 shadow-md transition-colors ${
             isWishlisted ? 'text-red-500 border-red-100' : 'text-gray-400 hover:text-red-500'
@@ -218,31 +224,41 @@ const ProductCardComponent: React.FC<ProductCardProps> = ({
         {/* New Quantity & Unit Selector */}
         <div className="mt-2 space-y-2">
           {quantityInCart > 0 ? (
-            <div className="flex items-center bg-[#00AEEF] rounded-xl p-1 border border-[#00AEEF] shadow-lg shadow-[#00AEEF]/20 h-11 transition-all animate-in fade-in zoom-in duration-300">
-              <button 
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onAddToCart(product, -1, false, localUnit);
-                }}
-                className="w-9 h-9 flex items-center justify-center bg-white/20 rounded-lg hover:bg-white/30 transition-all active:scale-90 text-white"
-              >
-                <Minus className="w-4 h-4 stroke-[3]" />
-              </button>
-              <div className="flex-1 text-center flex flex-col items-center justify-center -space-y-1">
-                <span className="text-[14px] font-black text-white leading-none">{quantityInCart}</span>
-                {localUnit && <span className="text-[8px] font-bold text-white/70 uppercase tracking-tighter">{localUnit}</span>}
+            <div className="space-y-2 animate-in fade-in zoom-in duration-300">
+              <div className="flex items-center bg-[#00AEEF] rounded-xl p-1 border border-[#00AEEF] shadow-lg shadow-[#00AEEF]/20 h-11 transition-all">
+                <button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onAddToCart(product, -1, false, localUnit);
+                  }}
+                  className="w-9 h-9 flex items-center justify-center bg-white/20 rounded-lg hover:bg-white/30 transition-all active:scale-90 text-white"
+                >
+                  <Minus className="w-4 h-4 stroke-[3]" />
+                </button>
+                <div className="flex-1 text-center flex flex-col items-center justify-center -space-y-1">
+                  <span className="text-[14px] font-black text-white leading-none">{quantityInCart}</span>
+                  {localUnit && <span className="text-[8px] font-bold text-white/70 uppercase tracking-tighter">{localUnit}</span>}
+                </div>
+                <button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onAddToCart(product, 1, false, localUnit);
+                  }}
+                  className="w-9 h-9 flex items-center justify-center bg-white/20 rounded-lg hover:bg-white/30 transition-all active:scale-90 text-white"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                </button>
               </div>
-              <button 
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onAddToCart(product, 1, false, localUnit);
-                }}
-                className="w-9 h-9 flex items-center justify-center bg-white/20 rounded-lg hover:bg-white/30 transition-all active:scale-90 text-white"
+
+              <Link 
+                to="/cart"
+                className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl font-black text-[11px] uppercase tracking-wider shadow-lg shadow-green-500/15 hover:scale-[1.01] active:scale-95 transition-all text-center flex items-center justify-center gap-1.5"
               >
-                <Plus className="w-4 h-4 stroke-[3]" />
-              </button>
+                <span>{quantityInCart} Added! Go to Cart</span>
+                <span className="animate-pulse">→</span>
+              </Link>
             </div>
           ) : (
             <>

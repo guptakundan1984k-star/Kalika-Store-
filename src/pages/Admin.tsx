@@ -21,6 +21,7 @@ import { AdminPartyPricingManager } from '../components/AdminPartyPricingManager
 import { AdminDuesManager } from '../components/AdminDuesManager';
 import { AdminWalletRequests } from '../components/AdminWalletRequests';
 import { AdminDeliveryRequests } from '../components/AdminDeliveryRequests';
+import { AdminPOSManager } from '../components/AdminPOSManager';
 
 import { Product, Order, UserProfile, Coupon, Banner, Expense, BulkEnquiry } from '../types';
 import { 
@@ -46,7 +47,7 @@ interface AdminProps {
 
 const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'bulk-ai' | 'party-pricing' | 'expenses' | 'orders' | 'workflow' | 'users' | 'wallet' | 'coupons' | 'promotions' | 'banners' | 'support' | 'bulk-enquiries' | 'dues' | 'delivery' | 'variations' | 'stocks' | 'settings' | 'storage'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'products' | 'bulk-ai' | 'party-pricing' | 'expenses' | 'orders' | 'workflow' | 'users' | 'wallet' | 'coupons' | 'promotions' | 'banners' | 'support' | 'bulk-enquiries' | 'dues' | 'delivery' | 'variations' | 'stocks' | 'settings' | 'storage'>('dashboard');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isDbConnected, setIsDbConnected] = useState<boolean | null>(null);
   const [pendingQueries, setPendingQueries] = useState(0);
@@ -294,6 +295,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
 
   const menuItems = [
     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+    { id: 'pos', label: 'POS Billing', icon: Printer },
     { id: 'products', label: 'Inventory', icon: Package },
     { id: 'party-pricing', label: 'Party Rates', icon: Tag },
     { id: 'bulk-ai', label: 'Bulk AI Add', icon: Zap },
@@ -445,6 +447,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
             >
 
               {activeTab === 'dashboard' && <AdminDashboard onTabChange={setActiveTab} user={user} products={products} orders={orders} users={users} />}
+              {activeTab === 'pos' && <AdminPOSManager products={products} />}
               {activeTab === 'bulk-ai' && (
                 <AdminBulkAIUploader 
                   products={products}

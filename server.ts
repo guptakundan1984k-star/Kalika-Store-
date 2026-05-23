@@ -6,8 +6,47 @@ import { google } from "googleapis";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import dotenv from "dotenv";
+import axios from "axios";
 
 dotenv.config();
+
+// Helper to send SMS via Exotel API
+async function sendSMSViaExotel(toPhone: string, messageBody: string): Promise<boolean> {
+  const accountSid = process.env.EXOTEL_ACCOUNT_SID;
+  const apiKey = process.env.EXOTEL_API_KEY;
+  const apiToken = process.env.EXOTEL_API_TOKEN;
+  const subdomain = process.env.EXOTEL_SUBDOMAIN || "api.exotel.com";
+  const senderId = process.env.EXOTEL_SENDER_ID || "08047191112"; // User virtual number or sender ID
+
+  if (!accountSid || !apiKey || !apiToken) {
+    console.warn(`[SMS Service] Exotel credentials missing. SMS not sent to ${toPhone}. Check EXOTEL_ACCOUNT_SID, EXOTEL_API_KEY, and EXOTEL_API_TOKEN in .env.`);
+    return false;
+  }
+
+  try {
+    const endpoint = `https://${subdomain}/v1/Accounts/${accountSid}/Sms/send.json`;
+    const auth = Buffer.from(`${apiKey}:${apiToken}`).toString("base64");
+    
+    const params = new URLSearchParams();
+    params.append("From", senderId);
+    params.append("To", toPhone);
+    params.append("Body", messageBody);
+
+    console.log(`[SMS Service] Dispatching SMS to ${toPhone} via ${endpoint}...`);
+    const response = await axios.post(endpoint, params, {
+      headers: {
+        "Authorization": `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    });
+
+    console.log(`[SMS Service] Exotel API response for ${toPhone}:`, response.data);
+    return true;
+  } catch (error: any) {
+    console.error(`[SMS Service] Failed to send SMS to ${toPhone}:`, error.response?.data || error.message);
+    return false;
+  }
+}
 
 // Load firebase config
 const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
@@ -55,6 +94,91 @@ async function startServer() {
 
   // API Routes
   app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+
+  // In-memory registry to avoid sending duplicate SMS notifications for the same order
+  const sentSMSOrders = new Set<string>();
+
+  // Central helper to dispatch SMS for an order, with deduplication
+  async function triggerOrderPlacedSMSNotification(orderId: string, orderData: any): Promise<boolean> {
+    if (sentSMSOrders.has(orderId)) {
+      console.log(`[SMS Service] Order #${orderId} already notified. Skipping duplicate SMS request.`);
+      return false;
+    }
+    sentSMSOrders.add(orderId);
+
+    const targetNumbers = ["6205284423", "9608123427"];
+    const total = Math.round(orderData.total || 0);
+    const customerName = orderData.userName || "Guest Customer";
+    const itemsCount = (orderData.items && Array.isArray(orderData.items)) ? orderData.items.length : 0;
+    const shortId = orderId.slice(-8).toUpperCase();
+
+    // Using exact words requested by user: "Order placed"
+    const message = `Order placed: Kalika Store New Order #${shortId} of Rs ${total} from ${customerName} (${itemsCount} items). Check admin dashboard.`;
+
+    console.log(`[SMS Service] Dispatching real order placed SMS notification for #${orderId} to: ${targetNumbers.join(", ")}`);
+    
+    let allSuccess = true;
+    for (const phone of targetNumbers) {
+      const res = await sendSMSViaExotel(phone, message);
+      if (!res) allSuccess = false;
+    }
+    return allSuccess;
+  }
+
+  // Expose API for sending SMS manually via Axios
+  app.post("/api/send-sms", async (req, res) => {
+    const { phone, message } = req.body;
+    if (!phone || !message) {
+      return res.status(400).json({ success: false, message: "Missing phone or message in request body" });
+    }
+    const success = await sendSMSViaExotel(phone, message);
+    if (success) {
+      res.json({ success: true, message: `SMS sent successfully to ${phone}` });
+    } else {
+      res.status(500).json({ success: false, message: `Failed to send SMS to ${phone}. Check server configurations.` });
+    }
+  });
+
+  // Client-triggered API to send instant order notification
+  app.post("/api/notify-order", async (req, res) => {
+    const { orderId, orderData } = req.body;
+    if (!orderId || !orderData) {
+      return res.status(400).json({ success: false, message: "Missing orderId or orderData" });
+    }
+    
+    try {
+      const success = await triggerOrderPlacedSMSNotification(orderId, orderData);
+      res.json({ success: true, message: "Notification handled", smsDispatched: success });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Setup live background order received listener to push notifications to admin phones automatically as a fallback
+  try {
+    const serverBootTime = Date.now();
+    console.log(`[SMS Service] Initializing Firestore background listener of orders collection...`);
+    
+    db.collection('orders').onSnapshot((snapshot) => {
+      snapshot.docChanges().forEach(async (change) => {
+        if (change.type === 'added') {
+          const orderData = change.doc.data();
+          const orderId = change.doc.id;
+          
+          const createdAt = orderData.createdAt || 0;
+          // Filter to only new orders placed after server is up
+          if (createdAt > serverBootTime) {
+            console.log(`[SMS Service] Fallback listener detected new Order: #${orderId}. Running trigger...`);
+            await triggerOrderPlacedSMSNotification(orderId, orderData);
+          }
+        }
+      });
+    }, (error) => {
+      console.error(`[SMS Service] Firestore listener error:`, error);
+    });
+  } catch (err: any) {
+    console.error(`[SMS Service] Failed to initialize Firestore listener:`, err.message);
+  }
 
   app.get("/api/auth/google/url", (req, res) => {
     const host = req.headers.host;

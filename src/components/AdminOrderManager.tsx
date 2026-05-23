@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { db, doc, deleteDoc, updateDoc, collection, addDoc, onSnapshot } from '../firebase';
 import { printerService } from '../services/BluetoothPrinterService';
 import { InvoiceGenerator } from './InvoiceGenerator';
+import { notificationService } from '../services/notificationService';
 
 
 interface AdminOrderManagerProps {
@@ -145,7 +146,14 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
     };
 
     try {
-      await addDoc(collection(db, 'orders'), newOrder);
+      const docRef = await addDoc(collection(db, 'orders'), newOrder);
+      
+      // Trigger Exotel SMS notification to admin numbers instantly
+      try {
+        notificationService.triggerSMSNotification(docRef.id, newOrder);
+      } catch (smsErr) {
+        console.error("SMS notification trigger failed safely in background:", smsErr);
+      }
       
       // WhatsApp Redirect for store orders
       const itemsMsg = manualOrder.items.map(i => `• ${i.name} x${i.quantity}`).join('%0A');

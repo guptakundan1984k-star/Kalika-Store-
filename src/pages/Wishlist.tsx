@@ -1,5 +1,5 @@
 import React from 'react';
-import { Product } from '../types';
+import { Product, CartItem } from '../types';
 import { ShoppingBag, ArrowRight, Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, Link } from 'react-router-dom';
@@ -11,9 +11,10 @@ interface WishlistProps {
   wishlist: string[];
   onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
   toggleWishlist: (productId: string) => void;
+  cart?: CartItem[];
 }
 
-const Wishlist: React.FC<WishlistProps> = ({ products, wishlist, onAddToCart, toggleWishlist }) => {
+const Wishlist: React.FC<WishlistProps> = ({ products, wishlist, onAddToCart, toggleWishlist, cart = [] }) => {
   const navigate = useNavigate();
   const wishlistedProducts = products.filter(p => wishlist.includes(p.id));
 
@@ -61,6 +62,7 @@ const Wishlist: React.FC<WishlistProps> = ({ products, wishlist, onAddToCart, to
                       onAddToCart={onAddToCart} 
                       toggleWishlist={toggleWishlist}
                       isWishlisted={true}
+                      quantityInCart={cart.find(item => item.id === product.id)?.quantity}
                     />
                   </motion.div>
                 ))}

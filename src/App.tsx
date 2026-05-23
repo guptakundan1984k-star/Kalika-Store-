@@ -8,8 +8,10 @@ import { LoadingScreen } from './components/LoadingScreen';
 import { VoiceAssistant } from './components/VoiceAssistant';
 import ScrollToTop from './components/ScrollToTop';
 import { Product, CartItem, UserProfile, Order, Coupon, Banner, StoreSettings, WalletTransaction } from './types';
+import { BluetoothPrinterManager, buildEscPosBytes, printViaIframe } from './services/printerService';
+import { ReceiptPreviewModal } from './components/ReceiptPreviewModal';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, ShoppingBag, ArrowUp, X } from 'lucide-react';
+import { Sparkles, ShoppingBag, ArrowUp, X, Printer } from 'lucide-react';
 import { PageLoader } from './components/PageLoader';
 
 // Firebase
@@ -123,6 +125,45 @@ function AppContent() {
 
   const ordersRef = React.useRef<Order[]>([]);
   useEffect(() => { ordersRef.current = orders; }, [orders]);
+
+  // Automated Receipt Printing State & Ref Triggers
+  const [printingToast, setPrintingToast] = useState<{ id: string; name: string; total: number } | null>(null);
+  const [autoprintOrderPreview, setAutoprintOrderPreview] = useState<Order | null>(null);
+  const appBootTimeRef = React.useRef<number>(Date.now() - 5000);
+  const printedOrdersCacheRef = React.useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!orders || orders.length === 0) return;
+    const isAutoprint = localStorage.getItem('bluetooth_autoprint_enabled') === 'true';
+    if (!isAutoprint) return;
+
+    // Find newest order added after app startup that hasn't been printed in this local session yet
+    const orderToPrint = [...orders]
+      .sort((a, b) => b.createdAt - a.createdAt) // newest first
+      .find(order => {
+        const isNewAfterBoot = order.createdAt >= appBootTimeRef.current;
+        const isNotYetPrinted = !printedOrdersCacheRef.current.has(order.id) && !localStorage.getItem(`printed_pos_order_${order.id}`);
+        const isIncomingStatus = order.status === 'Pending' || order.status === 'Order Placed' || order.status === 'Order Received';
+        return isNewAfterBoot && isNotYetPrinted && isIncomingStatus;
+      });
+
+    if (orderToPrint) {
+      // Mark as printed globally and locally to avoid loops
+      printedOrdersCacheRef.current.add(orderToPrint.id);
+      localStorage.setItem(`printed_pos_order_${orderToPrint.id}`, 'true');
+
+      // Set toaster details
+      setPrintingToast({ id: orderToPrint.id, name: orderToPrint.userName || 'Guest Customer', total: orderToPrint.total });
+      
+      // Auto-open print preview modal for verification
+      setAutoprintOrderPreview(orderToPrint);
+
+      // Keep toast active momentarily for user delight
+      setTimeout(() => {
+        setPrintingToast(null);
+      }, 4000);
+    }
+  }, [orders]);
 
   useEffect(() => {
     const handleScroll = () => { setShowBackToTop(window.scrollY > 400); };
@@ -360,7 +401,7 @@ function AppContent() {
               <Route path="/items" element={<Items products={products} onAddToCart={addToCart} cart={cart} onUpdateQuantity={updateCartQuantity} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} storeSettings={storeSettings} />} />
               <Route path="/product/:id" element={<ProductDetail products={products} onAddToCart={addToCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} cart={cart} user={user} storeSettings={storeSettings} />} />
               <Route path="/categories" element={<Categories products={products} onAddToCart={addToCart} cart={cart} onRemoveFromCart={removeFromCart} toggleWishlist={toggleWishlist} wishlist={user?.wishlist || []} />} />
-              <Route path="/wishlist" element={user ? <Wishlist products={products} wishlist={user.wishlist || []} onAddToCart={addToCart} toggleWishlist={toggleWishlist} /> : <Navigate to="/login" />} />
+              <Route path="/wishlist" element={user ? <Wishlist products={products} wishlist={user.wishlist || []} onAddToCart={addToCart} toggleWishlist={toggleWishlist} cart={cart} /> : <Navigate to="/login" />} />
               <Route path="/bulk-enquiry" element={user ? <BulkEnquiryPage user={user} /> : <Navigate to="/login" />} />
               <Route path="/addresses" element={user ? <AddressesPage user={user} /> : <Navigate to="/login" />} />
               <Route path="/help" element={<HelpSupportPage user={user} orders={orders} />} />
@@ -372,7 +413,7 @@ function AppContent() {
               <Route path="/orders" element={user ? <MyOrders orders={orders} user={user} /> : <Navigate to="/login" />} />
               <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
               <Route path="/order-success" element={<OrderSuccess />} />
-              <Route path="/search" element={<SearchResults products={products} onAddToCart={addToCart} />} />
+              <Route path="/search" element={<SearchResults products={products} onAddToCart={addToCart} cart={cart} />} />
               <Route path="/admin" element={<Admin products={products} orders={orders} coupons={coupons} banners={banners} user={user} />} />
               <Route path="/cs" element={<CS products={products} orders={orders} user={user} />} />
               <Route path="/topup" element={<Topup user={user} />} />
@@ -396,6 +437,32 @@ function AppContent() {
             </div>
           </motion.div>
         )}
+
+        {printingToast && (
+          <motion.div 
+            initial={{ opacity: 0, y: -40, scale: 0.95 }} 
+            animate={{ opacity: 1, y: 0, scale: 1 }} 
+            exit={{ opacity: 0, y: -45, scale: 0.95 }} 
+            className="fixed top-24 right-4 z-[9999] w-[90%] max-w-sm"
+          >
+            <div className="bg-gray-950 text-white p-5 rounded-[28px] shadow-2xl flex items-start gap-4 border border-white/10 backdrop-blur-md">
+              <div className="w-10 h-10 bg-green-500 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-green-500/30 animate-pulse">
+                <Printer className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-[9px] font-black uppercase tracking-widest text-green-400 block animate-pulse">Auto-Printing Bill...</span>
+                <span className="font-extrabold text-xs text-white block truncate mt-1">Order #{printingToast.id.slice(-8).toUpperCase()}</span>
+                <span className="text-[10px] text-gray-400 block mt-0.5">Billed to: <span className="text-gray-200 font-bold">{printingToast.name}</span> • ₹{Math.round(printingToast.total)}</span>
+              </div>
+              <button 
+                onClick={() => setPrintingToast(null)} 
+                className="p-1.5 hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
       <VoiceAssistant 
         onAddToCart={handleVoiceAddToCart} 
@@ -410,6 +477,12 @@ function AppContent() {
       <LanguagePromptModal />
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} items={cart} products={products} user={user} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClear={handleClearCart} onAddItems={(items) => { items.forEach(({ product, quantity }) => addToCart(product, quantity)); }} onCheckout={() => { setIsCartOpen(false); navigate('/checkout'); }} />
       <ProductRequestModal isOpen={isRequestModalOpen} onClose={() => setIsRequestModalOpen(false)} initialProductName={requestedProductName} />
+      <ReceiptPreviewModal 
+        isOpen={!!autoprintOrderPreview}
+        order={autoprintOrderPreview}
+        onClose={() => setAutoprintOrderPreview(null)}
+        onConfirmPrint={() => setAutoprintOrderPreview(null)}
+      />
       {showBackToTop && (
         <motion.button initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="fixed bottom-24 right-8 z-50 bg-gray-900 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-90 transition-all border border-white/20">
           <ArrowUp className="w-6 h-6" />

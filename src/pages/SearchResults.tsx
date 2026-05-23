@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Product } from '../types';
+import { Product, CartItem } from '../types';
 import { ProductCard } from '../components/ProductCard';
 import { searchProducts } from '../utils/searchUtils';
 import { Search, Filter, ArrowLeft, Package, Sparkles } from 'lucide-react';
@@ -10,9 +10,10 @@ import { ReachedEnd } from '../components/ReachedEnd';
 interface SearchResultsProps {
   products: Product[];
   onAddToCart: (product: Product, quantity?: number, redirectToCheckout?: boolean, selectedUnit?: string) => void;
+  cart?: CartItem[];
 }
 
-export const SearchResults: React.FC<SearchResultsProps> = ({ products, onAddToCart }) => {
+export const SearchResults: React.FC<SearchResultsProps> = ({ products, onAddToCart, cart = [] }) => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const query = searchParams.get('q') || '';
@@ -84,7 +85,11 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ products, onAddToC
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
               >
-                <ProductCard product={product} onAddToCart={onAddToCart} />
+                <ProductCard 
+                  product={product} 
+                  onAddToCart={onAddToCart} 
+                  quantityInCart={cart.find(item => item.id === product.id)?.quantity}
+                />
               </motion.div>
             ))}
           </div>
@@ -129,7 +134,12 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ products, onAddToC
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {recommendedProducts.map(p => (
-                  <ProductCard key={p.id} product={p} onAddToCart={onAddToCart} />
+                  <ProductCard 
+                    key={p.id} 
+                    product={p} 
+                    onAddToCart={onAddToCart} 
+                    quantityInCart={cart.find(item => item.id === p.id)?.quantity}
+                  />
                 ))}
               </div>
             </div>

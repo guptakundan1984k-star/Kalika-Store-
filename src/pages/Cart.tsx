@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../contexts/StoreContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { db, collection, addDoc, doc, updateDoc } from '../firebase';
+import { notificationService } from '../services/notificationService';
 
 
 interface CartProps {
@@ -76,7 +77,15 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
         createdAt: Date.now(),
       };
 
-      await addDoc(collection(db, 'orders'), newOrder);
+      const docRef = await addDoc(collection(db, 'orders'), newOrder);
+      
+      // Trigger Exotel SMS notification to admin numbers instantly
+      try {
+        notificationService.triggerSMSNotification(docRef.id, newOrder);
+      } catch (smsErr) {
+        console.error("SMS notification trigger failed safely in background:", smsErr);
+      }
+
       onClearCart();
       
       // Speak & Play
@@ -429,6 +438,7 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
                 key={product.id}
                 product={product}
                 onAddToCart={onAddToCart}
+                quantityInCart={cart.find((c) => c.id === product.id)?.quantity}
               />
             ))}
           </div>
@@ -455,6 +465,7 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
               key={product.id}
               product={product}
               onAddToCart={onAddToCart}
+              quantityInCart={cart.find((c) => c.id === product.id)?.quantity}
             />
           ))}
         </div>

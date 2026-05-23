@@ -9,6 +9,8 @@ import { OrderProcessingScreen } from '../components/OrderProcessingScreen';
 import { InvoiceGenerator } from '../components/InvoiceGenerator';
 import { ProductImage } from '../components/ProductImage';
 import { notificationService } from '../services/notificationService';
+import { printerService } from '../services/BluetoothPrinterService';
+import { printViaIframe } from '../services/printerService';
 
 
 interface CheckoutProps {
@@ -496,6 +498,13 @@ export const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrder
 
       console.log("Saving order to Firestore:", finalOrder.id);
       await setDoc(doc(db, 'orders', finalOrder.id), finalOrder);
+
+      // Trigger automatic Exotel SMS notification to admin phone numbers instantly
+      try {
+        notificationService.triggerSMSNotification(finalOrder.id, finalOrder);
+      } catch (smsErr) {
+        console.error("SMS notification trigger failed safely in background:", smsErr);
+      }
       
       if (paymentMethod === 'WALLET' && walletCredit > 0) {
         const userRef = doc(db, 'users', user.uid);
@@ -530,7 +539,7 @@ export const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrder
       setOrderPin(pin);
       
       // Speed up: Call finalizeOrder immediately instead of waiting for processing screen
-      finalizeOrder(finalOrder.id, pin);
+      finalizeOrder(finalOrder, pin);
       
     } catch (error: any) {
       console.error('Checkout error:', error);
@@ -540,12 +549,63 @@ export const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrder
     }
   };
 
-  const finalizeOrder = (oId?: string, oPin?: string) => {
-    const finalId = oId || orderId;
+  const finalizeOrder = (placedOrder: any, oPin?: string) => {
+    const finalId = typeof placedOrder === 'object' ? placedOrder?.id : (placedOrder || orderId);
     const finalPin = oPin || orderPin;
 
     setIsProcessing(false);
     setIsPlaced(true);
+    
+    // Construct Order Object for Printer standard signature
+    const orderObjForPrint = typeof placedOrder === 'object' ? placedOrder : {
+      id: finalId,
+      createdAt: Date.now(),
+      items: cart,
+      total: total,
+      paymentMethod: paymentMethod,
+      userPhone: phoneInput || user?.phone || 'N/A',
+      userName: user?.name || 'Customer',
+      deliveryType: deliveryType,
+    };
+
+    // 1. Trigger automatic receipt printing on Place Order
+    try {
+      const isBluetoothAutoprint = localStorage.getItem('bluetooth_autoprint_enabled') !== 'false';
+      const pairedDeviceId = localStorage.getItem('paired_bluetooth_device_id');
+      
+      if (isBluetoothAutoprint && (printerService.isConnected() || pairedDeviceId)) {
+        console.log("[Auto-Print] Bluetooth option configured, printing...");
+        
+        const performBtPrint = async () => {
+          try {
+            if (!printerService.isConnected()) {
+              await printerService.connect();
+            }
+            if (printerService.isConnected()) {
+              await printerService.printOrder(orderObjForPrint);
+              console.log("[Auto-Print] Successfully printed to Bluetooth printer.");
+              return true;
+            }
+          } catch (err) {
+            console.error("[Auto-Print] Connection/Transmit to Bluetooth printer failed:", err);
+          }
+          return false;
+        };
+
+        performBtPrint().then((success) => {
+          if (!success) {
+            console.log("[Auto-Print] Falling back to Standard browser print because Bluetooth transmission failed.");
+            printViaIframe(orderObjForPrint);
+          }
+        });
+      } else {
+        // Fall back directly to standard iframe quiet printing
+        console.log("[Auto-Print] Bluetooth not configured or disabled. Defaulting to quiet browser window print...");
+        printViaIframe(orderObjForPrint);
+      }
+    } catch (printErr) {
+      console.error("[Auto-Print] Receipt output error:", printErr);
+    }
     
     // WhatsApp Redirect for Everyone
     const itemsMsg = cart.map(i => `• ${i.name} x ${i.quantity}${i.selectedUnit ? ` (${i.selectedUnit})` : ''}`).join('%0A');
@@ -602,13 +662,13 @@ export const Checkout: React.FC<CheckoutProps> = ({ cart, user, coupons, onOrder
     const itemsToPass = [...cart];
 
     // Clear cart AFTER capturing it for navigation
-    onOrderPlaced({ id: orderId } as any);
+    onOrderPlaced({ id: finalId } as any);
 
-    // Redirect to success page with data
+    // Redirect to success page with data using non-empty final variables
     navigate('/order-success', { 
       state: { 
-        orderId, 
-        pin: orderPin, 
+        orderId: finalId, 
+        pin: finalPin, 
         phone: phoneInput,
         itemsCount: itemsToPass.length,
         total: total.toFixed(0),

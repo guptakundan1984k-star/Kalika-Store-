@@ -52,5 +52,20 @@ export const notificationService = {
       console.error('Error sending notification:', error);
       return { success: false };
     }
+  },
+
+  // Direct trigger to notify admin numbers via Exotel SMS API instantly
+  async triggerSMSNotification(orderId: string, orderData: any) {
+    try {
+      const response = await fetch('/api/notify-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, orderData })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Error triggering SMS notification:', error);
+      return { success: false };
+    }
   }
 };
