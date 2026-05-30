@@ -35,6 +35,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
   const hasCustomPrice = user?.customPrices?.[product?.id || ''] !== undefined;
   
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
   const [eligibleOrderId, setEligibleOrderId] = useState<string | null>(null);
   const [newReview, setNewReview] = useState<{ rating: number, comment: string, photos: string[] }>({ rating: 5, comment: '', photos: [] });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -98,11 +99,17 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
     speak(`Added ${quantity} ${selectedUnit || 'unit'} of ${product?.name} to your cart. Go to cart to checkout.`);
   };
 
-  const avgRating = reviews.length > 0 
-    ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
+  const approvedReviews = reviews.filter(r => r.status === 'approved' || !r.status);
+  const avgRating = approvedReviews.length > 0 
+    ? (approvedReviews.reduce((acc, r) => acc + r.rating, 0) / approvedReviews.length).toFixed(1)
     : (product.rating || 4.5);
 
-  const totalReviews = Math.max(reviews.length, product.reviewCount || 0);
+  const totalReviews = Math.max(approvedReviews.length, product.reviewCount || 0);
+
+  const visibleReviews = reviews.filter(r => 
+    r.status !== 'rejected' && 
+    (r.status === 'approved' || !r.status || r.userId === user?.uid)
+  );
 
   const isWishlisted = wishlist.includes(id || '');
 
@@ -204,19 +211,15 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
         comment: newReview.comment,
         photos: newReview.photos,
         orderId: eligibleOrderId,
+        status: 'pending',
         createdAt: Date.now()
       });
 
-      // Update product rating and count
-      const updatedReviews = [...reviews, { rating: newReview.rating } as any];
-      const newAvg = updatedReviews.reduce((acc, r) => acc + r.rating, 0) / updatedReviews.length;
-      
-      await updateDoc(doc(db, 'products', id), {
-        rating: newAvg,
-        reviewCount: updatedReviews.length
-      });
-
       setNewReview({ rating: 5, comment: '', photos: [] });
+      setSubmitSuccess(true);
+      setTimeout(() => {
+        setSubmitSuccess(false);
+      }, 7000);
     } catch (error) {
       console.error("Error adding review:", error);
     } finally {
@@ -663,6 +666,16 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
               eligibleOrderId ? (
                 <form onSubmit={handleAddReview} className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-xl shadow-gray-200/50 space-y-6">
                   <h4 className="text-lg font-black text-gray-900">Write a Review</h4>
+                  {submitSuccess && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-green-50 text-green-700 p-4 rounded-2xl border border-green-100 text-xs font-semibold leading-relaxed flex items-center gap-2"
+                    >
+                      <Check className="w-4 h-4 shrink-0 text-green-500" />
+                      <span>Thank you! Your feedback is successfully saved and is pending admin moderation.</span>
+                    </motion.div>
+                  )}
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Rating</label>
                     <div className="flex gap-2">
@@ -766,8 +779,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
           </div>
 
           <div className="lg:col-span-2 space-y-6">
-            {reviews.length > 0 ? (
-              reviews.map((review) => (
+            {visibleReviews.length > 0 ? (
+              visibleReviews.map((review) => (
                 <motion.div 
                   key={review.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -780,12 +793,18 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ products, onAddToCart, to
                         <User className="w-6 h-6" />
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <h5 className="font-black text-gray-900">{review.userName}</h5>
                           {review.isCSReview && (
                             <div className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">
                               <ShieldCheck className="w-3 h-3" />
                               <span className="text-[8px] font-black uppercase tracking-widest">CS Verified</span>
+                            </div>
+                          )}
+                          {review.status === 'pending' && (
+                            <div className="flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full border border-amber-100">
+                              <ShieldCheck className="w-3 h-3 text-amber-500 animate-pulse" />
+                              <span className="text-[8px] font-black uppercase tracking-widest animate-pulse">Pending Moderation</span>
                             </div>
                           )}
                         </div>

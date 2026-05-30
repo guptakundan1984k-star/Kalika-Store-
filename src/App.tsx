@@ -4,6 +4,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { CartDrawer } from './components/CartDrawer';
+import { FlyToCartOverlay } from './components/FlyToCartOverlay';
 import { LoadingScreen } from './components/LoadingScreen';
 import { VoiceAssistant } from './components/VoiceAssistant';
 import ScrollToTop from './components/ScrollToTop';
@@ -93,14 +94,10 @@ function AppContent() {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [showSplash, setShowSplash] = useState(() => {
-    const hasSeenSplash = sessionStorage.getItem('has_seen_splash');
-    return !hasSeenSplash;
-  });
+  const [showSplash, setShowSplash] = useState(false);
 
   const handleSplashComplete = () => {
     setShowSplash(false);
-    sessionStorage.setItem('has_seen_splash', 'true');
   };
 
   useEffect(() => {
@@ -168,9 +165,66 @@ function AppContent() {
   useEffect(() => {
     const handleScroll = () => { setShowBackToTop(window.scrollY > 400); };
     window.addEventListener('scroll', handleScroll);
+
+    // Block Inspect Element and Right-Click, advising the user of the ban
+    const showBannedNotification = () => {
+      let container = document.getElementById('banned-toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'banned-toast-container';
+        container.className = 'fixed top-12 left-1/2 -translate-x-1/2 z-[100000] pointer-events-none flex flex-col gap-2 w-[90%] max-w-sm';
+        document.body.appendChild(container);
+      }
+      
+      const toast = document.createElement('div');
+      toast.className = 'bg-red-600 text-white font-extrabold text-xs px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-red-500 animate-bounce pointer-events-auto transition-all duration-300';
+      toast.style.opacity = '1';
+      toast.innerHTML = `
+        <span class="text-lg">🚫</span>
+        <div>
+          <p class="uppercase tracking-widest text-[9px] text-red-100 font-black">Security Policy</p>
+          <p class="text-sm font-black mt-0.5">Inspect Element is strictly banned!</p>
+        </div>
+      `;
+      
+      container.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-20px)';
+        setTimeout(() => {
+          toast.remove();
+        }, 1200);
+      }, 3000);
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      showBannedNotification();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCmdOrCtrl = e.ctrlKey || e.metaKey;
+      const isDevKeys = 
+        e.key === 'F12' ||
+        (isCmdOrCtrl && e.shiftKey && (e.key === 'I' || e.key === 'C' || e.key === 'J' || e.key === 'i' || e.key === 'c' || e.key === 'j')) ||
+        (isCmdOrCtrl && (e.key === 'U' || e.key === 'u')) ||
+        (isCmdOrCtrl && e.altKey && (e.key === 'I' || e.key === 'i' || e.key === 'C' || e.key === 'c'));
+
+      if (isDevKeys) {
+        e.preventDefault();
+        e.stopPropagation();
+        showBannedNotification();
+      }
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('keydown', handleKeyDown);
     
     return () => {
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
@@ -218,6 +272,15 @@ function AppContent() {
       if (quantity <= 0) return prev;
       return [...prev, { ...product, quantity, price: finalPrice, selectedUnit }];
     });
+
+    if (quantity > 0) {
+      window.dispatchEvent(new CustomEvent('fly-to-cart', {
+        detail: {
+          productId: product.id,
+          image: product.image
+        }
+      }));
+    }
 
     if (isAlreadyInCart && quantity > 0) {
       // Notification handled below, don't alert to avoid bad UX
@@ -475,6 +538,7 @@ function AppContent() {
       />
       <LoginPromptModal isOpen={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} />
       <LanguagePromptModal />
+      <FlyToCartOverlay />
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} items={cart} products={products} user={user} onUpdateQuantity={updateCartQuantity} onRemove={removeFromCart} onClear={handleClearCart} onAddItems={(items) => { items.forEach(({ product, quantity }) => addToCart(product, quantity)); }} onCheckout={() => { setIsCartOpen(false); navigate('/checkout'); }} />
       <ProductRequestModal isOpen={isRequestModalOpen} onClose={() => setIsRequestModalOpen(false)} initialProductName={requestedProductName} />
       <ReceiptPreviewModal 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Printer, X, CheckCircle, Bluetooth, AlertCircle } from 'lucide-react';
 import { BluetoothPrinterManager, buildEscPosBytes, printViaIframe } from '../services/printerService';
@@ -39,32 +39,30 @@ export const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({
   const [printStatus, setPrintStatus] = useState<'idle' | 'printing' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
-  if (!isOpen || (!order && !sale)) return null;
-
-  // Unify the receipt data
+  // Unify the receipt data safely, even if they are null because hooks must run unconditionally
   const isPosSale = !!sale;
-  const id = isPosSale ? sale.id : order!.id;
-  const createdAt = isPosSale ? sale.timestamp : order!.createdAt;
-  const userName = isPosSale ? (sale.customerName || 'Guest Customer') : (order!.userName || 'Guest Customer');
-  const userPhone = isPosSale ? (sale.customerPhone || 'N/A') : (order!.userPhone || 'N/A');
-  const deliveryType = isPosSale ? 'Walk-in' : order!.deliveryType;
-  const paymentMethod = isPosSale ? sale.paymentMethod : (order!.paymentMethod || 'COD');
+  const id = isPosSale ? (sale?.id || '') : (order?.id || 'TEST');
+  const createdAt = isPosSale ? (sale?.timestamp || Date.now()) : (order?.createdAt || Date.now());
+  const userName = isPosSale ? (sale?.customerName || 'Guest Customer') : (order?.userName || 'Guest Customer');
+  const userPhone = isPosSale ? (sale?.customerPhone || 'N/A') : (order?.userPhone || 'N/A');
+  const deliveryType = isPosSale ? 'Walk-in' : (order?.deliveryType || 'Takeaway');
+  const paymentMethod = isPosSale ? (sale?.paymentMethod || 'Cash') : (order?.paymentMethod || 'COD');
   
   const items = isPosSale 
-    ? sale.items.map(itm => ({
+    ? (sale?.items || []).map(itm => ({
         name: itm.productName,
         quantity: itm.quantity,
         price: itm.price,
         subtotal: itm.subtotal
       }))
-    : order!.items.map(itm => ({
+    : (order?.items || []).map(itm => ({
         name: itm.name,
         quantity: itm.quantity,
         price: itm.price,
         subtotal: itm.price * itm.quantity
       }));
 
-  const total = isPosSale ? sale.total : order!.total;
+  const total = isPosSale ? (sale?.total || 0) : (order?.total || 0);
 
   // Compile normal Order structure for helper library use if we need to call standard printers
   const standardOrderObject: Order = isPosSale 
@@ -78,7 +76,7 @@ export const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({
         total,
         pin: '000000',
         userId: 'pos_cashier',
-        items: sale.items.map((itm, index) => ({
+        items: (sale?.items || []).map((itm, index) => ({
           id: `pos_itm_${index}`,
           name: itm.productName,
           quantity: itm.quantity,
@@ -90,7 +88,64 @@ export const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({
           createdAt: Date.now()
         }))
       } as any
-    : order!;
+    : (order || {
+        id,
+        createdAt,
+        userName,
+        userPhone,
+        deliveryType,
+        paymentMethod: paymentMethod as any,
+        total,
+        pin: '000000',
+        userId: 'fallback_user',
+        items: []
+      } as any);
+
+  // Automatically trigger bill printing on mount or open
+  useEffect(() => {
+    if (isOpen && (order || sale)) {
+      const isBluetoothAutoprint = localStorage.getItem('bluetooth_autoprint_enabled') !== 'false';
+      const pairedDeviceId = localStorage.getItem('paired_bluetooth_device_id');
+
+      const autoPrint = async () => {
+        // Keep smooth transitions
+        await new Promise(resolve => setTimeout(resolve, 600));
+        
+        if (isBluetoothAutoprint && (BluetoothPrinterManager.getIsConnected() || pairedDeviceId)) {
+          console.log("[Auto-Print Modal] Auto-dispatching Bluetooth printing...");
+          setPrintStatus('printing');
+          try {
+            const bytes = buildEscPosBytes(standardOrderObject);
+            const success = await BluetoothPrinterManager.sendBytesToPrinter(bytes);
+            if (success) {
+              setPrintStatus('success');
+              setTimeout(() => {
+                setPrintStatus('idle');
+                if (onConfirmPrint) onConfirmPrint();
+              }, 1500);
+              return;
+            }
+          } catch (err) {
+            console.error("[Auto-Print Modal] Bluetooth print failed, fallback to system printing:", err);
+          }
+        }
+
+        console.log("[Auto-Print Modal] Defaulting to quiet browser window print...");
+        try {
+          printViaIframe(standardOrderObject);
+          if (onConfirmPrint) {
+            onConfirmPrint();
+          }
+        } catch (iframeErr) {
+          console.error("[Auto-Print Modal] Quiet printing fallback failed:", iframeErr);
+        }
+      };
+
+      autoPrint();
+    }
+  }, [isOpen, order?.id, sale?.id]);
+
+  if (!isOpen || (!order && !sale)) return null;
 
   const handleBluetoothPrint = async () => {
     setPrintStatus('printing');

@@ -7,8 +7,19 @@ import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import dotenv from "dotenv";
 import axios from "axios";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
+
+// Initialize modern Google GenAI SDK for server-side endpoints
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 // Helper to send SMS via Exotel API
 async function sendSMSViaExotel(toPhone: string, messageBody: string): Promise<boolean> {
@@ -151,6 +162,71 @@ async function startServer() {
       res.json({ success: true, message: "Notification handled", smsDispatched: success });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Server-side robust OCR / analyzer route for Paper Bill scanner (Gemini Lens)
+  app.post("/api/gemini/analyze-bill", async (req, res) => {
+    const { imageBase64, products } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ success: false, message: "Missing imageBase64" });
+    }
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ success: false, message: "Server is not configured with GEMINI_API_KEY." });
+    }
+
+    try {
+      const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+      
+      const payloadProducts = Array.isArray(products) ? products : [];
+      const productPromptSlice = payloadProducts.map((p: any) => `${p.id} (${p.name})`).join(', ');
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                inlineData: {
+                  data: base64Data,
+                  mimeType: "image/jpeg"
+                }
+              },
+              {
+                text: "Act as an expert grocery list and paper bill list scanner for Kalika Store. Scan this image carefully to extract grocery items and their requested quantities.\n" +
+                  "Here is our available product list:\n" + 
+                  productPromptSlice + 
+                  "\n\nMatch each item in the paper list with a product from the provided list. Return ONLY a raw JSON array of objects representing matched products. Each object must have fields 'productId' and 'quantity'.\n" +
+                  "Format example: [{\"productId\": \"rice-premium\", \"quantity\": 2}].\n" +
+                  "If an entry name on the list looks like a catalog item, match it. Do NOT return markdown or explanation text, ONLY return the raw, pure JSON code block inside brackets."
+              }
+            ]
+          }
+        ]
+      });
+
+      const rawText = response.text || "";
+      console.log("[Gemini Lens Server] Raw text output:", rawText);
+      const cleaned = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+      const firstBracket = cleaned.indexOf('[');
+      const lastBracket = cleaned.lastIndexOf(']');
+      
+      let parsedItems = [];
+      if (firstBracket !== -1 && lastBracket !== -1) {
+        const jsonOnly = cleaned.slice(firstBracket, lastBracket + 1);
+        parsedItems = JSON.parse(jsonOnly);
+      } else {
+        parsedItems = JSON.parse(cleaned);
+      }
+
+      res.json({
+        success: true,
+        items: Array.isArray(parsedItems) ? parsedItems : []
+      });
+    } catch (err: any) {
+      console.error("[Gemini Lens Server] Error scanning bill:", err);
+      res.status(500).json({ success: false, error: err.message || "Unknown error during AI scan" });
     }
   });
 

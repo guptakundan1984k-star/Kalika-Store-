@@ -13,7 +13,8 @@
         "comment": { "type": "string" },
         "photos": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "number" },
-        "orderId": { "type": "string" }
+        "orderId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] }
       },
       "required": ["productId", "userId", "rating", "comment", "orderId"]
     },

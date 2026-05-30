@@ -62,62 +62,48 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 1.1, filter: 'blur(20px)' }}
+      exit={{ opacity: 0, scale: 0.98 }}
       className="fixed inset-0 z-[10000] bg-white flex flex-col items-center justify-center overflow-hidden"
     >
-      {/* Background Decorative Glows */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
-        <motion.div 
-          animate={{ x: [0, 50, 0], y: [0, 30, 0] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -top-20 -left-20 w-80 h-80 bg-primary/10 rounded-full blur-[100px]" 
-        />
-        <motion.div 
-          animate={{ x: [0, -50, 0], y: [0, -30, 0] }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -bottom-20 -right-20 w-80 h-80 bg-blue-500/10 rounded-full blur-[100px]" 
-        />
-      </div>
-
       <div className="relative flex flex-col items-center justify-center w-full max-w-lg">
         <AnimatePresence mode="wait">
           {!showComplete ? (
             <motion.div
               key={currentItem.label}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
+              exit={{ opacity: 0, y: -15 }}
               className="flex flex-col items-center gap-8"
             >
-              <div className="w-24 h-24 bg-primary/10 text-primary rounded-[32px] flex items-center justify-center relative">
+              <div className="w-20 h-20 bg-primary/10 text-primary rounded-2xl flex items-center justify-center relative">
                 <motion.div
-                  initial={{ scale: 0.5, rotate: -45 }}
+                  initial={{ scale: 0.8, rotate: -15 }}
                   animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: "spring", damping: 12 }}
+                  transition={{ type: "spring", damping: 15 }}
                 >
-                  <currentItem.icon className="w-12 h-12" />
+                  <currentItem.icon className="w-10 h-10" />
                 </motion.div>
               </div>
 
               <div className="flex flex-col items-center gap-4">
-                <div className="flex items-baseline justify-center">
+                <div className="flex justify-center flex-wrap px-4 gap-1">
                   {currentItem.label.split('').map((char, i) => (
                     <motion.span
                       key={`${index}-${i}`}
-                      initial={{ opacity: 0, filter: 'blur(5px)' }}
-                      animate={{ opacity: 1, filter: 'blur(0px)' }}
-                      transition={{ delay: i * 0.03 }}
-                      className="text-4xl md:text-6xl font-black text-gray-900 tracking-tighter italic uppercase text-center"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.02 }}
+                      className="text-3xl md:text-5xl font-black text-gray-900 tracking-tighter uppercase text-center"
                     >
                       {char === ' ' ? '\u00A0' : char}
                     </motion.span>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-1.5">
                   {ITEMS.map((_, i) => (
                     <div 
                       key={i}
-                      className={`h-1.5 rounded-full transition-all duration-500 ${i === index ? 'w-10 bg-primary underline shadow-[0_0_10px_rgba(249,115,22,0.4)]' : 'w-2 bg-gray-100'}`} 
+                      className={`h-1.5 rounded-full transition-all duration-300 ${i === index ? 'w-8 bg-primary shadow-sm' : 'w-2 bg-gray-100'}`} 
                     />
                   ))}
                 </div>
@@ -125,30 +111,29 @@ export const LoadingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplet
             </motion.div>
           ) : (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               className="flex flex-col items-center gap-6"
             >
               <div className="flex flex-col items-center gap-4 text-center">
                 <Logo large />
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="bg-primary/5 px-8 py-4 rounded-[40px] border border-primary/10 backdrop-blur-md shadow-2xl relative"
+                  transition={{ delay: 0.2 }}
+                  className="bg-gray-50 px-8 py-4 rounded-2xl border border-gray-150 shadow-sm relative"
                 >
-                  <motion.h1 
-                    className="text-6xl md:text-8xl font-black text-gray-900 tracking-tighter uppercase italic font-bubbly relative z-10"
+                  <h1 
+                    className="text-5xl md:text-6xl font-black text-gray-900 tracking-tighter uppercase font-sans relative z-10"
                   >
                     Kalika Store
-                  </motion.h1>
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-blue-500/10 rounded-[40px] animate-pulse" />
+                  </h1>
                 </motion.div>
                 <motion.span 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.6 }}
-                  className="text-xs md:text-sm font-black uppercase tracking-[0.5em] text-primary"
+                  transition={{ delay: 0.4 }}
+                  className="text-2xs md:text-xs font-bold uppercase tracking-[0.4em] text-primary"
                 >
                   Premium Essentials Delivered
                 </motion.span>

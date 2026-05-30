@@ -126,9 +126,9 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
             initial={{ y: -100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -100, opacity: 0 }}
-            className="fixed top-0 left-0 right-0 z-[100] bg-gray-900 text-white py-4 px-6 text-center font-black uppercase tracking-[0.2em] shadow-2xl flex items-center justify-center gap-4 border-b-4 border-primary"
+            className="fixed top-0 left-0 right-0 z-[100] bg-gray-900 text-white py-3 px-6 text-center font-bold uppercase tracking-[0.2em] shadow-md flex items-center justify-center gap-4 border-b border-gray-700"
           >
-            <Languages className="w-6 h-6 text-primary animate-pulse" />
+            <Languages className="w-5 h-5 text-primary" />
             <span>{language === 'hi' ? 'वेबसाइट अब हिंदी में है' : 'Website is now in English'}</span>
             <X className="w-5 h-5 ml-4 cursor-pointer hover:rotate-90 transition-transform" onClick={() => setShowLangBanner(false)} />
           </motion.div>
@@ -257,20 +257,26 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
                 </div>
 
                 <button 
+                  id="navbar-cart-btn"
                   onClick={onCartOpen}
-                  className="relative flex items-center justify-center w-12 h-12 bg-white border-2 border-gray-100 rounded-2xl shadow-xl shadow-gray-200/50 hover:scale-110 active:scale-95 transition-all group"
+                  className="relative flex items-center justify-center w-11 h-11 bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50 active:scale-95 transition-all group"
                 >
                   <div className="relative">
-                    <ShoppingBag className="w-6 h-6 text-gray-900 group-hover:text-primary transition-colors" />
-                    {cartCount > 0 && (
-                      <motion.span 
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="absolute -top-3 -right-3 flex items-center justify-center bg-white text-primary text-[9px] font-black w-6 h-6 rounded-full border-2 border-primary shadow-lg z-20"
-                      >
-                        {cartCount}
-                      </motion.span>
-                    )}
+                    <ShoppingBag className="w-5 h-5 text-gray-850 group-hover:text-primary transition-colors" />
+                    <AnimatePresence mode="wait">
+                      {cartCount > 0 && (
+                        <motion.span 
+                          key={cartCount}
+                          initial={{ scale: 0.8 }}
+                          animate={{ scale: 1 }}
+                          exit={{ scale: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute -top-2.5 -right-2.5 flex items-center justify-center bg-[#00AEEF] text-white text-[9px] font-black w-5.5 h-5.5 rounded-full border border-white z-20"
+                        >
+                          {cartCount}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </button>
               </div>
@@ -325,7 +331,7 @@ export const Navbar: React.FC<NavbarProps> = ({ cartCount, user, searchQuery, se
       {/* Bottom Navbar (Floating pill design matching screenshot) */}
       {!hideBottomNav && (
         <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-[400px]">
-          <nav className="bg-white rounded-[32px] px-2 py-2 flex items-center justify-between shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100">
+          <nav className="bg-white rounded-3xl px-2 py-2 flex items-center justify-between shadow-md border border-gray-200/80">
             {mobileNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;

@@ -54,9 +54,9 @@
 }
 
 .floating-btn {
-  @apply pointer-events-auto p-4 rounded-full shadow-2xl transition-all duration-300;
+  @apply pointer-events-auto p-4.5 rounded-2xl shadow-md border border-gray-200 transition-all duration-300;
   @apply flex items-center justify-center;
-  @apply hover:scale-110 active:scale-95;
+  @apply hover:scale-102 active:scale-95;
   max-width: fit-content;
 }
 
@@ -95,6 +95,6 @@
   }
   
   .glass-card {
-    @apply bg-white border border-gray-100 shadow-xl;
+    @apply bg-white border border-gray-200/80 shadow-sm rounded-2xl;
   }
 }

@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { db, collection, addDoc, handleFirestoreError, OperationType, getDoc, doc, setDoc } from '../firebase';
 import { aiService } from '../services/aiService';
 import { notificationService } from '../services/notificationService';
+import { printViaIframe } from '../services/printerService';
 
 interface AdminManualOrderCreatorProps {
   enquiry: BulkEnquiry;
@@ -130,6 +131,13 @@ export const AdminManualOrderCreator: React.FC<AdminManualOrderCreatorProps> = (
         notificationService.triggerSMSNotification(generatedId, newOrder);
       } catch (smsErr) {
         console.error("SMS notification trigger failed safely in background:", smsErr);
+      }
+
+      // Automatically print the bill
+      try {
+        printViaIframe(newOrder);
+      } catch (printErr) {
+        console.error("[Auto-Print] Receipt output error:", printErr);
       }
       
       // WhatsApp Redirect for store orders

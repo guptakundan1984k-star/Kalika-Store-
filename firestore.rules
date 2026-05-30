@@ -147,13 +147,14 @@ service cloud.firestore {
     }
 
     function isValidReview(data) {
-      return hasOnlyAllowedFields(['id', 'productId', 'userId', 'userName', 'rating', 'comment', 'photos', 'createdAt', 'isCSReview', 'orderId']) &&
+      return hasOnlyAllowedFields(['id', 'productId', 'userId', 'userName', 'rating', 'comment', 'photos', 'createdAt', 'isCSReview', 'orderId', 'status']) &&
              data.productId is string && data.userId is string &&
              data.rating is number && data.rating >= 1 && data.rating <= 5 &&
              data.comment is string && data.comment.size() > 0 && data.comment.size() < 2000 &&
              (!('photos' in data) || data.photos is list) &&
              (!('isCSReview' in data) || data.isCSReview is bool) &&
              (!('orderId' in data) || data.orderId is string) &&
+             (!('status' in data) || data.status in ['pending', 'approved', 'rejected']) &&
              data.createdAt is number;
     }
 

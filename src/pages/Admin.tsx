@@ -14,6 +14,7 @@ import { AdminStockManager } from '../components/AdminStockManager';
 import { AdminStoreSettings } from '../components/AdminStoreSettings';
 import { AdminStorageManager } from '../components/AdminStorageManager';
 import { AdminBulkAIUploader } from '../components/AdminBulkAIUploader';
+import { AdminReviewManager } from '../components/AdminReviewManager';
 import { AdminExpenseManager } from '../components/AdminExpenseManager';
 import { AdminBulkEnquiryManager } from '../components/AdminBulkEnquiryManager';
 import { AdminManualOrderCreator } from '../components/AdminManualOrderCreator';
@@ -29,7 +30,7 @@ import {
   Tag, Settings, LogOut, ChevronRight, ChevronLeft, Menu, X, 
   Bell, Search, User, Sparkles, Shield, Image as ImageIcon,
   Printer, Eye, EyeOff, Box, Layers, Cloud, CloudOff, RefreshCw, Database, HardDrive, CheckSquare,
-  IndianRupee, Zap, AlertCircle, Briefcase, Wallet, Navigation, ArrowLeft, Megaphone
+  IndianRupee, Zap, AlertCircle, Briefcase, Wallet, Navigation, ArrowLeft, Megaphone, MessageSquare
 } from 'lucide-react';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,7 +48,7 @@ interface AdminProps {
 
 const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'products' | 'bulk-ai' | 'party-pricing' | 'expenses' | 'orders' | 'workflow' | 'users' | 'wallet' | 'coupons' | 'promotions' | 'banners' | 'support' | 'bulk-enquiries' | 'dues' | 'delivery' | 'variations' | 'stocks' | 'settings' | 'storage'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'products' | 'bulk-ai' | 'party-pricing' | 'expenses' | 'orders' | 'workflow' | 'users' | 'wallet' | 'coupons' | 'promotions' | 'banners' | 'support' | 'bulk-enquiries' | 'dues' | 'delivery' | 'variations' | 'stocks' | 'settings' | 'storage' | 'reviews'>('dashboard');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isDbConnected, setIsDbConnected] = useState<boolean | null>(null);
   const [pendingQueries, setPendingQueries] = useState(0);
@@ -309,6 +310,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
     { id: 'coupons', label: 'Coupons', icon: Tag },
     { id: 'promotions', label: 'Promotions', icon: Megaphone },
     { id: 'banners', label: 'Banners', icon: ImageIcon },
+    { id: 'reviews', label: 'Reviews', icon: MessageSquare },
     { id: 'support', label: 'Support', icon: Bell, badge: pendingQueries, hasDot: unreadQueries > 0 },
     { id: 'delivery', label: 'Express Coord', icon: Navigation },
     { id: 'bulk-enquiries', label: 'Business Inquiries', icon: Briefcase, badge: pendingEnquiries, hasDot: unreadEnquiries > 0 },
@@ -691,6 +693,7 @@ const Admin: React.FC<AdminProps> = ({ products, orders, coupons, banners, user 
               {activeTab === 'dues' && <AdminDuesManager />}
               {activeTab === 'settings' && <AdminStoreSettings />}
               {activeTab === 'storage' && <AdminStorageManager />}
+              {activeTab === 'reviews' && <AdminReviewManager products={products} />}
 
             </motion.div>
           </AnimatePresence>

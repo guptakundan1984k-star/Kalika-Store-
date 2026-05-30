@@ -114,7 +114,7 @@ const ProductCardComponent: React.FC<ProductCardProps> = ({
   const finalPrice = (user?.customPrices?.[product.id]) ?? product.price;
   const hasCustomPrice = user?.customPrices?.[product.id] !== undefined;
 
-  const handleAdd = () => {
+  const handleAdd = (e: React.MouseEvent<HTMLButtonElement>) => {
     const q = parseFloat(localQuantity);
     if (isNaN(q) || q <= 0) {
       alert("Please enter a valid quantity");
@@ -134,12 +134,12 @@ const ProductCardComponent: React.FC<ProductCardProps> = ({
       whileInView={{ opacity: 1, scale: 1 }}
       whileTap={{ scale: 0.98 }}
       viewport={{ once: true }}
-      className="bg-white rounded-[32px] overflow-hidden group relative flex flex-col h-full transition-all duration-300 border border-gray-100 hover:shadow-xl hover:shadow-gray-200/50"
+      className="bg-white rounded-2xl overflow-hidden group relative flex flex-col h-full transition-all duration-300 border border-gray-100 hover:border-gray-200/70 hover:shadow-md"
     >
       {/* Image Container */}
-      <div className="aspect-square relative bg-[#F9FAFB] rounded-[32px] overflow-hidden group-hover:bg-gray-50 transition-colors">
+      <div className="aspect-square relative bg-[#F9FAFB] rounded-2xl overflow-hidden group-hover:bg-gray-50 transition-colors">
         {quantityInCart > 0 && (
-          <div className="absolute top-4 left-4 z-10 bg-green-500 text-white px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-md flex items-center gap-1 animate-in fade-in zoom-in duration-300">
+          <div className="absolute top-4 left-4 z-10 bg-green-500 text-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider shadow-sm flex items-center gap-1 animate-in fade-in zoom-in duration-300">
             <Check className="w-3.5 h-3.5 stroke-[3]" />
             <span>{quantityInCart} Added</span>
           </div>
@@ -225,7 +225,7 @@ const ProductCardComponent: React.FC<ProductCardProps> = ({
         <div className="mt-2 space-y-2">
           {quantityInCart > 0 ? (
             <div className="space-y-2 animate-in fade-in zoom-in duration-300">
-              <div className="flex items-center bg-[#00AEEF] rounded-xl p-1 border border-[#00AEEF] shadow-lg shadow-[#00AEEF]/20 h-11 transition-all">
+              <div className="flex items-center bg-[#00AEEF] rounded-xl p-1 border border-[#00AEEF] shadow-sm h-11 transition-all">
                 <button 
                   onClick={(e) => {
                     e.preventDefault();
@@ -246,7 +246,7 @@ const ProductCardComponent: React.FC<ProductCardProps> = ({
                     e.stopPropagation();
                     onAddToCart(product, 1, false, localUnit);
                   }}
-                  className="w-9 h-9 flex items-center justify-center bg-white/20 rounded-lg hover:bg-white/30 transition-all active:scale-90 text-white"
+                  className="w-9 h-9 flex items-center justify-center bg-white/20 rounded-lg hover:bg-white/30 transition-all active:scale-95 text-white"
                 >
                   <Plus className="w-4 h-4 stroke-[3]" />
                 </button>
@@ -254,7 +254,7 @@ const ProductCardComponent: React.FC<ProductCardProps> = ({
 
               <Link 
                 to="/cart"
-                className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl font-black text-[11px] uppercase tracking-wider shadow-lg shadow-green-500/15 hover:scale-[1.01] active:scale-95 transition-all text-center flex items-center justify-center gap-1.5"
+                className="w-full bg-green-500 hover:bg-green-650 text-white py-2 rounded-xl font-bold text-[11px] uppercase tracking-wider shadow-sm active:scale-95 transition-all text-center flex items-center justify-center gap-1.5"
               >
                 <span>{quantityInCart} Added! Go to Cart</span>
                 <span className="animate-pulse">→</span>
@@ -268,14 +268,14 @@ const ProductCardComponent: React.FC<ProductCardProps> = ({
                   inputMode="decimal"
                   value={localQuantity}
                   onChange={(e) => setLocalQuantity(e.target.value)}
-                  className="flex-1 min-w-0 bg-gray-50 border-2 border-gray-100 rounded-xl px-3 text-sm font-black text-gray-900 focus:border-[#00AEEF] focus:outline-none transition-colors"
+                  className="flex-1 min-w-0 bg-gray-50 border border-gray-200 rounded-xl px-3 text-sm font-semibold text-gray-900 focus:border-[#00AEEF] focus:ring-1 focus:ring-[#00AEEF] focus:outline-none transition-all"
                   placeholder="Qty"
                 />
                 
                 <div className="relative">
                   <button 
                     onClick={() => setShowUnitSelector(!showUnitSelector)}
-                    className={`h-full px-3 flex items-center gap-1 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border-2 ${
+                    className={`h-full px-3 flex items-center gap-1 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all border ${
                       localUnit 
                         ? 'bg-[#00AEEF]/10 border-[#00AEEF]/20 text-[#00AEEF]' 
                         : 'bg-blue-600 border-blue-600 text-white'
@@ -296,7 +296,7 @@ const ProductCardComponent: React.FC<ProductCardProps> = ({
                           initial={{ opacity: 0, y: 10, scale: 0.95 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                          className="absolute bottom-full right-0 mb-2 z-50 w-32 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden"
+                          className="absolute bottom-full right-0 mb-2 z-50 w-32 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden"
                         >
                           <div className="max-h-48 overflow-y-auto py-1">
                             {UNITS.map(unit => (
@@ -323,7 +323,7 @@ const ProductCardComponent: React.FC<ProductCardProps> = ({
 
               <button 
                 onClick={handleAdd}
-                className="w-full bg-[#00AEEF] text-white py-2.5 rounded-xl font-black text-[12px] uppercase tracking-[0.2em] shadow-lg shadow-[#00AEEF]/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                className="w-full bg-[#00AEEF] hover:bg-[#0099d4] text-white py-2.5 rounded-xl font-bold text-[12px] uppercase tracking-[0.2em] shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 <ShoppingBag className="w-4 h-4" />
                 {isPreOrder ? 'Pre-order' : 'Add to cart'}

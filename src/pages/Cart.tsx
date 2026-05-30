@@ -7,6 +7,7 @@ import { useStore } from '../contexts/StoreContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { db, collection, addDoc, doc, updateDoc } from '../firebase';
 import { notificationService } from '../services/notificationService';
+import { printViaIframe } from '../services/printerService';
 
 
 interface CartProps {
@@ -84,6 +85,16 @@ const Cart: React.FC<CartProps> = ({ cart, onUpdateQuantity, onRemove, onClearCa
         notificationService.triggerSMSNotification(docRef.id, newOrder);
       } catch (smsErr) {
         console.error("SMS notification trigger failed safely in background:", smsErr);
+      }
+
+      // Automatically print the bill
+      try {
+        printViaIframe({
+          ...newOrder,
+          id: docRef.id
+        });
+      } catch (printErr) {
+        console.error("[Auto-Print] Receipt output error:", printErr);
       }
 
       onClearCart();

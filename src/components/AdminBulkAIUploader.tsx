@@ -378,16 +378,16 @@ export const AdminBulkAIUploader: React.FC<AdminBulkAIUploaderProps> = ({ onBulk
               <motion.div 
                 animate={{ rotate: 360 }}
                 transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                className="absolute inset-0 border-[8px] border-primary/20 border-t-primary rounded-full shadow-[0_0_50px_-12px_rgba(var(--primary-rgb),0.5)]"
+                className="absolute inset-0 border-4 border-primary/20 border-t-primary rounded-full shadow-sm"
               />
               <div className="absolute inset-0 flex items-center justify-center">
-                <Sparkles className="w-16 h-16 text-primary animate-pulse" />
+                <Sparkles className="w-12 h-12 text-primary" />
               </div>
             </div>
-            <h3 className="text-4xl font-black text-white tracking-tight mb-4">Gemini Vision is Scanning...</h3>
-            <p className="max-w-md text-gray-400 font-medium text-lg">Identifying product packaging, extracting names, and generating professional descriptions for your catalog.</p>
+            <h3 className="text-3xl font-black text-white tracking-tight mb-4">Gemini Vision is Scanning...</h3>
+            <p className="max-w-md text-gray-400 font-medium text-base">Identifying product packaging, extracting names, and generating professional descriptions for your catalog.</p>
             
-            <div className="mt-12 flex items-center gap-3 bg-white/5 border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-md">
+            <div className="mt-12 flex items-center gap-3 bg-white/5 border border-white/10 px-6 py-3 rounded-xl">
               <Loader2 className="w-5 h-5 text-primary animate-spin" />
               <span className="text-xs font-black text-white uppercase tracking-[0.2em]">Processing {files.length} Photos</span>
             </div>

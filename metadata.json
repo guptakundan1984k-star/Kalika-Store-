@@ -1,5 +1,6 @@
 {
   "name": "Kalikastore.in",
   "description": "A modern grocery store with AI-powered admin assistant, real-time order tracking, and Jharkhand-wide delivery.",
-  "requestFramePermissions": ["geolocation", "microphone", "camera"]
+  "requestFramePermissions": ["geolocation", "microphone", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

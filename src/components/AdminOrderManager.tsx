@@ -11,6 +11,7 @@ import { ProductImage } from './ProductImage';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, doc, deleteDoc, updateDoc, collection, addDoc, onSnapshot } from '../firebase';
 import { printerService } from '../services/BluetoothPrinterService';
+import { printViaIframe } from '../services/printerService';
 import { InvoiceGenerator } from './InvoiceGenerator';
 import { notificationService } from '../services/notificationService';
 
@@ -153,6 +154,16 @@ export const AdminOrderManager: React.FC<AdminOrderManagerProps> = ({
         notificationService.triggerSMSNotification(docRef.id, newOrder);
       } catch (smsErr) {
         console.error("SMS notification trigger failed safely in background:", smsErr);
+      }
+
+      // Automatically print the bill
+      try {
+        printViaIframe({
+          ...newOrder,
+          id: docRef.id
+        });
+      } catch (printErr) {
+        console.error("[Auto-Print] Receipt output error:", printErr);
       }
       
       // WhatsApp Redirect for store orders

@@ -84,9 +84,9 @@ export const AdminAssistant: React.FC<AdminAssistantProps> = ({ context, title =
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         onClick={() => { setIsOpen(true); setIsMinimized(false); }}
-        className="fixed bottom-8 right-8 z-[60] bg-gray-900 text-white w-16 h-16 rounded-[24px] shadow-2xl flex items-center justify-center hover:scale-110 active:scale-90 transition-all border-2 border-primary/20"
+        className="fixed bottom-8 right-8 z-[60] bg-gray-950 text-white w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center hover:bg-black transition-all border border-gray-800"
       >
-        <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+        <Sparkles className="w-6 h-6 text-[#00AEEF]" />
       </motion.button>
 
       <AnimatePresence>
@@ -98,21 +98,21 @@ export const AdminAssistant: React.FC<AdminAssistantProps> = ({ context, title =
               y: 0, 
               scale: 1,
               height: isMinimized ? '80px' : '600px',
-              width: isMinimized ? '300px' : '400px'
+              width: isMinimized ? '350px' : '400px'
             }}
             exit={{ opacity: 0, y: 50, scale: 0.95 }}
-            className={`fixed bottom-8 right-8 z-[70] bg-white border border-gray-100 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] rounded-[32px] overflow-hidden flex flex-col transition-all duration-300`}
+            className={`fixed bottom-8 right-8 z-[70] bg-white border border-gray-200 shadow-xl rounded-2xl overflow-hidden flex flex-col transition-all duration-300`}
           >
-            <div className="bg-gray-900 p-6 flex items-center justify-between">
+            <div className="bg-gray-950 p-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center">
-                  <Sparkles className="w-6 h-6 text-primary" />
+                <div className="w-9 h-9 bg-[#00AEEF]/10 rounded-lg flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-[#00AEEF]" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white tracking-tight uppercase">{title}</h3>
+                  <h3 className="text-xs font-bold text-white tracking-widest uppercase">{title}</h3>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Active Insight</span>
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Active Insight</span>
                   </div>
                 </div>
               </div>

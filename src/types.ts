@@ -38,6 +38,7 @@ export interface Review {
   createdAt: number;
   orderId?: string; // Link to the specific order that allowed this review
   isCSReview?: boolean;
+  status?: 'pending' | 'approved' | 'rejected';
 }
 
 export interface Address {

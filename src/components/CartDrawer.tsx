@@ -130,12 +130,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </button>
                 </div>
               ) : (
-                items.map((item, idx) => (
-                  <motion.div 
-                    layout
-                    key={`${item.id}-${item.selectedUnit}-${idx}`}
-                    className="flex items-center gap-4 bg-white p-4 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-xl transition-all group"
-                  >
+                <AnimatePresence mode="popLayout">
+                  {items.map((item, idx) => (
+                    <motion.div 
+                      layout
+                      initial={{ opacity: 0, scale: 0.9, x: 50 }}
+                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, x: -50 }}
+                      transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+                      key={`${item.id}-${item.selectedUnit}-${idx}`}
+                      className="flex items-center gap-4 bg-white p-4 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-xl transition-all group"
+                    >
                     <div className="w-20 h-20 rounded-[24px] overflow-hidden bg-gray-50 shrink-0 border border-gray-100 shadow-inner">
                       <ProductImage
                         src={item.image || undefined} 
@@ -190,7 +195,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <Trash2 className="w-5 h-5" />
                     </button>
                   </motion.div>
-                ))
+                ))}</AnimatePresence>
               )}
             </div>
             

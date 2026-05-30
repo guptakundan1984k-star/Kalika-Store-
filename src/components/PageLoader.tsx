@@ -28,7 +28,7 @@ export const PageLoader: React.FC<PageLoaderProps> = ({ children }) => {
       >
         <Loader2 className="w-6 h-6 text-primary" />
       </motion.div>
-      <p className="mt-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] animate-pulse">Loading Kalika Store...</p>
+      <p className="mt-4 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Loading Kalika Store...</p>
     </div>
   );
 };

@@ -390,7 +390,7 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
               </div>
               <button 
                 onClick={() => navigate('/items?request=new')}
-                className="bg-primary text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
+                className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-sm transition-all"
               >
                 Request
               </button>

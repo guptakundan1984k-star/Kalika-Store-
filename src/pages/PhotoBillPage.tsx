@@ -4,7 +4,6 @@ import { Camera, Image as ImageIcon, Sparkles, Loader2, ArrowRight, ShoppingCart
 import { motion, AnimatePresence } from 'motion/react';
 
 import { PageLoader } from '../components/PageLoader';
-import { GoogleGenAI } from "@google/genai";
 
 interface PhotoBillPageProps {
   products: Product[];
@@ -35,61 +34,39 @@ const PhotoBillPageContent: React.FC<PhotoBillPageProps> = ({ products, user, on
     setIsAnalyzing(true);
     setErrorNote(null);
     try {
-      const getApiKey = () => {
-        try {
-          return (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
-                 import.meta.env.VITE_GEMINI_API_KEY || 
-                 '';
-        } catch (e) {
-          return '';
-        }
-      };
-
-      const key = getApiKey();
-      if (!key) {
-        setErrorNote("Gemini API key is not configured.");
-        setIsAnalyzing(false);
-        return;
-      }
-
-      const ai = new GoogleGenAI({ apiKey: key });
-      const base64Data = selectedImage.split(',')[1];
-      const result = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{
-          role: 'user',
-          parts: [
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: "image/jpeg"
-              }
-            },
-            {
-              text: "Act as an expert grocery list scanner for Kalika Store. Scan this image for items and quantities. Available products: " + 
-                products.map(p => `${p.id} (${p.name})`).join(', ') + 
-                ". FOR EACH MATCH: Provide the productId and quantity. If an item name in the image looks like a product in the catalog, it's a match. Return ONLY raw JSON: [{\"productId\": \"...\", \"quantity\": 1}]. No text or markdown."
-            }
-          ]
-        }]
+      const response = await fetch("/api/gemini/analyze-bill", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          imageBase64: selectedImage,
+          products: products.map(p => ({ id: p.id, name: p.name })),
+        }),
       });
 
-      const text = result.text || "";
-      const jsonStr = text.match(/\[.*\]/s)?.[0] || '[]';
-      const items = JSON.parse(jsonStr);
+      if (!response.ok) {
+        throw new Error("Analysis request failed. Please check your network connection.");
+      }
 
+      const resData = await response.json();
+      if (!resData.success) {
+        throw new Error(resData.error || "Analysis failed");
+      }
+
+      const items = resData.items || [];
       const detected = items.map((item: any) => {
-        const product = products.find(p => p.id === item.productId || p.name.toLowerCase().includes(item.productId.toLowerCase()));
-        return product ? { product, quantity: item.quantity || 1 } : null;
+        const product = products.find(p => p.id === item.productId || p.name.toLowerCase().includes(String(item.productId || "").toLowerCase()));
+        return product ? { product, quantity: Number(item.quantity) || 1 } : null;
       }).filter(Boolean) as { product: Product, quantity: number }[];
 
       setDetectedItems(detected);
       if (detected.length === 0) {
-        setErrorNote("No matches found in the catalog. Please try a clearer photo.");
+        setErrorNote("No matching catalog items detected. Please take a clearer photo with legible items.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Analysis error:", e);
-      setErrorNote("AI is currently under heavy load. Please try again in a moment.");
+      setErrorNote(e.message || "Gemini Lens service is currently unavailable. Please try again in a moment.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -136,11 +113,11 @@ const PhotoBillPageContent: React.FC<PhotoBillPageProps> = ({ products, user, on
       <div className="min-h-screen bg-gray-50 pt-24 pb-40 px-4 md:px-8">
       <div className="max-w-4xl mx-auto space-y-12">
         <div className="text-center space-y-4">
-          <div className="w-20 h-20 bg-primary/10 rounded-[32px] flex items-center justify-center text-primary mx-auto">
+          <div className="w-20 h-20 bg-[#00AEEF]/10 rounded-[32px] flex items-center justify-center text-[#00AEEF] mx-auto">
             <Camera className="w-10 h-10" />
           </div>
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight">Photo Bill System</h1>
-          <p className="text-gray-500 font-medium">Upload a photo of your handwritten list and we'll automatically add items to your cart.</p>
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">Gemini Lens Paper Scanner</h1>
+          <p className="text-gray-500 font-medium">Upload a photo of your paper list/handwritten bill and our advanced Gemini Lens will instantly add items to your cart.</p>
 
         </div>
 
